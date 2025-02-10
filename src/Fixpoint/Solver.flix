@@ -22,7 +22,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Ram.RamSym
+    use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.PredSym
@@ -104,7 +104,7 @@ mod Fixpoint.Solver {
             Datalog(pFacts, Vector.empty())
         case Model(db) =>
             Map.rangeQuery(ramSym -> match ramSym {
-                case RamSym.Full(predSym, _, _) => match predSym <=> p {
+                case RelSym.Symbol(predSym, _, _) => match predSym <=> p {
                     case Comparison.EqualTo => Comparison.EqualTo
                     case cmp => cmp
                 }
@@ -498,7 +498,7 @@ mod Fixpoint.Solver {
             Foldable.foldLeft(() -> t -> {
                 let vs = f(t);
                 let arity = List.length(vs);
-                let ramSym = RamSym.Full(p, arity, Denotation.Relational);
+                let ramSym = RelSym.Symbol(p, arity, Denotation.Relational);
                 let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
                 MutMap.put(List.toVector(vs), Reflect.default(), rel)
             }, (), ts);
@@ -713,7 +713,7 @@ mod Fixpoint.Solver {
             use Fixpoint.Ast.Ram.toDenotation;
             let pFacts = MutList.empty(rc);
             let qquery = ramSym -> match ramSym {
-                case RamSym.Full(predSym, _, _) => match predSym <=> p {
+                case RelSym.Symbol(predSym, _, _) => match predSym <=> p {
                     case Comparison.EqualTo => Comparison.EqualTo
                     case cmp => cmp
                 }

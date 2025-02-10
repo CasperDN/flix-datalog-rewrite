@@ -21,7 +21,7 @@ mod Fixpoint.Ast.Datalog {
     use Fixpoint.PredSymsOf.predSymsOf
     use Fixpoint.SubstitutePredSym
     use Fixpoint.SubstitutePredSym.substitute
-    use Fixpoint.Ast.Ram.RamSym
+    use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
 
@@ -32,7 +32,7 @@ mod Fixpoint.Ast.Datalog {
     @Internal
     pub enum Datalog[v] {
         case Datalog(Vector[Constraint[v]], Vector[Constraint[v]])
-        case Model(Map[RamSym[v], Map[Vector[v], v]])
+        case Model(Map[RelSym[v], Map[Vector[v], v]])
         case Join(Datalog[v], Datalog[v])
     }
 

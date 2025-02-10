@@ -16,7 +16,7 @@
 
 mod Fixpoint.Phase.IndexSelection {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RamSym, RamTerm, BoolExp, RowVar}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp}
 
     ///
     /// Hoist and query optimize `stmt`.
@@ -68,11 +68,12 @@ mod Fixpoint.Phase.IndexSelection {
             else
                 RamStmt.Insert(RelOp.If(ground, innerOp))
         case RamStmt.Merge(_, _) => stmt
-        case RamStmt.Assign(_, _) => stmt
+        case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(queryStmt, xs))
-        case RamStmt.Until(test, body) => RamStmt.Until(test, queryStmt(body))
+        case RamStmt.While(test, body) => RamStmt.While(test, queryStmt(body))
         case RamStmt.Comment(_) => stmt
+        case RamStmt.Par(_) => ???
     }
 
     /// Hoist and query optimize `op`.
@@ -80,7 +81,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// `freeVars` is the set of variables bound by an outer loop.
     /// Returns the optimized op and the conditions that occur in `op` that have to be hoisted.
     ///
-    def queryOp(op: RelOp[v], freeVars: Set[RowVar]): (RelOp[v], Vector[BoolExp[v]]) = match op {
+    def queryOp(op: RelOp[v], freeVars: Set[TupleVar]): (RelOp[v], Vector[BoolExp[v]]) = match op {
         case RelOp.Search(var, ramSym, body) =>
             use Fixpoint.Ast.Ram.BoolExp.Eq;
             use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
@@ -113,18 +114,25 @@ mod Fixpoint.Phase.IndexSelection {
                     let search = RelOp.Search(var, ramSym, RelOp.If(test, innerOp));
                     (search, ground)
             else
-                let qry =
-                    Vector.map(x -> match x {
-                        case Eq(RamTerm.RowLoad(_, j), rhs) => (j, rhs)
+                // let qry =
+                //     Vector.map(x -> match x {
+                //         case Eq(RamTerm.RowLoad(_, j), rhs) => (j, rhs)
+                //         case _ => ???
+                //     }, prefixQuery);
+                let qry = Vector.map(x -> match x {
+                        case Eq(lhs, rhs) => QueryExp.Eq(lhs, rhs)
                         case _ => ???
                     }, prefixQuery);
                 if (Vector.isEmpty(test))
-                    let search = RelOp.Query(var, ramSym, qry, innerOp);
+                    let search = RelOp.SearchWithIndex(var, ramSym, qry, innerOp);
+                    // let search = RelOp.Query(var, ramSym, qry, innerOp);
                     (search, ground)
                 else
-                    let search = RelOp.Query(var, ramSym, qry, RelOp.If(test, innerOp));
+                    let search = RelOp.SearchWithIndex(var, ramSym, qry, RelOp.If(test, innerOp));
+                    // let search = RelOp.Query(var, ramSym, qry, RelOp.If(test, innerOp));
                     (search, ground)
-        case RelOp.Query(_, _, _, _) => (op, Vector.empty())
+        case RelOp.SearchWithIndex(_, _, _, _) => (op, Vector.empty())
+        // case RelOp.Query(_, _, _, _) => (op, Vector.empty())
         case RelOp.Functional(_, _, _, _) => (op, Vector.empty())
         case RelOp.Project(_, _) => (op, Vector.empty())
         case RelOp.If(test, then) =>
@@ -141,6 +149,7 @@ mod Fixpoint.Phase.IndexSelection {
             case _ => ???
         }, varQuery) |>
         // Group `var[i] = rhs` by `i`.
+        // TODO: groupBy potentially expensive/wastefull since we already knows they are in order. Probably not real problem since list is likely to be short.
         Vector.groupBy(x -> y -> match (x, y) {
             case (Eq(RowLoad(_, index1), _), Eq(RowLoad(_, index2), _)) => index1 == index2
             case _ => ???
@@ -158,8 +167,8 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// An expression is ground if all its terms are ground.
     ///
-    def isExpGround(freeVars: Set[RowVar], exp: BoolExp[v]): Bool = match exp {
-        case BoolExp.Empty(_) => true
+    def isExpGround(freeVars: Set[TupleVar], exp: BoolExp[v]): Bool = match exp {
+        case BoolExp.IsEmpty(_) => true
         case BoolExp.NotMemberOf(terms, _) => Vector.forAll(isTermGround(freeVars), terms)
         case BoolExp.Eq(lhs, rhs) => isTermGround(freeVars, lhs) and isTermGround(freeVars, rhs)
         case BoolExp.Leq(_, lhs, rhs) => isTermGround(freeVars, lhs) and isTermGround(freeVars, rhs)
@@ -188,7 +197,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// A term is ground if it is a literal or a free variable.
     ///
-    def isTermGround(freeVars: Set[RowVar], term: RamTerm[v]): Bool = match term {
+    def isTermGround(freeVars: Set[TupleVar], term: RamTerm[v]): Bool = match term {
         case RamTerm.Lit(_) => true
         case RamTerm.RowLoad(var, _) => Set.memberOf(var, freeVars)
         case RamTerm.LoadLatVar(var) => Set.memberOf(var, freeVars)
