@@ -18,6 +18,7 @@ mod Fixpoint.Debugging {
 
     use Fixpoint.Ast.Datalog.Datalog
     use Fixpoint.Ast.Ram.RamStmt
+    use Fixpoint.Ast.Ram.RamProgram
     use Fixpoint.Ast.Shared.PredSym
 
     ///
@@ -66,18 +67,26 @@ mod Fixpoint.Debugging {
     /// Note: Returns `s` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreInterpret(s: RamStmt[v]): RamStmt[v] with Order[v] = unchecked_cast({
+    pub def notifyPreInterpret(program: RamProgram[v]): RamProgram[v] with Order[v] = match program {
+        case RamProgram.Program(stmt, facts, _index) => unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
+            println(String.repeat(80, "*"));
+            println("** Facts");
+            println(String.repeat(80, "*"));
+            println("");
+            println(String.indent(4, "${facts}"));
+            println("");
             println(String.repeat(80, "*"));
             println("** Relation Algebra Machine AST");
             println(String.repeat(80, "*"));
             println("");
-            println(String.indent(4, "${s}"));
+            println(String.indent(4, "${stmt}"));
             println("");
-            s
+            program
         } else {
-            s
+            program
         }
     } as _ \ {})
+    }
 
 }

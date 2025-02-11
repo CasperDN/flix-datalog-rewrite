@@ -181,8 +181,17 @@ mod Fixpoint.Phase.Compiler {
             MutList.push(mergeDelta, stmts)
         }, idb);
         Map.forEach(predSym -> match (arity, den) -> {
+            // let delta = RelSym.Delta(predSym, arity, den);
+            let delta = RelSym.Symbol(PredSymMaps.getPredSymDeltaId(predSymMaps, predSym), arity, den);
+            // let newr = RelSym.New(predSym, arity, den);
+            let newr = RelSym.Symbol(PredSymMaps.getPredSymNewId(predSymMaps, predSym), arity, den);
+            // let assign = RamStmt.Assign(delta, newr);
+            let assign = RamStmt.Swap(delta, newr);
+            MutList.push(assign, loopBody)
+        }, idb);
+        Map.forEach(predSym -> match (arity, den) -> {
             // let purge = RamStmt.Purge(RelSym.New(predSym, arity, den));
-            let purge = RamStmt.Purge(RelSym.Symbol(PredSymMaps.getPredSymNewId(predSymMaps, predSym), arity, den));
+            let purge = RamStmt.Purge(RelSym.Symbol(PredSymMaps.getPredSymDeltaId(predSymMaps, predSym), arity, den));
             MutList.push(purge, loopBody)
         }, idb);
         List.forEach(x -> compileRuleIncr(loopBody, x, predSymMaps), stratum);
@@ -193,15 +202,6 @@ mod Fixpoint.Phase.Compiler {
             // let full = RelSym.Full(predSym, arity, den);
             let mergeNew = RamStmt.Merge(newr, full);
             MutList.push(mergeNew, loopBody)
-        }, idb);
-        Map.forEach(predSym -> match (arity, den) -> {
-            // let delta = RelSym.Delta(predSym, arity, den);
-            let delta = RelSym.Symbol(PredSymMaps.getPredSymDeltaId(predSymMaps, predSym), arity, den);
-            // let newr = RelSym.New(predSym, arity, den);
-            let newr = RelSym.Symbol(PredSymMaps.getPredSymNewId(predSymMaps, predSym), arity, den);
-            // let assign = RamStmt.Assign(delta, newr);
-            let assign = RamStmt.Swap(delta, newr);
-            MutList.push(assign, loopBody)
         }, idb);
         let loopTest =
             Map.mapWithKey(predSym -> match (arity, den) -> {

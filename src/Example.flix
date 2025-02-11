@@ -34,19 +34,9 @@ def isConnected(s: Set[(Int32, Int32)], src: Int32, dst: Int32): Bool =
 def main(): Unit \ IO =
 // println("x");
     let p = #{
-    PartDepends("Car",       "Chassis").
-    PartDepends("Car",       "Engine").
-    PartDepends("Engine",    "Piston").
-    PartDepends("Engine",    "Ignition").
-
-    AssemblyTime("Car",     7).
-    AssemblyTime("Engine",  2).
-
-    DeliveryDate("Chassis";  2).
-    DeliveryDate("Piston";   1).
-    DeliveryDate("Ignition"; 7).
+    Edge(1, 1).
 };
-    let r = query p select (c, d) from DeliveryDate(c; d);
+    let r = query p select (c, d) from Edge(c, d);
     println(r);
 
 // Computes the delivery date for each component.

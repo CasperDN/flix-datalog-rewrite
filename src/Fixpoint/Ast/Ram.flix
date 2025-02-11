@@ -294,6 +294,8 @@ mod Fixpoint.Ast.Ram {
         }
     }
 
+
+    // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
     pub enum RamProgram[v] {
         case Program(RamStmt[v], FactInformation[v], IndexInformation[v])
     }

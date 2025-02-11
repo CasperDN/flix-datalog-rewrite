@@ -25,15 +25,19 @@ mod Fixpoint.Interpreter {
 
     @Internal
     pub def interpret(rc: Region[r], program: RamProgram[v]): Database[v, r] \ r with Order[v] =
+        let db = MutMap.empty(rc);
+        match program {
+            case RamProgram.Program(_, facts, _) => 
+            MutMap.put(, MutMap.empty(), facts)
+        };
         interpretWithDatabase(rc, MutMap.empty(rc), program)
     
         
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): Database[v, r] \ r with Order[v] = match program {
+    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): Database[v, r] \ r with Order[v] = match Fixpoint.Debugging.notifyPreInterpret(program) {
         case RamProgram.Program(stmt, _facts, _index) =>
-            let s = Fixpoint.Debugging.notifyPreInterpret(stmt);
-            evalStmt(rc, db, s);
+            evalStmt(rc, db, stmt);
             db
     }
 
@@ -49,7 +53,9 @@ mod Fixpoint.Interpreter {
                         MutMap.mergeWith(lub, MutMap.getWithDefault(srcSym, MutMap.empty(rc), db), dst)
                 }
             case RamStmt.Swap(lhs, rhs) =>
-                MutMap.put(lhs, MutMap.getWithDefault(rhs, MutMap.empty(rc), db), db)
+                let temp = MutMap.getWithDefault(lhs, MutMap.empty(rc), db);
+                MutMap.put(lhs, MutMap.getWithDefault(rhs, MutMap.empty(rc), db), db);
+                MutMap.put(rhs, temp, db)
             case RamStmt.Purge(ramSym) => MutMap.remove(ramSym, db)
             case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, db), stmts)
             case RamStmt.While(test, body) =>
