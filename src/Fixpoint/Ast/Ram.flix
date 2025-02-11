@@ -1,3 +1,4 @@
+   use IoError.ErrorKind
 /*
  * Copyright 2021 Benjamin Dahse
  *
@@ -15,6 +16,8 @@
  */
 
 mod Fixpoint.Ast.Ram {
+    use Fixpoint.Ast.Ram.IndexInformation
+    use Fixpoint.Ast.Ram.FactInformation
 
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
@@ -49,6 +52,7 @@ mod Fixpoint.Ast.Ram {
                     let tst = test |> Vector.join(" Λ ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
+                case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
             }
     }
 
@@ -163,7 +167,7 @@ mod Fixpoint.Ast.Ram {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // RamSym                                                                  //
+    // RelSym                                                                  //
     /////////////////////////////////////////////////////////////////////////////
 
     @Internal

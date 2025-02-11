@@ -15,8 +15,7 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RamSym, RamTerm, BoolExp, RowVar}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, RamProgram}
     use Fixpoint.Ast.Ram.RamTerm.{RowLoad, LoadLatVar, Lit, Meet}
 
     ///
@@ -34,10 +33,14 @@ mod Fixpoint.Phase.Simplifier {
     ///     end
     ///
     @Internal
+    pub def simplifyProgram(program: RamProgram[v]): RamProgram[v] = match program {
+        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(simplifyStmt(stmt), facts, index)
+    }
+    @Internal
     pub def simplifyStmt(stmt: RamStmt[v]): RamStmt[v] =
         Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(Set#{}, stmt))
 
-    def simplifyHelper(stratum: Set[RamSym[v]], stmt: RamStmt[v]): Option[RamStmt[v]] = match stmt {
+    def simplifyHelper(stratum: Set[RelSym[v]], stmt: RamStmt[v]): Option[RamStmt[v]] = match stmt {
         case RamStmt.Insert(op) =>
             forM (
                 newOp <- simplifyOp(stratum, op)
@@ -70,21 +73,22 @@ mod Fixpoint.Phase.Simplifier {
                 }
             }
         case RamStmt.Merge(_, _) => Some(stmt)
-        case RamStmt.Assign(_, _) => Some(stmt)
+        case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
             Some(RamStmt.Seq(Vector.filterMap(simplifyHelper(stratum), xs)))
-        case RamStmt.Until(test, body) =>
+        case RamStmt.While(test, body) =>
             let newStratum = Vector.foldLeft(acc -> e -> match e {
-                case BoolExp.Empty(ramSym) => Set.insert(ramSym, acc)
+                case BoolExp.IsEmpty(ramSym) => Set.insert(ramSym, acc)
                 case _ => acc
             }, Set#{}, test);
             simplifyHelper(newStratum, body) |>
-            Option.map(newBody -> RamStmt.Until(test, newBody))
+            Option.map(newBody -> RamStmt.While(test, newBody))
         case RamStmt.Comment(_) => Some(stmt)
+        case RamStmt.Par(xs) => ???
     }
 
-    def simplifyOp(stratum: Set[RamSym[v]], op: RelOp[v]): Option[RelOp[v]] = match op {
+    def simplifyOp(stratum: Set[RelSym[v]], op: RelOp[v]): Option[RelOp[v]] = match op {
         case RelOp.If(test, then) =>
             let (memberOf, rest) =
                 // Delete checks of the form `x[i] == x[i]` and `x ≤ x` and `x ⊓ y ≤ x`.
@@ -108,30 +112,38 @@ mod Fixpoint.Phase.Simplifier {
                 Some(RelOp.If(newTest, then))
         case RelOp.Search(rowVar, ramSym, body) =>
             let f = nb -> match ramSym {
-                case RamSym.Delta(_, _, _) =>
-                    if (Set.memberOf(ramSym, stratum))
-                        Some(RelOp.Search(rowVar, ramSym, nb))
-                    else
-                        None
+                // case RelSym.Delta(_, _, _) =>
+                //     if (Set.memberOf(ramSym, stratum))
+                //         Some(RelOp.Search(rowVar, ramSym, nb))
+                //     else
+                //         None
                 case _ => Some(RelOp.Search(rowVar, ramSym, nb))
             };
             forM (
                 newBody <- simplifyOp(stratum, body);
                 res <- f(newBody)
             ) yield res
-        case RelOp.Query(rowVar, ramSym, qry, body) =>
+        case RelOp.SearchWithIndex(rowVar, ramSym, qry, body) =>
             let f = nb -> match ramSym {
-                case RamSym.Delta(_, _, _) =>
-                    if (Set.memberOf(ramSym, stratum))
-                        Some(RelOp.Query(rowVar, ramSym, qry, nb))
-                    else
-                        None
-                case _ => Some(RelOp.Query(rowVar, ramSym, qry, nb))
+                case _ => Some(RelOp.SearchWithIndex(rowVar, ramSym, qry, nb))
             };
             forM (
                 newBody <- simplifyOp(stratum, body);
                 res <- f(newBody)
             ) yield res
+        // case RelOp.Query(rowVar, ramSym, qry, body) =>
+        //     let f = nb -> match ramSym {
+        //         // case RelSym.Delta(_, _, _) =>
+        //         //     if (Set.memberOf(ramSym, stratum))
+        //         //         Some(RelOp.Query(rowVar, ramSym, qry, nb))
+        //         //     else
+        //         //         None
+        //         case _ => Some(RelOp.Query(rowVar, ramSym, qry, nb))
+        //     };
+        //     forM (
+        //         newBody <- simplifyOp(stratum, body);
+        //         res <- f(newBody)
+        //     ) yield res
         case RelOp.Functional(rowVar, f, terms, body) =>
             forM(
                 newBody <- simplifyOp(stratum, body)
@@ -142,7 +154,7 @@ mod Fixpoint.Phase.Simplifier {
     ///
     /// Returns the set of variables that occur in `term`.
     ///
-    def ramTermVars(term: RamTerm[v]): Set[RowVar] = match term {
+    def ramTermVars(term: RamTerm[v]): Set[TupleVar] = match term {
         case RamTerm.Lit(_) => Set#{}
         case RamTerm.RowLoad(var, _) => Set#{var}
         case RamTerm.LoadLatVar(var) => Set#{var}
