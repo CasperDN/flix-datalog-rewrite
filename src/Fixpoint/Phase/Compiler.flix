@@ -15,8 +15,7 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, RamProgram}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -32,9 +31,9 @@ mod Fixpoint.Phase.Compiler {
 
     // // TODO: Possibly move to other file
     struct PredSymMaps[r] {
-        mut fullMap: MutMap[Int64, PredSym, r],
-        mut deltaMap: MutMap[Int64, PredSym, r],
-        mut newMap: MutMap[Int64, PredSym, r],
+        fullMap: MutMap[Int64, PredSym, r],
+        deltaMap: MutMap[Int64, PredSym, r],
+        newMap: MutMap[Int64, PredSym, r],
         mut counter: Int64
     }
 
@@ -112,25 +111,41 @@ mod Fixpoint.Phase.Compiler {
     /// A rule belongs to the same stratum as its head predicate.
     ///
     @Internal
-    pub def compile(d: Datalog[v], strat: Map[PredSym, Int32]): RamStmt[v] = match d {
+    pub def compile(d: Datalog[v], strat: Map[PredSym, Int32]): RamProgram[v] = match d {
         case Datalog(facts, rules) => region rc {
             let predSymMaps = PredSymMaps.empty(rc);
             let stmts = MutList.empty(rc);
-            let bla: (Constraint[v]) -> Unit \ rc = x -> compileRule(stmts, x, predSymMaps);
+            let compiledFacts = compileFacts(facts, predSymMaps);
             // Vector.forEach(x -> compileRule(stmts, x, predSymMaps), facts);
-            Vector.forEach(bla, facts);
-            let bla2: (Int32, List[Constraint[v]]) -> Unit \ rc = (_, s) -> compileStratum(stmts, s, predSymMaps);
+            // Create map of stratum to list of rules in stratum
             Vector.foldRight(rule -> match rule {
                 case Constraint(HeadAtom(p, _, _), _) =>
                     let ruleStratum = Map.getWithDefault(p, 0, strat);
                     Map.insertWith(List.append, ruleStratum, rule :: Nil)
             }, Map#{}, rules) |>
-            Map.forEach(bla2);
-            // Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps));
-            RamStmt.Seq(MutList.toVector(stmts))
+            Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps));
+            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, 2)
         }
         case _ => bug!("Datalog normalization bug")
     }
+
+    ///
+    /// Collect all facts by their predicate
+    ///
+    // TODO: Can we at this point compute the facts directly/reduce to literals by calling the functions?
+    def compileFacts(facts: Vector[Constraint[v]], predSymMaps: PredSymMaps[r1]): FactInformation[v] \ r1 = 
+        let test = 
+        Vector.foldRight(a -> b -> {
+            match a {
+                case Constraint(HeadAtom(predSym, _, headTerms), _) => 
+                    let x = Vector.map(compileHeadTerm(Map.empty()), headTerms); 
+                    match PredSymMaps.getPredSymFullId(predSymMaps, predSym) {
+                        case PredSym(_, id) => Map.insertWith(List.append, id, x :: Nil, b)
+                    }
+            }
+        }, Map#{}, facts);
+        Map.map(List.toVector, test)
+
 
     ///
     /// Compile all rules to be evaluated in `stratum` to RAM
@@ -156,7 +171,7 @@ mod Fixpoint.Phase.Compiler {
             Map.insert(pred, (arity, den))
         }, Map#{}, stratum);
         let loopBody = MutList.empty(rc);
-        List.forEach(x -> compileRuleIncr(loopBody, x, predSymMaps), stratum);
+        List.forEach(x -> compileRule(stmts, x, predSymMaps), stratum);
         Map.forEach(predSym -> match (arity, den) -> {
             let full = RelSym.Symbol(PredSymMaps.getPredSymFullId(predSymMaps, predSym), arity, den);
             let delta = RelSym.Symbol(PredSymMaps.getPredSymDeltaId(predSymMaps, predSym), arity, den);
@@ -165,7 +180,7 @@ mod Fixpoint.Phase.Compiler {
             let mergeDelta = RamStmt.Merge(full, delta);
             MutList.push(mergeDelta, stmts)
         }, idb);
-                Map.forEach(predSym -> match (arity, den) -> {
+        Map.forEach(predSym -> match (arity, den) -> {
             // let purge = RamStmt.Purge(RelSym.New(predSym, arity, den));
             let purge = RamStmt.Purge(RelSym.Symbol(PredSymMaps.getPredSymNewId(predSymMaps, predSym), arity, den));
             MutList.push(purge, loopBody)

@@ -47,7 +47,6 @@ def main(): Unit \ IO =
     DeliveryDate("Ignition"; 7).
 };
     let r = query p select (c, d) from DeliveryDate(c; d);
-    let _ = Vector.get(0, r);
     println(r);
 
 // Computes the delivery date for each component.

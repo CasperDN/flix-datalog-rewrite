@@ -15,8 +15,7 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, RamProgram}
     use Fixpoint.Ast.Ram.RamTerm.{RowLoad, LoadLatVar, Lit, Meet}
 
     ///
@@ -33,6 +32,10 @@ mod Fixpoint.Phase.Simplifier {
     ///         end
     ///     end
     ///
+    @Internal
+    pub def simplifyProgram(program: RamProgram[v]): RamProgram[v] = match program {
+        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(simplifyStmt(stmt), facts, index)
+    }
     @Internal
     pub def simplifyStmt(stmt: RamStmt[v]): RamStmt[v] =
         Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(Set#{}, stmt))

@@ -1,3 +1,4 @@
+   use IoError.ErrorKind
 /*
  * Copyright 2021 Benjamin Dahse
  *
@@ -15,6 +16,8 @@
  */
 
 mod Fixpoint.Ast.Ram {
+    use Fixpoint.Ast.Ram.IndexInformation
+    use Fixpoint.Ast.Ram.FactInformation
 
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
@@ -289,5 +292,13 @@ mod Fixpoint.Ast.Ram {
         //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
             case _ => ?bug
         }
-    }    
+    }
+
+    pub enum RamProgram[v] {
+        case Program(RamStmt[v], FactInformation[v], IndexInformation[v])
+    }
+
+    pub type alias FactInformation[v] = Map[Int64, Vector[Vector[RamTerm[v]]]]
+    // TODO: Implement this
+    pub type alias IndexInformation[v] = Int32
 }

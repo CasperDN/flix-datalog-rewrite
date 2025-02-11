@@ -16,7 +16,7 @@
 
 mod Fixpoint.Interpreter {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp, RamProgram}
     use Fixpoint.Ast.Shared.Denotation
 
     pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
@@ -24,14 +24,18 @@ mod Fixpoint.Interpreter {
     pub type alias SearchEnv[v: Type, r: Region] = (Array[Vector[v], r], Array[v, r])
 
     @Internal
-    pub def interpret(rc: Region[r], stmt: RamStmt[v]): Database[v, r] \ r with Order[v] =
-        interpretWithDatabase(rc, MutMap.empty(rc), stmt)
+    pub def interpret(rc: Region[r], program: RamProgram[v]): Database[v, r] \ r with Order[v] =
+        interpretWithDatabase(rc, MutMap.empty(rc), program)
+    
+        
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Database[v, r] \ r with Order[v] =
-        let s = Fixpoint.Debugging.notifyPreInterpret(stmt);
-        evalStmt(rc, db, s);
-        db
+    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): Database[v, r] \ r with Order[v] = match program {
+        case RamProgram.Program(stmt, _facts, _index) =>
+            let s = Fixpoint.Debugging.notifyPreInterpret(stmt);
+            evalStmt(rc, db, s);
+            db
+    }
 
     def evalStmt(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Unit \ r with Order[v] =
         match stmt {

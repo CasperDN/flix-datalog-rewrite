@@ -50,9 +50,9 @@ mod Fixpoint.Solver {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         def compiler(cs: Datalog[v]) = {
             Fixpoint.Phase.Compiler.compile(cs, stf)
-            |> Fixpoint.Phase.Simplifier.simplifyStmt
-            |> Fixpoint.Phase.IndexSelection.queryStmt
-            |> Fixpoint.Phase.VarsToIndices.lowerStmt
+            |> Fixpoint.Phase.Simplifier.simplifyProgram
+            |> Fixpoint.Phase.IndexSelection.queryProgram
+            |> Fixpoint.Phase.VarsToIndices.lowerProgram
         };
         let model = match d {
             case Datalog(_, _) => region rc {

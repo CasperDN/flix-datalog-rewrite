@@ -16,7 +16,7 @@
 
 mod Fixpoint.Phase.IndexSelection {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
 
     ///
     /// Hoist and query optimize `stmt`.
@@ -75,6 +75,12 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Comment(_) => stmt
         case RamStmt.Par(_) => ???
     }
+
+    @Internal
+    pub def queryProgram(program: RamProgram[v]): RamProgram[v] = match program { 
+        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(queryStmt(stmt), facts, index)
+    }
+
 
     /// Hoist and query optimize `op`.
     ///
