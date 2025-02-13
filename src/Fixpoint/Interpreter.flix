@@ -16,26 +16,22 @@
 
 mod Fixpoint.Interpreter {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp, RamProgram}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RamSym, RamTerm, BoolExp, RowVar, toDenotation}
     use Fixpoint.Ast.Shared.Denotation
 
-    pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
+    pub type alias Database[v: Type, r: Region] = MutMap[RamSym[v], MutMap[Vector[v], v, r], r]
 
     pub type alias SearchEnv[v: Type, r: Region] = (Array[Vector[v], r], Array[v, r])
 
     @Internal
-    pub def interpret(rc: Region[r], program: RamProgram[v]): Database[v, r] \ r with Order[v] =
-        interpretWithDatabase(rc, MutMap.empty(rc), program)
-    
-        
+    pub def interpret(rc: Region[r], stmt: RamStmt[v]): Database[v, r] \ r with Order[v] =
+        interpretWithDatabase(rc, MutMap.empty(rc), stmt)
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): Database[v, r] \ r with Order[v] = match program {
-        case RamProgram.Program(stmt, _facts, _index) =>
-            let s = Fixpoint.Debugging.notifyPreInterpret(stmt);
-            evalStmt(rc, db, s);
-            db
-    }
+    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Database[v, r] \ r with Order[v] =
+        let s = Fixpoint.Debugging.notifyPreInterpret(stmt);
+        evalStmt(rc, db, s);
+        db
 
     def evalStmt(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Unit \ r with Order[v] =
         match stmt {
@@ -48,11 +44,11 @@ mod Fixpoint.Interpreter {
                     case Denotation.Latticenal(_, _, lub, _) =>
                         MutMap.mergeWith(lub, MutMap.getWithDefault(srcSym, MutMap.empty(rc), db), dst)
                 }
-            case RamStmt.Swap(lhs, rhs) =>
+            case RamStmt.Assign(lhs, rhs) =>
                 MutMap.put(lhs, MutMap.getWithDefault(rhs, MutMap.empty(rc), db), db)
             case RamStmt.Purge(ramSym) => MutMap.remove(ramSym, db)
             case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, db), stmts)
-            case RamStmt.While(test, body) =>
+            case RamStmt.Until(test, body) =>
                 if (evalBoolExp(rc, db, (Array#{} @ rc, Array#{} @ rc), test)) {
                     ()
                 } else {
@@ -60,38 +56,33 @@ mod Fixpoint.Interpreter {
                     evalStmt(rc, db, stmt)
                 }
             case RamStmt.Comment(_) => ()
-            case RamStmt.Par(_) => ???
         }
 
     def allocEnv(rc: Region[r], depth: Int32, relOp: RelOp[v]): SearchEnv[v, r] \ r = match relOp {
         case RelOp.Search(_, _, body)           => allocEnv(rc, depth + 1, body)
-        case RelOp.SearchWithIndex(_, _, _, body)         => allocEnv(rc, depth + 1, body)
+        case RelOp.Query(_, _, _, body)         => allocEnv(rc, depth + 1, body)
         case RelOp.Functional(_, _, _, body)    => allocEnv(rc, depth + 1, body)
         case RelOp.Project(_, _)                => (Array.repeat(rc, depth, Vector.empty()), Array.empty(rc, depth))
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
     }
 
-    def evalOp(rc1: Region[r1], db: Database[v, r1], env: SearchEnv[v, r2], op: RelOp[v]): Unit \ { r1, r2} with Order[v] =
+    def evalOp(rc1: Region[r1], db: Database[v, r1], env: SearchEnv[v, r2], op: RelOp[v]): Unit \ { r1, r2 } with Order[v] =
         match op {
-            case RelOp.Search(TupleVar.Named(i), ramSym, body) =>
+            case RelOp.Search(RowVar.Index(i), ramSym, body) =>
                 let (tupleEnv, latEnv) = env;
                 MutMap.forEach(t -> l -> {
                     Array.put(t, i, tupleEnv);
                     Array.put(l, i, latEnv);
                     evalOp(rc1, db, env, body)
                 }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.SearchWithIndex(TupleVar.Named(i), ramSym, qry, body) =>
+            case RelOp.Query(RowVar.Index(i), ramSym, qry, body) =>
                 let (tupleEnv, latEnv) = env;
-                let toSend = Vector.map(x -> match x {
-                    case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
-                    case _ => ???
-                }, qry);
-                MutMap.rangeQueryWith(evalQuery(env, Vector.toList(toSend)), t -> l -> {
+                MutMap.rangeQueryWith(evalQuery(env, Vector.toList(qry)), t -> l -> {
                     Array.put(t, i, tupleEnv);
                     Array.put(l, i, latEnv);
                     evalOp(rc1, db, env, body)
                 }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.Functional(TupleVar.Named(i), f, terms, body) =>
+            case RelOp.Functional(RowVar.Index(i), f, terms, body) =>
                 let args = terms |> Vector.map(evalTerm(env));
                 let result = f(args);
 
@@ -138,7 +129,7 @@ mod Fixpoint.Interpreter {
 
     def evalBoolExp(rc1: Region[r1], db: Database[v, r1], env: SearchEnv[v, r2], es: Vector[BoolExp[v]]): Bool \ { r1, r2 } with Order[v] =
         Vector.forAll(exp -> match exp {
-            case BoolExp.IsEmpty(ramSym) =>
+            case BoolExp.Empty(ramSym) =>
                 MutMap.isEmpty(MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
             case BoolExp.NotMemberOf(terms, ramSym) =>
                 let rel = MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db);
@@ -192,10 +183,10 @@ mod Fixpoint.Interpreter {
 
     def evalTerm(env: SearchEnv[v, r], term: RamTerm[v]): v \ r = match term {
         case RamTerm.Lit(v) => v
-        case RamTerm.RowLoad(TupleVar.Named(i), index) =>
+        case RamTerm.RowLoad(RowVar.Index(i), index) =>
             let (tupleEnv, _) = env;
             Vector.get(index, Array.get(i, tupleEnv))
-        case RamTerm.LoadLatVar(TupleVar.Named(i)) =>
+        case RamTerm.LoadLatVar(RowVar.Index(i)) =>
             let (_, latEnv) = env;
             Array.get(i, latEnv)
         case RamTerm.Meet(cap, lhs, rhs) =>
