@@ -1,5 +1,7 @@
-def getEdges(): #{ Edge(Int32, Int32) | s } \ IO = 
-    let tuples = loadTuplesFromCSV("C:/Users/adamt/Desktop/Datalogi/flix-datalog-rewrite/src/Test/edge.csv", " ");
+import java.lang.System;
+use Common.loadTuplesFromCSV;
+def getEdges(): #{ Edge(Int32, Int32) | r } \ {IO, Sys} = 
+    let tuples = loadTuplesFromCSV("${getCwd()}/src/Test/edge.csv", " ");
     let map = x -> match Int32.fromString(x) {
         case Some(y) => y
         case None => ???
@@ -10,10 +12,22 @@ def getEdges(): #{ Edge(Int32, Int32) | s } \ IO =
     }, tuples);
     inject edges into Edge
 
-def main2(): Unit \ { IO } = 
+def path(): Int64 \ {IO, Sys} = 
+    let f = getEdges();
     let r = #{
         Path(x, y) :- Edge(x, y).
         Path(x, z) :- Path(x, y), Path(y, z)
     };
-    let x = Vector.length(query getEdges(), r select (x, y) from Path(x, y));
-    println(x)
+    let startTime = System.nanoTime();
+    let x = Vector.find(_ -> true, query f, r select (x, y) from Path(x, y));
+    let endTime = System.nanoTime();
+    println(x);
+    endTime - startTime
+    
+// def general(pred: ?, getFacts: Unit -> #{}, getRules: Unit -> #{}): Int64 \ {IO, Sys} = 
+//     let f = getFacts();
+//     let r = getRules();
+//     let startTime = System.nanoTime();
+//     let endTime = System.nanoTime();
+//     println(x);
+//     endTime - startTime
