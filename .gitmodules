@@ -1,0 +1,3 @@
+[submodule "seaborn-data"]
+	path = dep/seaborn-data
+	url = https://github.com/mwaskom/seaborn-data.git
