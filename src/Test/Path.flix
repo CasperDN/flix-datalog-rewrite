@@ -1,33 +1,28 @@
-import java.lang.System;
-use Common.loadTuplesFromCSV;
-def getEdges(): #{ Edge(Int32, Int32) | r } \ {IO, Sys} = 
-    let tuples = loadTuplesFromCSV("${getCwd()}/src/Test/edge.csv", " ");
-    let map = x -> match Int32.fromString(x) {
-        case Some(y) => y
-        case None => ???
-    };
-    let edges = List.map(x -> match x {
-        case y :: z :: Nil => (map(y), map(z))
-        case _ => ???
-    }, tuples);
-    inject edges into Edge
+mod Path {
+    import java.lang.System;
 
-def path(): Int64 \ {IO, Sys} = 
-    let f = getEdges();
-    let r = #{
-        Path(x, y) :- Edge(x, y).
-        Path(x, z) :- Path(x, y), Path(y, z)
-    };
-    let startTime = System.nanoTime();
-    let x = Vector.find(_ -> true, query f, r select (x, y) from Path(x, y));
-    let endTime = System.nanoTime();
-    println(x);
-    endTime - startTime
-    
-// def general(pred: ?, getFacts: Unit -> #{}, getRules: Unit -> #{}): Int64 \ {IO, Sys} = 
-//     let f = getFacts();
-//     let r = getRules();
-//     let startTime = System.nanoTime();
-//     let endTime = System.nanoTime();
-//     println(x);
-//     endTime - startTime
+    def getFacts(): #{ Edge(Int32, Int32) | r } \ {IO, Sys} = 
+        let path = "${Common.getCwd()}/src/Test/edge.csv";
+        let tuples = Common.loadTuplesFromCSV(path, " ");
+        let map = x -> match Int32.fromString(x) {
+            case Some(y) => y
+            case None => ???
+        };
+        let edges = List.map(x -> match x {
+            case y :: z :: Nil => (map(y), map(z))
+            case _ => ???
+        }, tuples);
+        inject edges into Edge
+
+    pub def path(): Int64 \ {IO, Sys} = 
+        let f = getFacts();
+        let r = #{
+            Path(x, y) :- Edge(x, y).
+            Path(x, z) :- Path(x, y), Path(y, z)
+        };
+        let startTime = System.nanoTime();
+        let x = Vector.find(_ -> true, query f, r select (x, y) from Path(x, y));
+        let endTime = System.nanoTime();
+        println(x);
+        endTime - startTime
+}

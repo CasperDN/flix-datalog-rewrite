@@ -32,7 +32,7 @@ def isConnected(s: Set[(Int32, Int32)], src: Int32, dst: Int32): Bool =
 
 
 def main(): Unit \ IO =
-// println("x");
+println("x");
     let p = #{
     PartDepends("Car",       "Chassis").
     PartDepends("Car",       "Engine").
