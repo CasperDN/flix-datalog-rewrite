@@ -34,7 +34,7 @@ mod Fixpoint.Phase.Simplifier {
     ///
     @Internal
     pub def simplifyProgram(program: RamProgram[v]): RamProgram[v] = match program {
-        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(simplifyStmt(stmt), facts, index)
+        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(simplifyStmt(stmt), facts, meta, index)
     }
     @Internal
     pub def simplifyStmt(stmt: RamStmt[v]): RamStmt[v] =
@@ -77,13 +77,13 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
             Some(RamStmt.Seq(Vector.filterMap(simplifyHelper(stratum), xs)))
-        case RamStmt.While(test, body) =>
+        case RamStmt.Until(test, body) =>
             let newStratum = Vector.foldLeft(acc -> e -> match e {
                 case BoolExp.IsEmpty(ramSym) => Set.insert(ramSym, acc)
                 case _ => acc
             }, Set#{}, test);
             simplifyHelper(newStratum, body) |>
-            Option.map(newBody -> RamStmt.While(test, newBody))
+            Option.map(newBody -> RamStmt.Until(test, newBody))
         case RamStmt.Comment(_) => Some(stmt)
         case RamStmt.Par(xs) => ???
     }

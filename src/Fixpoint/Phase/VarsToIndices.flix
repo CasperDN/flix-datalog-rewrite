@@ -24,7 +24,7 @@ mod Fixpoint.Phase.VarsToIndices {
 
         @Internal
     pub def lowerProgram(program: RamProgram[v]): RamProgram[v] = match program {
-        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(lowerStmt(stmt), facts, index)
+        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(lowerStmt(stmt), facts, meta, index)
     }
 
 
@@ -35,7 +35,7 @@ mod Fixpoint.Phase.VarsToIndices {
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(lowerStmt, xs))
-        case RamStmt.While(test, body) => RamStmt.While(test, lowerStmt(body))
+        case RamStmt.Until(test, body) => RamStmt.Until(test, lowerStmt(body))
         case RamStmt.Comment(_) => stmt
         case RamStmt.Par(_) => ???
     }

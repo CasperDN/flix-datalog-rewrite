@@ -89,7 +89,8 @@ mod Fixpoint.Ast.Shared {
 
     instance ToString[PredSym] {
         pub def toString(predSym: PredSym): String = match predSym {
-            case PredSym.PredSym(name, id) => if (id == 0i64) name else "${name}%${id}"
+            case PredSym.PredSym(name, id) => "${name}%${id}"
+            // case PredSym.PredSym(name, id) => if (id == 0i64) name else "${name}%${id}"
         }
     }
 

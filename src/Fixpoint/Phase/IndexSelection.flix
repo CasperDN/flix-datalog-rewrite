@@ -71,14 +71,14 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(queryStmt, xs))
-        case RamStmt.While(test, body) => RamStmt.While(test, queryStmt(body))
+        case RamStmt.Until(test, body) => RamStmt.Until(test, queryStmt(body))
         case RamStmt.Comment(_) => stmt
         case RamStmt.Par(_) => ???
     }
 
     @Internal
     pub def queryProgram(program: RamProgram[v]): RamProgram[v] = match program { 
-        case RamProgram.Program(stmt, facts, index) => RamProgram.Program(queryStmt(stmt), facts, index)
+        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(queryStmt(stmt), facts, meta, index)
     }
 
 

@@ -14,31 +14,76 @@
  * limitations under the License.
  */
 
+
+// mod Fixpoint.Database2 {
+
+// }
+
 mod Fixpoint.Interpreter {
+    use PredTrack.PredSymMapInternal
 
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp, RamProgram}
     use Fixpoint.Ast.Shared.Denotation
+    // use PredTrack
 
     pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
 
     pub type alias SearchEnv[v: Type, r: Region] = (Array[Vector[v], r], Array[v, r])
 
-    @Internal
-    pub def interpret(rc: Region[r], program: RamProgram[v]): Database[v, r] \ r with Order[v] =
-        let db = MutMap.empty(rc);
-        match program {
-            case RamProgram.Program(_, facts, _) => 
-            MutMap.put(, MutMap.empty(), facts)
-        };
-        interpretWithDatabase(rc, MutMap.empty(rc), program)
-    
+    // pub type alias Database[v: Type, r: Region] = MutMap[Int64, MutMap[Vector[v], v, r], r]
+
+    // pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
+
+    /**
+    pub type alias Database[r: Region] = (
+        MutMap[Int64, MutSet[Vector[v], r], r], 
+        MutMap[Int64, MutMap[Vector[v], r], r]
+    )
+     */
+
+
+    /**
+    pub type alias Database[r: Region] = {
+        // (longMaps = MutMap[RelSym[v], MutMap[Vector[Int64]]],)        
+        )
         
+    }
+
+     */
+
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): Database[v, r] \ r with Order[v] = match Fixpoint.Debugging.notifyPreInterpret(program) {
-        case RamProgram.Program(stmt, _facts, _index) =>
+    pub def interpret(rc: Region[r], program: RamProgram[v]): (Database[v, r], PredSymMapInternal[v]) \ r with Order[v] =
+        let db = MutMap.empty(rc);
+        match program {
+            case RamProgram.Program(_, facts, predTrack, _) =>
+                Map.forEach(id -> factSet -> {
+                    let sym = PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full);
+                    // let sym = unwrap(Map.get(id, metaInformation));
+                    let mapForCurrent = MutMap.empty(rc);
+                    match sym {
+                        case RelSym.Symbol(_, _, Denotation.Relational) => 
+                            Vector.forEach(factTuple -> MutMap.put(factTuple, Reflect.default(), mapForCurrent), factSet)
+                        case RelSym.Symbol(_, arity, Denotation.Latticenal(_, _, _, _)) => 
+                            Vector.forEach(factTuple -> {
+                                let nonLatticePart = Vector.slice({start=0}, {end=arity - 1}, factTuple);
+                                let latticePart = Vector.get(arity - 1, factTuple);
+                                MutMap.put(nonLatticePart, latticePart, mapForCurrent)
+                            }, factSet)
+                    };
+                    // MutMap.put(id, mapForCurrent, db)
+                    MutMap.put(PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full), mapForCurrent, db)
+                }, facts)
+        };
+        interpretWithDatabase(rc, db, program)
+    
+
+
+    @Internal
+    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): (Database[v, r], PredSymMapInternal[v]) \ r with Order[v] = match Fixpoint.Debugging.notifyPreInterpret(program) {
+        case RamProgram.Program(stmt, _facts, meta, _index) =>
             evalStmt(rc, db, stmt);
-            db
+            (db, meta)
     }
 
     def evalStmt(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Unit \ r with Order[v] =
@@ -58,7 +103,7 @@ mod Fixpoint.Interpreter {
                 MutMap.put(rhs, temp, db)
             case RamStmt.Purge(ramSym) => MutMap.remove(ramSym, db)
             case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, db), stmts)
-            case RamStmt.While(test, body) =>
+            case RamStmt.Until(test, body) =>
                 if (evalBoolExp(rc, db, (Array#{} @ rc, Array#{} @ rc), test)) {
                     ()
                 } else {
@@ -236,4 +281,15 @@ mod Fixpoint.Interpreter {
         case RamTerm.RowLoad(rowVar, index) => bug!("Illegal RowLoad with ${rowVar} ${index}")
         case _ => bug!("Illegal term ${term}")
     }
+
+    // def unwrap(o: Option[a]): a = match o {
+    //     case Some(a) => a
+    //     case None => bug!("Unexpected None in Interpreter")
+    // }
+
+    // def evalInputFacts(rc: Region[r], term: RamTerm[v]): v \ r = 
+    //     let arr0 = Array.empty(rc, 0);
+    //     let arr1 = Array.empty(rc, 0);
+    //     evalTerm((arr0, arr1), term)
+
 }

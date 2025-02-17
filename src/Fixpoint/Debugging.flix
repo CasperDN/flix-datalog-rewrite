@@ -68,13 +68,14 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreInterpret(program: RamProgram[v]): RamProgram[v] with Order[v] = match program {
-        case RamProgram.Program(stmt, facts, _index) => unchecked_cast({
+        case RamProgram.Program(stmt, facts, _meta, _index) => unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Facts");
             println(String.repeat(80, "*"));
             println("");
-            println(String.indent(4, "${facts}"));
+            println(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}"));
+            // println(String.indent(4, "${Debug.stringify(facts)}"));
             println("");
             println(String.repeat(80, "*"));
             println("** Relation Algebra Machine AST");

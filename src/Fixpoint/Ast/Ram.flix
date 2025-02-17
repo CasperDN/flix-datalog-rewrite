@@ -38,7 +38,7 @@ mod Fixpoint.Ast.Ram {
         case Purge(RelSym[v])
         case Seq(Vector[RamStmt[v]])
         case Par(Vector[RamStmt[v]])
-        case While(Vector[BoolExp[v]], RamStmt[v])
+        case Until(Vector[BoolExp[v]], RamStmt[v])
         case Comment(String)
     }
 
@@ -51,8 +51,8 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
                 case RamStmt.Purge(ramSym) => "purge ${ramSym}"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
-                case RamStmt.While(test, body) =>
-                    let tst = test |> Vector.join(" Λ ");
+                case RamStmt.Until(test, body) =>
+                    let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
@@ -143,10 +143,10 @@ mod Fixpoint.Ast.Ram {
     instance ToString[BoolExp[v]] {
         pub def toString(exp: BoolExp[v]): String =
             match exp {
-                case BoolExp.IsEmpty(ramSym) => "${ramSym} == ∅"
-                case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) ∉ ${ramSym}"
+                case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
+                case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                case BoolExp.Leq(_, lhs, rhs) => "${lhs} ≤ ${rhs}"
+                case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
@@ -297,10 +297,12 @@ mod Fixpoint.Ast.Ram {
 
     // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
     pub enum RamProgram[v] {
-        case Program(RamStmt[v], FactInformation[v], IndexInformation[v])
+        case Program(RamStmt[v], FactInformation[v], MetaInformation[v], IndexInformation[v])
     }
 
-    pub type alias FactInformation[v] = Map[Int64, Vector[Vector[RamTerm[v]]]]
+    pub type alias MetaInformation[v] = PredTrack.PredSymMapInternal[v]
+
+    pub type alias FactInformation[v] = Map[Int64, Vector[Vector[v]]]
     // TODO: Implement this
     pub type alias IndexInformation[v] = Int32
 }

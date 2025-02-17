@@ -30,6 +30,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
     use Fixpoint.Interpreter.Database
+    use PredTrack.PredSymMapInternal
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -38,7 +39,9 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def runSolver(d: Datalog[v]): Datalog[v] with Order[v] =
-        Fixpoint.Phase.Stratifier.stratify(d) |> runWithStratification(d)
+        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
+        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
+        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat), fixInfo)
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -56,12 +59,12 @@ mod Fixpoint.Solver {
         };
         let model = match d {
             case Datalog(_, _) => region rc {
-                compiler(d) |> Fixpoint.Interpreter.interpret(rc) |> toModel
+                compiler(d) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
             }
             case Model(_) => d
             case Join(Model(m), cs) => region rc {
                 let db = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
-                compiler(cs) |> Fixpoint.Interpreter.interpretWithDatabase(rc, db) |> toModel
+                compiler(cs) |> Fixpoint.Interpreter.interpretWithDatabase(rc, db) |> toModelWithRenaming
             }
             case _ => bug!("Datalog normalization bug")
         };
@@ -748,6 +751,22 @@ mod Fixpoint.Solver {
         case HeadTerm.Lit(v) => v
         case _               => bug!("Unexpected non-value term.")
     }
+
+
+    ///
+    /// Returns the given database `db` as a Datalog value.
+    ///
+    def toModelWithRenaming(dbMeta: (Database[v, r], PredSymMapInternal[v])): Datalog[v] \ r =
+        let (db, meta) = dbMeta;
+        MutMap.toMap(db) |>
+        Map.map(MutMap.toMap) |>
+        Map.filterWithKey(k -> _ -> match k {
+            case RelSym.Symbol(PredSym(_, id), _, _) => PredTrack.isFullID(meta, id)
+        }) |>
+        // Map.foldLeftWithKey(map -> k -> v -> match k {
+        //     case RelSym.Symbol(PredSym(name, _), arity, den) => Map.insert(RelSym.Symbol(PredSym(name, 0i64), arity, den), v, map)
+        // }, Map#{}) |>
+        Model
 
     ///
     /// Returns the given database `db` as a Datalog value.

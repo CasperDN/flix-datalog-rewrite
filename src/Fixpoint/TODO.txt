@@ -11,7 +11,11 @@ Stratifier.flix:
 
 General note:
     The interpreter should receive some meta-data about which indexes should be created for the different relations
+    The different facts1, facts2, ... and so on is used by Lowering.scala (Fixpoint.Solver.facts$arity)
+    A reason for using RAM: Index selection can then also be applied with respect to the Delta-relations, if we want to
 
+WEIRD BEHAVIOR:
+    Apparently all PredSym's are generated with an ID of 0?
 
 
 Spørg Magnus om forskel på følgende:
@@ -21,12 +25,12 @@ Spørg Magnus om forskel på følgende:
             match a {
                 case Constraint(HeadAtom(predSym, _, headTerms), _) => 
                     let x = Vector.map(compileHeadTerm(Map.empty()), headTerms); 
-                    match PredSymMaps.getPredSymFullId(predSymMaps, predSym) {
+                    match PredTrack.getPredSymFullId(PredTrack, predSym) {
                         case PredSym(_, id) => Map.insertWith(List.append, id, x :: Nil, b)
                     }
                     // ()
             }
-            // let _ = PredSymMaps.getPredSymFullId(predSymMaps, PredSym("", 1i64)); 
+            // let _ = PredTrack.getPredSymFullId(PredTrack, PredSym("", 1i64)); 
             // b
         }, Map#{}, facts);
         Map.map(List.toVector, test);
@@ -36,7 +40,7 @@ Spørg Magnus om forskel på følgende:
         // let test = 
         // Vector.foldRight(match Constraint(HeadAtom(predSym, _, headTerms), _) ->
         //             let x = Vector.map(compileHeadTerm(Map.empty()), headTerms);
-        //             match PredSymMaps.getPredSymFullId(predSymMaps, predSym) {
+        //             match PredTrack.getPredSymFullId(PredTrack, predSym) {
         //                 case PredSym(_, id) => Map.insertWith(List.append, id, x :: Nil)
         //             }, Map#{}, facts);
         // Map.map(List.toVector, test)
