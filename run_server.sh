@@ -1,3 +1,3 @@
-tar -xvf out.zip
-cd flix-datalog-rewrite
-java -jar flix.jar
+#!/usr/bin/env bash
+entrypoint=benchmark
+java -jar flix.jar run --entrypoint $entrypoint --args "$1" 

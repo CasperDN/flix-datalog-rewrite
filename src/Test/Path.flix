@@ -14,15 +14,15 @@ mod Path {
         }, tuples);
         inject edges into Edge
 
-    pub def path(): Int64 \ {IO, Sys} = 
+    pub def runTest(): Int64 \ {IO, Sys} = 
         let f = getFacts();
         let r = #{
             Path(x, y) :- Edge(x, y).
             Path(x, z) :- Path(x, y), Path(y, z)
         };
         let startTime = System.nanoTime();
-        let x = Vector.find(_ -> true, query f, r select (x, y) from Path(x, y));
+        let x = query f, r select (x, y) from Path(x, y) |> Vector.exists(_ -> true);
+        Common.forceEval(x);
         let endTime = System.nanoTime();
-        println(x);
         endTime - startTime
 }

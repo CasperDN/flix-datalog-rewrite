@@ -9,12 +9,9 @@ mod Titanic {
     instance Order[Age] {
 
         pub def compare(x: Age, y: Age): Comparison = match (x,y) {
-            case (Age.Known(age1), Age.Known(age2)) => 
-                if (age1 < age2) Comparison.LessThan 
-                else if (age1 > age2) Comparison.GreaterThan 
-                else Comparison.EqualTo
-            case (Age.Unknown, Age.Known(_)) => Comparison.LessThan
-            case (Age.Known(_), Age.Unknown) => Comparison.GreaterThan
+            case (Age.Known(age1), Age.Known(age2)) => age1 <=> age2
+            case (Age.Unknown, Age.Known(_)) => Comparison.GreaterThan
+            case (Age.Known(_), Age.Unknown) => Comparison.LessThan
             case _ => Comparison.LessThan
         }
 
@@ -43,20 +40,20 @@ mod Titanic {
                 )
             case _ => ???
         }, List.slice({start = 1}, {end = List.size(tuples)},tuples));
-        inject List.take(30, passengers) into Passenger
+        inject List.take(500, passengers) into Passenger
 
-    pub def titanic(): Int64 \ {IO, Sys} = 
+    pub def runTest(): Int64 \ {IO, Sys} = 
         let f = getFacts();
         let r = #{
             Survivors(embarkTown; Set#{id}) :- Passenger(id, 1, g, a, fare, c, embarkTown).
             NumSurvivors(embarkTown, Set.size(s)) :- fix Survivors(embarkTown; s). 
 
-            Child(id, survived, gender, fare, class, embarkTown) :- 
-                Passenger(id, survived, gender, age, fare, class, embarkTown), if (age < Age.Known(18.0f32)).
+            Child(id) :- 
+                Passenger(id, _, _, age, _, _, _), if (age < Age.Known(18.0f32)).
         };
         let startTime = System.nanoTime();
-        let x = query f, r select set from NumSurvivors("Southampton", set);
+        let x = query f, r select set from NumSurvivors("Southampton", set) |> Vector.exists(_ -> true);
+        Common.forceEval(x);
         let endTime = System.nanoTime();
-        println(x);
         endTime - startTime
 }
