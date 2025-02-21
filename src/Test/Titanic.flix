@@ -19,7 +19,7 @@ mod Titanic {
 
     // Passenger: (Id, Survived, Gender, Age, Fare, Class, EmbarkTown)
     def getFacts(): #{ Passenger(Int32, Int32, String, Age, Float32, String, String) | r } \ {IO, Sys} = 
-        let path = "${Common.getCwd()}\\dep\\seaborn-data\\titanic.csv";
+        let path = "${Common.getCwd()}/titanic.csv";
         let tuples = Common.loadTuplesFromCSV(path, ",");
         let passengers = List.mapWithIndex(i -> x -> match x {
             case surv :: _ :: gender :: age :: _ :: _ :: fare :: _ :: class :: _ :: adult :: _ :: embarkTown :: _ :: _ :: Nil => 

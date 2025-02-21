@@ -2,7 +2,7 @@ mod Path {
     import java.lang.System;
 
     def getFacts(): #{ Edge(Int32, Int32) | r } \ {IO, Sys} = 
-        let path = "${Common.getCwd()}/src/Test/edge.csv";
+        let path = "${Common.getCwd()}/edge.csv";
         let tuples = Common.loadTuplesFromCSV(path, " ");
         let map = x -> match Int32.fromString(x) {
             case Some(y) => y
