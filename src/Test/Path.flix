@@ -3,7 +3,7 @@ mod Path {
 
     def getFacts(): #{ Edge(Int32, Int32) | r } \ {IO, Sys} = 
         let path = "${Common.getCwd()}/edge.csv";
-        let tuples = Common.loadTuplesFromCSV(path, " ");
+        let tuples = Common.loadTuplesFromFile(path, 0, " ");
         let map = x -> match Int32.fromString(x) {
             case Some(y) => y
             case None => ???
@@ -20,8 +20,8 @@ mod Path {
             Path(x, y) :- Edge(x, y).
             Path(x, z) :- Path(x, y), Path(y, z)
         };
-        let startTime = System.nanoTime();
         let x = query f, r select (x, y) from Path(x, y) |> Vector.exists(_ -> true);
+        let startTime = System.nanoTime();
         Common.forceEval(x);
         let endTime = System.nanoTime();
         endTime - startTime

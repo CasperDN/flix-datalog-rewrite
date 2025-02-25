@@ -20,7 +20,7 @@ mod Titanic {
     // Passenger: (Id, Survived, Gender, Age, Fare, Class, EmbarkTown)
     def getFacts(): #{ Passenger(Int32, Int32, String, Age, Float32, String, String) | r } \ {IO, Sys} = 
         let path = "${Common.getCwd()}/titanic.csv";
-        let tuples = Common.loadTuplesFromCSV(path, ",");
+        let tuples = Common.loadTuplesFromFile(path, 1, ",");
         let passengers = List.mapWithIndex(i -> x -> match x {
             case surv :: _ :: gender :: age :: _ :: _ :: fare :: _ :: class :: _ :: adult :: _ :: embarkTown :: _ :: _ :: Nil => 
                 (   
@@ -39,7 +39,7 @@ mod Titanic {
                     embarkTown
                 )
             case _ => ???
-        }, List.slice({start = 1}, {end = List.size(tuples)},tuples));
+        }, tuples);
         inject List.take(500, passengers) into Passenger
 
     pub def runTest(): Int64 \ {IO, Sys} = 
@@ -51,8 +51,8 @@ mod Titanic {
             Child(id) :- 
                 Passenger(id, _, _, age, _, _, _), if (age < Age.Known(18.0f32)).
         };
-        let startTime = System.nanoTime();
         let x = query f, r select set from NumSurvivors("Southampton", set) |> Vector.exists(_ -> true);
+        let startTime = System.nanoTime();
         Common.forceEval(x);
         let endTime = System.nanoTime();
         endTime - startTime
