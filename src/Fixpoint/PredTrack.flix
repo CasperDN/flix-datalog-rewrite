@@ -20,14 +20,14 @@ mod PredTrack {
         use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, RamProgram}
 
         // (max+1, map from old index to RelSym, map from new index to old PredSym)
-        pub type alias PredSymMapInternal[v] = (Int64, Map[Int64, RelSym[v]], Map[Int64, PredSym])
+        pub type alias PredSymMapInternal = (Int64, Map[Int64, RelSym], Map[Int64, PredSym])
 
         pub enum PredType with Eq {
             case Full,
             case Delta,
             case New
         }
-        pub def initialize(program: Datalog[v]): PredSymMapInternal[v] = 
+        pub def initialize(program: Datalog): PredSymMapInternal = 
             let (max, forwardMap) = remapAllPredicates(program);
             // let backMap = MutMap.empty(rc);
             let backMap = Map.mapWithKey(id -> v -> 
@@ -38,14 +38,14 @@ mod PredTrack {
             (max, forwardMap, backMap)
         
 
-        pub def isFullPredicate(self: PredSymMapInternal[v], pred: PredSym): Bool = match pred {
+        pub def isFullPredicate(self: PredSymMapInternal, pred: PredSym): Bool = match pred {
             case PredSym(_, id) => isFullID(self, id)
         }
 
-        pub def isFullID(self: PredSymMapInternal[v], id: Int64): Bool = 
+        pub def isFullID(self: PredSymMapInternal, id: Int64): Bool = 
             PredType.Full == idToPredType(self, id)
 
-        pub def idToPredType(self: PredSymMapInternal[v], id: Int64): PredType = 
+        pub def idToPredType(self: PredSymMapInternal, id: Int64): PredType = 
             let (max, _, _) = self;
             if(id <= max) {
                 PredType.Full
@@ -55,20 +55,20 @@ mod PredTrack {
                 PredType.New                
             }
 
-
+        
 
         ///
         /// Collect all predicate symbols in a map
 
         ///
-        def remapAllPredicates(program: Datalog[v]): (Int64, Map[Int64, RelSym[v]]) = match program {
+        def remapAllPredicates(program: Datalog): (Int64, Map[Int64, RelSym]) = match program {
             case Datalog(facts, rules) =>
                 let (map1, max1) = collectPredicates(rules);
                 let (map2, max2) = collectPredicates(facts);
                 (Int64.max(max1, max2), Map.union(map1, map2))
             case _ => bug!("Datalog normalization bug")
         }
-        def collectPredicates(constraints: Vector[Constraint[v]]): (Map[Int64, RelSym[v]], Int64) = 
+        def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 
             // Missing Java's computeIfAbsent...
 
             Vector.foldLeft(mapMax -> constraint -> {match constraint { case Constraint(HeadAtom(PredSym(headName, headID), den, terms), body) =>
@@ -83,25 +83,24 @@ mod PredTrack {
                     }, (mapWithHead, Int64.max(headID, max)), body)
                 // (map, max)
             }}, (Map#{}, 0i64), constraints)
-        pub def getNewID(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
+        pub def getNewID(self: PredSymMapInternal, predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
             case PredSym(_, id) => id
-
         }
 
-        pub def oldIDSymToPredSym(self: PredSymMapInternal[v], id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
-            case RelSym.Symbol(pred, _, _) => pred
-        }
+        // pub def oldIDSymToPredSym(self: PredSymMapInternal, id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
+        //     case RelSym.Symbol(pred, _, _) => pred
+        // }
 
-        pub def oldPredSymToPredSym(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): PredSym = match oldPredSymToRelSym(self, predSym, t) {
+        pub def oldPredSymToPredSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym = match oldPredSymToRelSym(self, predSym, t) {
                 case RelSym.Symbol(pred, _, _) => pred
 
         }
 
-        pub def oldPredSymToRelSym(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): RelSym[v] = match predSym {
+        pub def oldPredSymToRelSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): RelSym = match predSym {
             case PredSym(_, id) => oldIDSymToRelSym(self, id, t)
         }
 
-        pub def oldIDSymToRelSym(self: PredSymMapInternal[v], id: Int64, t: PredType): RelSym[v] = 
+        pub def oldIDSymToRelSym(self: PredSymMapInternal, id: Int64, t: PredType): RelSym = 
             let (max, map, _) = self;
 
             let new_ = oldIDSymToNewRelSymInternal(id, map);
@@ -112,23 +111,8 @@ mod PredTrack {
         }
 
 
-        pub def oldPredSymToNewRelSymFull(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
-            oldPredSymToRelSym(self, predSym, PredType.Full)
-            // let (_, map, _) = self;
-            // oldPredSymToNewRelSymInternal(predSym, map)
-
-        pub def oldPredSymToNewRelSymDelta(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
-            oldPredSymToRelSym(self, predSym, PredType.Delta)
-            // let (max, map, _) = self;
-            // addToRelSym(oldPredSymToNewRelSymInternal(predSym, map), max)
-
-        pub def oldPredSymToNewRelSymNew(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
-            oldPredSymToRelSym(self, predSym, PredType.New)
-            // let (max, map, _) = self;
-            // addToRelSym(oldPredSymToNewRelSymInternal(predSym, map), 2i64*max)
-        
         @Internal
-        def addToRelSym(relSym: RelSym[v], c: Int64): RelSym[v] = match relSym {
+        def addToRelSym(relSym: RelSym, c: Int64): RelSym = match relSym {
             case RelSym.Symbol(pred, arity, den) => RelSym.Symbol(addToPredSym(pred, c), arity, den)
         }
 
@@ -138,7 +122,7 @@ mod PredTrack {
         }
         
         @Internal
-        def oldIDSymToNewRelSymInternal(id: Int64, map: Map[Int64, RelSym[v]]): RelSym[v] = match Map.get(id, map) {
+        def oldIDSymToNewRelSymInternal(id: Int64, map: Map[Int64, RelSym]): RelSym = match Map.get(id, map) {
                 case Some(relSym) => relSym
                 case None => bug!("PredSymMap not initialized correctly?")
         }
@@ -169,14 +153,14 @@ mod PredTrack {
 //         // use Fixpoint.Phase.Compiler.PredSymMapInternal
 
 //     // (max, map from old index to RelSym, map from new index to old PredSym)
-//         pub type alias PredSymMapInternal[v] = (Int64, Map[Int64, RelSym[v]], Map[Int64, PredSym])
+//         pub type alias PredSymMapInternal = (Int64, Map[Int64, RelSym], Map[Int64, PredSym])
 
 //         pub enum PredType {
 //             case Full,
 //             case Delta,
 //             case New
 //         }
-//         pub def initialize(program: Datalog[v]): PredSymMapInternal[v] = region rc {
+//         pub def initialize(program: Datalog): PredSymMapInternal = region rc {
 //             let (max, forwardMap) = remapAllPredicates(program);
 //             let backMap = MutMap.empty(rc);
 //             Map.forEach(oldID -> v -> 
@@ -192,7 +176,7 @@ mod PredTrack {
 //         /// Collect all predicate symbols in a map
 
 //         ///
-//         def remapAllPredicates(program: Datalog[v]): (Int64, Map[Int64, RelSym[v]]) = region rc {
+//         def remapAllPredicates(program: Datalog): (Int64, Map[Int64, RelSym]) = region rc {
 //                 let counter = Ref.fresh(rc, 0i64);
 //                 let map = MutMap.empty(rc);
 //                 match program {
@@ -202,7 +186,7 @@ mod PredTrack {
 //                     case _ => bug!("Datalog normalization bug")
 //                 }
 //         }
-//         def collectPredicates(constraints: Vector[Constraint[v]], counter: Ref[Int64, r], map: MutMap[Int64, RelSym[v], r]): Unit \ r = 
+//         def collectPredicates(constraints: Vector[Constraint], counter: Ref[Int64, r], map: MutMap[Int64, RelSym, r]): Unit \ r = 
 //             // Missing Java's computeIfAbsent...
 
 //             Vector.forEach(constraint -> {match constraint { case Constraint(HeadAtom(PredSym(headName, oldPred), den, terms), body) =>
@@ -219,25 +203,25 @@ mod PredTrack {
 //                     case _ => ()
 //                 }, body)
 //             }}, constraints)
-//         pub def getNewID(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
+//         pub def getNewID(self: PredSymMapInternal, predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
 //             case PredSym(_, id) => id
 
 //         }
 
-//         pub def oldIDSymToPredSym(self: PredSymMapInternal[v], id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
+//         pub def oldIDSymToPredSym(self: PredSymMapInternal, id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
 //             case RelSym.Symbol(pred, _, _) => pred
 //         }
 
-//         pub def oldPredSymToPredSym(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): PredSym = match oldPredSymToRelSym(self, predSym, t) {
+//         pub def oldPredSymToPredSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym = match oldPredSymToRelSym(self, predSym, t) {
 //                 case RelSym.Symbol(pred, _, _) => pred
 
 //         }
 
-//         pub def oldPredSymToRelSym(self: PredSymMapInternal[v], predSym: PredSym, t: PredType): RelSym[v] = match predSym {
+//         pub def oldPredSymToRelSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): RelSym = match predSym {
 //             case PredSym(_, id) => oldIDSymToRelSym(self, id, t)
 //         }
 
-//         pub def oldIDSymToRelSym(self: PredSymMapInternal[v], id: Int64, t: PredType): RelSym[v] = 
+//         pub def oldIDSymToRelSym(self: PredSymMapInternal, id: Int64, t: PredType): RelSym = 
 //             let (max, map, _) = self;
 
 //             let new_ = oldIDSymToNewRelSymInternal(id, map);
@@ -248,23 +232,23 @@ mod PredTrack {
 //         }
 
 
-//         pub def oldPredSymToNewRelSymFull(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
+//         pub def oldPredSymToNewRelSymFull(self: PredSymMapInternal, predSym: PredSym): RelSym =
 //             oldPredSymToRelSym(self, predSym, PredType.Full)
 //             // let (_, map, _) = self;
 //             // oldPredSymToNewRelSymInternal(predSym, map)
 
-//         pub def oldPredSymToNewRelSymDelta(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
+//         pub def oldPredSymToNewRelSymDelta(self: PredSymMapInternal, predSym: PredSym): RelSym =
 //             oldPredSymToRelSym(self, predSym, PredType.Delta)
 //             // let (max, map, _) = self;
 //             // addToRelSym(oldPredSymToNewRelSymInternal(predSym, map), max)
 
-//         pub def oldPredSymToNewRelSymNew(self: PredSymMapInternal[v], predSym: PredSym): RelSym[v] =
+//         pub def oldPredSymToNewRelSymNew(self: PredSymMapInternal, predSym: PredSym): RelSym =
 //             oldPredSymToRelSym(self, predSym, PredType.New)
 //             // let (max, map, _) = self;
 //             // addToRelSym(oldPredSymToNewRelSymInternal(predSym, map), 2i64*max)
         
 //         @Internal
-//         def addToRelSym(relSym: RelSym[v], c: Int64): RelSym[v] = match relSym {
+//         def addToRelSym(relSym: RelSym, c: Int64): RelSym = match relSym {
 //             case RelSym.Symbol(pred, arity, den) => RelSym.Symbol(addToPredSym(pred, c), arity, den)
 //         }
 
@@ -274,7 +258,7 @@ mod PredTrack {
 //         }
         
 //         @Internal
-//         def oldIDSymToNewRelSymInternal(id: Int64, map: Map[Int64, RelSym[v]]): RelSym[v] = match Map.get(id, map) {
+//         def oldIDSymToNewRelSymInternal(id: Int64, map: Map[Int64, RelSym]): RelSym = match Map.get(id, map) {
 //                 case Some(relSym) => relSym
 //                 case None => bug!("PredSymMap not initialized correctly?")
 //         }

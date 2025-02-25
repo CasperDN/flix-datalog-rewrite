@@ -60,7 +60,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// Step 1 and Step 2 are implemented as one pass.
     ///
     @Internal
-    pub def queryStmt(stmt: RamStmt[v]): RamStmt[v] = match stmt {
+    pub def queryStmt(stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) =>
             let (innerOp, ground) = queryOp(op, Set#{});
             if (Vector.isEmpty(ground))
@@ -77,7 +77,7 @@ mod Fixpoint.Phase.IndexSelection {
     }
 
     @Internal
-    pub def queryProgram(program: RamProgram[v]): RamProgram[v] = match program { 
+    pub def queryProgram(program: RamProgram): RamProgram = match program { 
         case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(queryStmt(stmt), facts, meta, index)
     }
 
@@ -87,7 +87,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// `freeVars` is the set of variables bound by an outer loop.
     /// Returns the optimized op and the conditions that occur in `op` that have to be hoisted.
     ///
-    def queryOp(op: RelOp[v], freeVars: Set[TupleVar]): (RelOp[v], Vector[BoolExp[v]]) = match op {
+    def queryOp(op: RelOp, freeVars: Set[TupleVar]): (RelOp, Vector[BoolExp]) = match op {
         case RelOp.Search(var, ramSym, body) =>
             use Fixpoint.Ast.Ram.BoolExp.Eq;
             use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
@@ -126,7 +126,8 @@ mod Fixpoint.Phase.IndexSelection {
                 //         case _ => ???
                 //     }, prefixQuery);
                 let qry = Vector.map(x -> match x {
-                        case Eq(lhs, rhs) => QueryExp.Eq(lhs, rhs)
+                        // case Eq(lhs, rhs) => QueryExp.Eq(lhs, rhs)
+                        case Eq(lhs, rhs) => BoolExp.Eq(lhs, rhs)
                         case _ => ???
                     }, prefixQuery);
                 if (Vector.isEmpty(test))
@@ -146,7 +147,7 @@ mod Fixpoint.Phase.IndexSelection {
             (innerOp, Vector.append(test, innerGround))
     }
 
-    def longestPrefixQuery(varQuery: Vector[BoolExp[v]]): (Vector[BoolExp[v]], Vector[BoolExp[v]]) =
+    def longestPrefixQuery(varQuery: Vector[BoolExp]): (Vector[BoolExp], Vector[BoolExp]) =
         use Fixpoint.Ast.Ram.BoolExp.Eq;
         use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
         // Sort equalities of the form `var[i] = rhs` ascending on `i`.
@@ -173,7 +174,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// An expression is ground if all its terms are ground.
     ///
-    def isExpGround(freeVars: Set[TupleVar], exp: BoolExp[v]): Bool = match exp {
+    def isExpGround(freeVars: Set[TupleVar], exp: BoolExp): Bool = match exp {
         case BoolExp.IsEmpty(_) => true
         case BoolExp.NotMemberOf(terms, _) => Vector.forAll(isTermGround(freeVars), terms)
         case BoolExp.Eq(lhs, rhs) => isTermGround(freeVars, lhs) and isTermGround(freeVars, rhs)
@@ -203,7 +204,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// A term is ground if it is a literal or a free variable.
     ///
-    def isTermGround(freeVars: Set[TupleVar], term: RamTerm[v]): Bool = match term {
+    def isTermGround(freeVars: Set[TupleVar], term: RamTerm): Bool = match term {
         case RamTerm.Lit(_) => true
         case RamTerm.RowLoad(var, _) => Set.memberOf(var, freeVars)
         case RamTerm.LoadLatVar(var) => Set.memberOf(var, freeVars)

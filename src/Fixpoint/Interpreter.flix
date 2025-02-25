@@ -21,30 +21,31 @@
 
 mod Fixpoint.Interpreter {
     use PredTrack.PredSymMapInternal
+    use Fixpoint.Boxed;
 
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp, RamProgram}
     use Fixpoint.Ast.Shared.Denotation
     // use PredTrack
 
-    pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
+    pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
 
-    pub type alias SearchEnv[v: Type, r: Region] = (Array[Vector[v], r], Array[v, r])
+    pub type alias SearchEnv[r: Region] = (Array[Vector[Boxed], r], Array[Boxed, r])
 
-    // pub type alias Database[v: Type, r: Region] = MutMap[Int64, MutMap[Vector[v], v, r], r]
+    // pub type alias Database[v: Type, r: Region] = MutMap[Int64, MutMap[Vector, v, r], r]
 
-    // pub type alias Database[v: Type, r: Region] = MutMap[RelSym[v], MutMap[Vector[v], v, r], r]
+    // pub type alias Database[v: Type, r: Region] = MutMap[RelSym, MutMap[Vector, v, r], r]
 
     /**
     pub type alias Database[r: Region] = (
-        MutMap[Int64, MutSet[Vector[v], r], r], 
-        MutMap[Int64, MutMap[Vector[v], r], r]
+        MutMap[Int64, MutSet[Vector, r], r], 
+        MutMap[Int64, MutMap[Vector, r], r]
     )
      */
 
 
     /**
     pub type alias Database[r: Region] = {
-        // (longMaps = MutMap[RelSym[v], MutMap[Vector[Int64]]],)        
+        // (longMaps = MutMap[RelSym, MutMap[Vector[Int64]]],)        
         )
         
     }
@@ -53,7 +54,7 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpret(rc: Region[r], program: RamProgram[v]): (Database[v, r], PredSymMapInternal[v]) \ r with Order[v] =
+    pub def interpret(rc: Region[r], program: RamProgram): (Database[r], PredSymMapInternal) \ r =
         let db = MutMap.empty(rc);
         match program {
             case RamProgram.Program(_, facts, predTrack, _) =>
@@ -80,13 +81,13 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], db: Database[v, r], program: RamProgram[v]): (Database[v, r], PredSymMapInternal[v]) \ r with Order[v] = match Fixpoint.Debugging.notifyPreInterpret(program) {
+    pub def interpretWithDatabase(rc: Region[r], db: Database[r], program: RamProgram): (Database[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
         case RamProgram.Program(stmt, _facts, meta, _index) =>
             evalStmt(rc, db, stmt);
             (db, meta)
     }
 
-    def evalStmt(rc: Region[r], db: Database[v, r], stmt: RamStmt[v]): Unit \ r with Order[v] =
+    def evalStmt(rc: Region[r], db: Database[r], stmt: RamStmt): Unit \ r =
         match stmt {
             case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), relOp)
             case RamStmt.Merge(srcSym, dstSym) =>
@@ -114,7 +115,7 @@ mod Fixpoint.Interpreter {
             case RamStmt.Par(_) => ???
         }
 
-    def allocEnv(rc: Region[r], depth: Int32, relOp: RelOp[v]): SearchEnv[v, r] \ r = match relOp {
+    def allocEnv(rc: Region[r], depth: Int32, relOp: RelOp): SearchEnv[r] \ r = match relOp {
         case RelOp.Search(_, _, body)           => allocEnv(rc, depth + 1, body)
         case RelOp.SearchWithIndex(_, _, _, body)         => allocEnv(rc, depth + 1, body)
         case RelOp.Functional(_, _, _, body)    => allocEnv(rc, depth + 1, body)
@@ -122,7 +123,7 @@ mod Fixpoint.Interpreter {
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
     }
 
-    def evalOp(rc1: Region[r1], db: Database[v, r1], env: SearchEnv[v, r2], op: RelOp[v]): Unit \ { r1, r2} with Order[v] =
+    def evalOp(rc1: Region[r1], db: Database[r1], env: SearchEnv[r2], op: RelOp): Unit \ { r1, r2} =
         match op {
             case RelOp.Search(TupleVar.Named(i), ramSym, body) =>
                 let (tupleEnv, latEnv) = env;
@@ -134,7 +135,8 @@ mod Fixpoint.Interpreter {
             case RelOp.SearchWithIndex(TupleVar.Named(i), ramSym, qry, body) =>
                 let (tupleEnv, latEnv) = env;
                 let toSend = Vector.map(x -> match x {
-                    case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
+                    // case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
+                    case BoolExp.Eq(RamTerm.RowLoad(_, index), t2) => (index, t2)
                     case _ => ???
                 }, qry);
                 MutMap.rangeQueryWith(evalQuery(env, Vector.toList(toSend)), t -> l -> {
@@ -178,7 +180,7 @@ mod Fixpoint.Interpreter {
             case _ => ()
         }
 
-    def evalQuery(env: SearchEnv[v, r], qry: List[(Int32, RamTerm[v])], tuple: Vector[v]): Comparison \ r with Order[v] =
+    def evalQuery(env: SearchEnv[r], qry: List[(Int32, RamTerm)], tuple: Vector[Boxed]): Comparison \ r =
         match qry {
             case Nil => Comparison.EqualTo
             case (j, t) :: tl => match Vector.get(j, tuple) <=> evalTerm(env, t) {
@@ -187,7 +189,7 @@ mod Fixpoint.Interpreter {
             }
         }
 
-    def evalBoolExp(rc1: Region[r1], db: Database[v, r1], env: SearchEnv[v, r2], es: Vector[BoolExp[v]]): Bool \ { r1, r2 } with Order[v] =
+    def evalBoolExp(rc1: Region[r1], db: Database[r1], env: SearchEnv[r2], es: Vector[BoolExp]): Bool \ { r1, r2 } =
         Vector.forAll(exp -> match exp {
             case BoolExp.IsEmpty(ramSym) =>
                 MutMap.isEmpty(MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
@@ -241,7 +243,7 @@ mod Fixpoint.Interpreter {
                 f(v1)(v2)(v3)(v4)(v5)
         }, es)
 
-    def evalTerm(env: SearchEnv[v, r], term: RamTerm[v]): v \ r = match term {
+    def evalTerm(env: SearchEnv[r], term: RamTerm): Boxed \ r = match term {
         case RamTerm.Lit(v) => v
         case RamTerm.RowLoad(TupleVar.Named(i), index) =>
             let (tupleEnv, _) = env;
@@ -287,7 +289,7 @@ mod Fixpoint.Interpreter {
     //     case None => bug!("Unexpected None in Interpreter")
     // }
 
-    // def evalInputFacts(rc: Region[r], term: RamTerm[v]): v \ r = 
+    // def evalInputFacts(rc: Region[r], term: RamTerm): v \ r = 
     //     let arr0 = Array.empty(rc, 0);
     //     let arr1 = Array.empty(rc, 0);
     //     evalTerm((arr0, arr1), term)

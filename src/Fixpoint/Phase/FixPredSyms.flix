@@ -28,7 +28,7 @@ mod Fixpoint.Phase.FixPredSyms {
     pub type alias FixInformation = Map[PredSym, Int64]
 
     @Internal
-    pub def fixPredSyms(d: Datalog[v]): (Datalog[v], FixInformation) = match d {
+    pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = match d {
         case Datalog(facts, rules) => region rc {
             let predToID = MutMap.empty(rc);
             let counter = Ref.fresh(rc, 0i64);
@@ -39,7 +39,7 @@ mod Fixpoint.Phase.FixPredSyms {
     }
 
     @Internal
-    pub def unfixPredSym(d: Datalog[v], forwardMap: FixInformation): Datalog[v] = match d {
+    pub def unfixPredSym(d: Datalog, forwardMap: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(swapMapOrder(forwardMap));
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
@@ -89,17 +89,17 @@ mod Fixpoint.Phase.FixPredSyms {
     
 
     @Internal
-    def remapConstraints(constraints: Vector[Constraint[v]], transformer: PredSym -> PredSym \ r): Vector[Constraint[v]] \ r = {
+    def remapConstraints(constraints: Vector[Constraint], transformer: PredSym -> PredSym \ r): Vector[Constraint] \ r = {
         Vector.map(match Constraint(head, body) -> Constraint(remapHead(head, transformer), Vector.map(x -> remapBody(x, transformer), body)), constraints)
     }
 
     @Internal
-    def remapHead(head: HeadPredicate[v], transformer: PredSym -> PredSym \ r): HeadPredicate[v] \ r = match head {
+    def remapHead(head: HeadPredicate, transformer: PredSym -> PredSym \ r): HeadPredicate \ r = match head {
         case HeadAtom(pred, den, terms) => HeadAtom(transformer(pred), den, terms)
     }
     
     @Internal
-    def remapBody(body: BodyPredicate[v], transformer: PredSym -> PredSym \ r): BodyPredicate[v] \ r = match body {
+    def remapBody(body: BodyPredicate, transformer: PredSym -> PredSym \ r): BodyPredicate \ r = match body {
         case BodyAtom(pred, den, pol, fixed, terms) => BodyAtom(transformer(pred), den, pol, fixed, terms)
         case _ => body
     }

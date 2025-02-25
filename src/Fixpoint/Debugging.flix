@@ -27,7 +27,7 @@ mod Fixpoint.Debugging {
     /// Note: Returns `d` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreSolve(d: Datalog[v]): Datalog[v] with Order[v] = unchecked_cast({
+    pub def notifyPreSolve(d: Datalog): Datalog = unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Datalog Input");
@@ -47,7 +47,7 @@ mod Fixpoint.Debugging {
     /// Note: Returns `d` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPostSolve(d: Datalog[v]): Datalog[v] with Order[v] = unchecked_cast({
+    pub def notifyPostSolve(d: Datalog): Datalog = unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Minimal Model");
@@ -67,27 +67,27 @@ mod Fixpoint.Debugging {
     /// Note: Returns `s` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreInterpret(program: RamProgram[v]): RamProgram[v] with Order[v] = match program {
+    pub def notifyPreInterpret(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, _meta, _index) => unchecked_cast({
-        if (Fixpoint.Options.enableDebugging()) {
-            println(String.repeat(80, "*"));
-            println("** Facts");
-            println(String.repeat(80, "*"));
-            println("");
-            println(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}"));
-            // println(String.indent(4, "${Debug.stringify(facts)}"));
-            println("");
-            println(String.repeat(80, "*"));
-            println("** Relation Algebra Machine AST");
-            println(String.repeat(80, "*"));
-            println("");
-            println(String.indent(4, "${stmt}"));
-            println("");
-            program
-        } else {
-            program
-        }
-    } as _ \ {})
+            if (Fixpoint.Options.enableDebugging()) {
+                println(String.repeat(80, "*"));
+                println("** Facts");
+                println(String.repeat(80, "*"));
+                println("");
+                println(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}"));
+                println(String.indent(4, "${Debug.stringify(facts)}"));
+                println("");
+                println(String.repeat(80, "*"));
+                println("** Relation Algebra Machine AST");
+                println(String.repeat(80, "*"));
+                println("");                
+                println(String.indent(4, "${stmt}"));
+                println("");
+                program
+            } else {
+                program
+            }
+        } as _ \ {})
     }
 
 }

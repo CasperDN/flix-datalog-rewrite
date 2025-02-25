@@ -23,13 +23,13 @@ mod Fixpoint.Phase.VarsToIndices {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
 
         @Internal
-    pub def lowerProgram(program: RamProgram[v]): RamProgram[v] = match program {
+    pub def lowerProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(lowerStmt(stmt), facts, meta, index)
     }
 
 
     @Internal
-    pub def lowerStmt(stmt: RamStmt[v]): RamStmt[v] = match stmt {
+    pub def lowerStmt(stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) => RamStmt.Insert(lowerOp(op, Map#{}, 0))
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
@@ -40,7 +40,7 @@ mod Fixpoint.Phase.VarsToIndices {
         case RamStmt.Par(_) => ???
     }
 
-    def lowerOp(op: RelOp[v], rowVars: Map[TupleVar, TupleVar], depth: Int32): RelOp[v] =
+    def lowerOp(op: RelOp, rowVars: Map[TupleVar, TupleVar], depth: Int32): RelOp =
         match op {
             case RelOp.Search(var, ramSym, body) =>
                 let newVar = TupleVar.Named(depth);
@@ -50,7 +50,8 @@ mod Fixpoint.Phase.VarsToIndices {
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(var, newVar, rowVars);
                 let newQuery = Vector.map(x -> match x {
-                    case QueryExp.Eq(j, t) => QueryExp.Eq(j, lowerTerm(rowVars, t))
+                    // case QueryExp.Eq(j, t) => QueryExp.Eq(j, lowerTerm(rowVars, t))
+                    case BoolExp.Eq(j, t) => BoolExp.Eq(j, lowerTerm(rowVars, t))
                     case _ => ???
                 }, prefixQuery);
                 RelOp.SearchWithIndex(newVar, ramSym, newQuery, lowerOp(body, newVars, depth + 1))
@@ -72,7 +73,7 @@ mod Fixpoint.Phase.VarsToIndices {
                  RelOp.If(Vector.map(lowerExp(rowVars), test), lowerOp(then, rowVars, depth))
         }
 
-    def lowerExp(rowVars: Map[TupleVar, TupleVar], exp: BoolExp[v]): BoolExp[v] =
+    def lowerExp(rowVars: Map[TupleVar, TupleVar], exp: BoolExp): BoolExp =
         match exp {
             case BoolExp.IsEmpty(_) => exp
             case BoolExp.NotMemberOf(terms, ramSym) =>
@@ -109,7 +110,7 @@ mod Fixpoint.Phase.VarsToIndices {
                 BoolExp.Guard5(f, t1, t2, t3, t4, t5)
         }
 
-    def lowerTerm(rowVars: Map[TupleVar, TupleVar], term: RamTerm[v]): RamTerm[v] = match term {
+    def lowerTerm(rowVars: Map[TupleVar, TupleVar], term: RamTerm): RamTerm = match term {
         case RamTerm.Lit(_) => term
         case RamTerm.RowLoad(rowVar, index) =>
              RamTerm.RowLoad(Map.getWithDefault(rowVar, rowVar, rowVars), index)
