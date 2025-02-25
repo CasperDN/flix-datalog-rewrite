@@ -25,7 +25,7 @@ mod Fixpoint.QueryHandler {
 
     enum Index[r: Eff] {
         case RBTree(MutMap[Vector[Int64], Int64, r])
-        // case LinkedBTree(TypeOfLinkBTree)
+        // case BLinkTree(TypeOfLinkBTree)
         // case Trie(TypeOfLinkBTree)
     }
 
