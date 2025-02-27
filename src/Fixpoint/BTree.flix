@@ -1,75 +1,27 @@
-mod Fixpoint.BTree {
+mod Fixpoint {
     type alias Compare[v] = v -> v -> Comparison
-   
+
+    def unwrap(x: Option[a]): a = match x {
+        case Some(v) => v
+        case None => bug!("Attempted unwrapping None")
+    }  
+
     struct BLinkTree[v, r] {
         mut root: Node[v, r],
         order:    Int32,
         rc:       Region[r]
     }
-
-    enum Node[v: Type, r: Eff] {
-        case Internal(MutList[Node[v, r], r], MutList[v, r], NodeData[v, r])
-        case Leaf(MutList[v, r], NodeData[v, r])
-    }
     
-    struct NodeData[v, r] {
-        mut parent: Option[Ref[Node[v, r], r]],
-        mut next:   Option[Ref[Node[v, r], r]]
-    }
-
-
-    mod Node {
-        use Fixpoint.BTree.{NodeData, Node}
-        pub def getData(node: Node[v, r]): NodeData[v, r]  = match node {
-            case Node.Internal(_, _, data) => data
-            case Node.Leaf(_, data)        => data
-        }
-        pub def getParent(node: Node[v, r]): Option[Ref[Node[v, r], r]] \ r               = NodeData.getParent(getData(node))
-        pub def getNext(node: Node[v, r]): Option[Ref[Node[v, r], r]] \ r                 = NodeData.getNext(getData(node))
-        pub def setParent(node: Node[v, r], parent: Option[Ref[Node[v, r], r]]): Unit \ r = NodeData.setParent(getData(node), parent)
-        pub def setNext(node: Node[v, r], next: Option[Ref[Node[v, r], r]]): Unit \ r     = NodeData.setNext(getData(node), next)
-
-    }
-
-    mod NodeData {
-        use Fixpoint.BTree.Node
-        pub def getParent(data: NodeData[v, r]): Option[Ref[Node[v, r], r]] \ r               = data->parent
-        pub def getNext(data: NodeData[v, r]): Option[Ref[Node[v, r], r]] \ r                 = data->next
-        pub def setParent(data: NodeData[v, r], parent: Option[Ref[Node[v, r], r]]): Unit \ r = data->parent = parent
-        pub def setNext(data: NodeData[v, r], next: Option[Ref[Node[v, r], r]]): Unit \ r     = data->next = next
-    }
-
-    mod BLinkTree {
-        use Fixpoint.BTree.{NodeData, Node, Compare}
-
-        pub def empty(rc: Region[r], order: Int32): BLinkTree[v, r] \ r = 
-            let nodeData = new NodeData @ rc { 
-                parent = Option.None, 
-                next = Option.None
-            };
-            new BLinkTree @ rc { 
-                root = Node.Leaf(MutList.empty(rc), nodeData), 
-                order = order,
-                rc = rc 
-            }
-
-        def unwrap(x: Option[a]): a = match x {
-            case Some(v) => v
-            case None => bug!("Attempted unwrapping None")
-        }  
-
-        // def findIndexOf(f: v -> Bool \ r1, list: MutList[v, r0]): Option[Int32] \ {r0, r1} = 
-        //     def findInternal(index: Int32): Option[Int32] \ {r0, r1} = {
-        //         if (index >= MutList.length(list)) 
-        //             None
-        //         else
-        //             // Casting here is not 'right', but do not want possible Option overhead since the operation is done often.
-        //             (if(unchecked_cast(f(MutList.get(index, list)) as _ \ {r0, r1}))
-        //                 Some(index)
-        //             else findInternal(index+1))
-        //     };
-        //     findInternal(0)
-
+    struct Node[v, r] {
+        keys:       MutList[v, r], // Acts as keys for internal nodes and values for leaves
+        children:   Option[MutList[Node[v, r], r]],
+        mut parent: Option[Node[v, r]],
+        mut next:   Option[Node[v, r]]
+    }   
+    
+    
+    mod MutList {
+        use Fixpoint.{unwrap, Compare}
         pub def main2(): Unit \ {IO} = region rc {
             let list = MutList.empty(rc);
             MutList.push(2, list);
@@ -81,10 +33,15 @@ mod Fixpoint.BTree {
                 else if (x > y) Comparison.GreaterThan
                 else Comparison.EqualTo
             };
-            println(unchecked_cast(binarySearch(9, list, compare) as _ \ IO))
-        }
+            println(unchecked_cast(binarySearch(4, list, compare, true) as _ \ IO))
+        }    
 
-        def binarySearch(keys: v, list: MutList[v, r], compare: Compare[v]): Int32 \ r = 
+        pub def sortedInsert(x: v, list: MutList[v, r], compare: Compare[v]): Unit \ r = 
+            let index = binarySearch(x, list, compare, false);
+            MutList.insert(x, index, list)
+
+
+        pub def binarySearch(key: v, list: MutList[v, r], compare: Compare[v], traverse: Bool): Int32 \ r = 
             if (MutList.isEmpty(list)) 
                 0
             else
@@ -92,104 +49,174 @@ mod Fixpoint.BTree {
                     if (l <= r) {
                         let m = (l + r) / 2;
                         let cur = unwrap(MutList.nth(m, list));
-                        if (compare(cur, keys) == Comparison.LessThan) f(m + 1, r)
-                        else if (compare(cur, keys) == Comparison.GreaterThan) f(l, m - 1)
-                        else m
+                        if (compare(cur, key) == Comparison.LessThan) f(m + 1, r)
+                        else if (compare(cur, key) == Comparison.GreaterThan) f(l, m - 1)
+                        else if (traverse) m + 1 else m
                     } else if (l != 0) r + 1 else 0
                 }; 
                 f(0, MutList.length(list) - 1)
 
-        def traverse(node: Node[v, r], val: v, compare: Compare[v]): Node[v, r] \ r = match node {
-            case Node.Internal(children, keys, _) =>
-                let index = binarySearch(val, keys, compare);
-                let childToVisit = MutList.nth(index, children);
-                // let findGreaterChild: Node[v, r] -> Bool \ r = child -> {
-                //     let keys = Node.getKeys(child);
-                //     compare(val, keys) == Comparison.LessThan
-                // };
-                // let childToVisit = match findIndexOf(findGreaterChild, children) {
-                //     case Some(index) =>  MutList.nth(index, children)                       
-                //     case None => MutList.last(children)
-                // };
-                traverse(unwrap(childToVisit), val, compare)
-            case _ => node
+    }
+
+    mod Node {
+        use Fixpoint.{Node, Compare, unwrap}
+        use Fixpoint.MutList.{binarySearch, sortedInsert}
+        pub def parent(node: Node[v, r]): Option[Node[v, r]] \ r = node->parent
+        pub def next(node: Node[v, r]): Option[Node[v, r]] \ r = node->next
+        pub def children(node: Node[v, r]): Option[MutList[Node[v, r], r]]  = node->children
+        pub def keys(node: Node[v, r]): MutList[v, r] = node->keys
+
+        // Traverse the tree until a leaf is reached
+        pub def traverse(node: Node[v, r], val: v, compare: Compare[v]): Node[v, r] \ r = match node->children {
+            case Some(children) =>
+                let index = binarySearch(val, node->keys, compare, true);
+                let childToVisit = match MutList.nth(index, children) {
+                    case Some(child) => child
+                    case None => unwrap(MutList.last(children))
+                };
+                traverse(childToVisit, val, compare)
+            case None => node
         }
 
-        def innerInsert(node: Node[v, r], val: v, compare: Compare[v], order: Int32, rc: Region[r]): Unit \ r = match traverse(node, val, compare) {
-            case Node.Leaf(values, _) => 
-                let length = MutList.length(values);
-                if (length + 1 >= order) 
-                    splitLeaf(node, val, compare, order, rc)
+        // Insert a value into a leaf, potentially causing a split and returning a new root
+        pub def insertIntoLeaf(node: Node[v, r], val: v, compare: Compare[v], order: Int32, rc: Region[r]): Option[Node[v,r]] \ r with ToString[v] = 
+            let length = MutList.length(node->keys);
+            if (length + 1 >= order) 
+                splitLeaf(node, val, compare, order, rc)
+            else {
+                sortedInsert(val, node->keys, compare);
+                None
+            }
+
+        // Split a leaf and push the middle key into the parent, potentially causing the parent to split and return a new root
+        def splitLeaf(leftLeaf: Node[v, r], val: v, compare: Compare[v], order: Int32, rc: Region[r]): Option[Node[v, r]] \ r with ToString[v] = 
+            let values = leftLeaf->keys;
+            let arr = MutList.toArray(rc, values);
+            // TODO: Double-check that we dont lose the middle value here
+            let rightArr = Array.copyOfRange(rc, order / 2, MutList.length(values), arr);
+            unchecked_cast(println("Before truncate: ${MutList.toVector(values)}") as _ \ r);
+            MutList.truncate(order / 2, values); 
+            let rightList = Array.toMutList(rc, rightArr);
+            // Decide where to insert val
+            if (compare(val, unwrap(MutList.last(values))) != Comparison.GreaterThan)
+                    sortedInsert(val, values, compare)
                 else 
-                    let index = binarySearch(val, values, compare);
-                    MutList.insert(val, index, values)
-            case _ => unreachable!()
-        }
+                    sortedInsert(val, rightList, compare);
+            unchecked_cast(println("leftList: ${MutList.toVector(values)}") as _ \ r);
+            unchecked_cast(println("rightList: ${MutList.toVector(rightList)}") as _ \ r);
+            // Create a new leaf to store the right half
+            let rightLeaf = new Node @ rc {
+                keys = rightList,
+                children = None,
+                parent = leftLeaf->parent,
+                next = leftLeaf->next
+            };
+            // Update the old leaf's fields
+            leftLeaf->next = Some(rightLeaf);
+            // Push key up to parent
+            let newKey = unwrap(MutList.head(rightList));
+            pushKeyToParent(leftLeaf->parent, newKey, leftLeaf, rightLeaf, compare, order, rc)
 
-        pub def insert(tree: BLinkTree[v, r], val: v, compare: Compare[v]): Unit \ r = 
-            innerInsert(tree->root, val, compare, tree->order, tree->rc)
-
-        def splitLeaf(leftLeaf: Node[v, r], val: v, compare: Compare[v], order: Int32, rc: Region[r]): Unit \ r = match leftLeaf {
-            case Node.Leaf(values, leftData) => 
-                // Split the values into two halves
-                let arr = MutList.toArray(rc, values);
-                // TODO: Double-check that we dont lose the middle value here
-                let rightArr = Array.copyOfRange(rc, MutList.length(values) / 2, MutList.length(values), arr);
-                MutList.truncate(MutList.length(values) / 2, values); 
-                let rightList = Array.toMutList(rc, rightArr);
-                // By default we insert the new value into the right half
-                MutList.insert(val, binarySearch(val, rightList, compare), rightList);
-                // Get the parent if it exists or create a new one
-                let parent = match NodeData.getParent(leftData) {
-                    case None => 
-                        let nodeData = new NodeData @ rc {
-                            parent = Option.None,
-                            next = Option.None
-                        };
-                        let children = MutList.empty(rc);
-                        let keys = MutList.empty(rc);
-                        // We only add the left leaf here since if it already existed
-                        // it would contain the the left leaf
-                        MutList.push(leftLeaf, children); 
-                        MutList.push(unwrap(MutList.head(values)), keys);
-                        let parent = Node.Internal(children, keys, nodeData);
-                        Ref.fresh(rc, parent)
-                    case Some(parent) => parent
-                };
-
-                // Create a new leaf to store the right half
-                let rightData = new NodeData @ rc {
-                    parent = Option.Some(parent),
-                    next = NodeData.getNext(leftData)
-                };
-                let rightLeaf = Node.Leaf(rightList, rightData);
-                // Update the old leaf's fields
-                NodeData.setParent(leftData, Option.Some(parent));
-                NodeData.setNext(leftData, Option.Some(Ref.fresh(rc, rightLeaf)));
-                // Push key up to parent
-                let newKey = unwrap(MutList.head(rightList));
-                splitInternal(parent, newKey, leftLeaf, rightLeaf, compare, order, rc)
-                
-            case _ => unreachable!()
-        }
-
-        def splitInternal(node: Ref[Node[v, r], r], 
+        def splitInternal(node: Node[v, r], 
                           newKey: v, 
                           leftChild: Node[v, r],
                           rightChild: Node[v, r],
                           compare: Compare[v], 
                           order: Int32, 
-                          rc: Region[r]): Unit \ r = match Ref.get(node) {
-            case Node.Internal(children, keys, data) => 
-                let length = MutList.length(children);
-                if (length + 1 >= order) 
-                    ???
-                else 
-                    let index = ???;
-                    ???
-                    // MutList.insert(newKey, keys, ?v)
-            case _ => unreachable!()
+                          rc: Region[r]): Option[Node[v, r]] \ r = ???
+
+
+        def pushKeyToParent(parent: Option[Node[v, r]], 
+                          newKey: v, 
+                          leftChild: Node[v, r],
+                          rightChild: Node[v, r],
+                          compare: Compare[v], 
+                          order: Int32, 
+                          rc: Region[r]): Option[Node[v, r]] \ r with ToString[v] = match parent {
+            case Some(node) => 
+                let children = unwrap(node->children);
+                let length = MutList.length(node->keys);
+                if (length + 1 >= order) {
+                    splitInternal(node, newKey, leftChild, rightChild, compare, order, rc)
+                } else {
+                    // Insert the new key first to know where to insert the node in the children
+                    sortedInsert(newKey, node->keys, compare);
+                    let index = binarySearch(newKey, node->keys, compare, true);
+                    MutList.insert(rightChild, index, children);
+                    None
+                }
+            case None =>  
+                // In this case, leftChild is the root of the tree
+                // and we must construct a new root node
+                let children = MutList.empty(rc);
+                let keys = MutList.empty(rc);
+                MutList.push(leftChild, children); 
+                MutList.push(rightChild, children);
+                MutList.push(newKey, keys);
+                let newRoot = new Node @ rc {
+                    keys = keys,
+                    children = Some(children),
+                    parent = None,
+                    next = None
+                };
+                leftChild->parent = Some(newRoot);
+                rightChild->parent = Some(newRoot);
+                Some(newRoot)
         }
+
+    }
+
+    mod BLinkTree {
+        use Fixpoint.{Node, Compare, unwrap}
+        use Fixpoint.MutList.binarySearch
+
+        pub def empty(rc: Region[r], order: Int32): BLinkTree[v, r] \ r = 
+            let node = new Node @ rc {
+                keys = MutList.empty(rc), 
+                children = None,
+                parent = None, 
+                next = None
+            };
+            new BLinkTree @ rc { 
+                root = node,
+                order = order,
+                rc = rc 
+            }
+
+        pub def main3(): Unit \ IO = region rc {
+            let compare: Int32 -> Int32 -> Comparison = x -> y -> {
+                if (x < y) Comparison.LessThan
+                else if (x > y) Comparison.GreaterThan
+                else Comparison.EqualTo
+            };
+            let tree = empty(rc, 4);
+            insert(tree, 6, compare);
+            insert(tree, 16, compare);
+            insert(tree, 24, compare);
+            insert(tree, 8, compare);
+            insert(tree, 2, compare);
+            insert(tree, 1, compare);
+            insert(tree, 9, compare);
+            insert(tree, 10, compare);
+            insert(tree, 17, compare);
+            insert(tree, 26, compare);
+            insert(tree, 39, compare);
+
+            println("root: ${MutList.toVector(Node.keys(tree->root))}");
+            def f(i: Int32, node: Node[Int32, rc]): Unit = {
+                println("Child ${i}: ${MutList.toVector(Node.keys(node))} ")
+            };
+            MutList.forEachWithIndex(f, unwrap(Node.children(tree->root)))
+        }       
+
+        pub def insert(tree: BLinkTree[v, r], val: v, compare: Compare[v]): Unit \ r with ToString[v] = 
+            let leaf = Node.traverse(tree->root, val, compare);
+            let newRoot = Node.insertIntoLeaf(leaf, val, compare, tree->order, tree->rc);
+            match newRoot {
+                case Some(root) => tree->root = root
+                case None => ()
+            }
+
     }
 
 }
