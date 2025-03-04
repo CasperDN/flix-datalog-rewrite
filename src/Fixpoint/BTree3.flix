@@ -1,23 +1,20 @@
-instance ToString[Fixpoint.BTree2.Node[k, v, r]] with ToString[k], ToString[v] {
+instance ToString[Fixpoint.BTree3.Node[k, v, r]] with ToString[k], ToString[v] {
 
-    pub def toString(x: Fixpoint.BTree2.Node[k, v, r]): String = 
-        unchecked_cast(Fixpoint.BTree2.Node.toString(x, 0) as _ \ { })
+    pub def toString(x: Fixpoint.BTree3.Node[k, v, r]): String = 
+        unchecked_cast(Fixpoint.BTree3.Node.toString(x, 0) as _ \ { })
 
 }
 
-// BTree with simple locking strategy: Lock node
-mod Fixpoint.BTree2 {
-    use Fixpoint.Lock
+mod Fixpoint.BTree3 {
     
     def unwrap(x: Option[a]): a = match x {
         case Some(v) => v
         case None => bug!("Attempted unwrapping None")
-    }  
+    }
 
     pub struct BLinkTree[k, v, r] {
         mut root: Node[k, v, r],
         order:    Int32,
-        rootLock: Lock.Lock[r],
         rc:       Region[r]
     }
 
@@ -25,7 +22,6 @@ mod Fixpoint.BTree2 {
         keys:       MutList[k, r], // Acts as keys for internal nodes and values for leaves
         children:   Option[MutList[Node[k, v, r], r]],
         leaves:     Option[MutList[MutSet[v, r], r]],
-        lock:       Lock.Lock[r],
         mut parent: Option[Node[k, v, r]],
         mut next:   Option[Node[k, v, r]]
     }     
@@ -43,6 +39,12 @@ mod Fixpoint.BTree2 {
         // };
         println(unchecked_cast(binarySearch(6, list) as _ \ IO))
     }
+
+    pub def sortedInsert(x: v, list: MutList[v, r]): Unit \ r with Order[v] = 
+        let index = binarySearch(x, list);
+        if (index < 0)
+            MutList.insert(x, toInsertionPoint(index), list)
+        else bug!("Key should be unique 2")
 
     // Perform a binary search and return the index of `key` in `list` if it exists.
     // Otherwise, return (-insertionPoint - 1). See Java binary search documentation for arrays.
@@ -66,15 +68,13 @@ mod Fixpoint.BTree2 {
     pub def toInsertionPoint(i: Int32): Int32 = -i-1
 
     mod Node {
-        use Fixpoint.Lock
-        use Fixpoint.BTree2.{Node, unwrap, binarySearch, toInsertionPoint, BLinkTree}
-        import java.util.concurrent.locks.ReentrantReadWriteLock
+        use Fixpoint.BTree3.{Node, unwrap}
+        use Fixpoint.BTree3.{binarySearch, sortedInsert, toInsertionPoint}
 
         pub def parent(node: Node[k, v, r]): Option[Node[k, v, r]] \ r = node->parent
         pub def next(node: Node[k, v, r]): Option[Node[k, v, r]] \ r = node->next
         pub def children(node: Node[k, v, r]): Option[MutList[Node[k, v, r], r]]  = node->children
         pub def keys(node: Node[k, v, r]): MutList[k, r] = node->keys
-        pub def lock(node: Node[k, v, r]): Lock.Lock[r] = node->lock
 
         pub def toString(node: Node[k, v, r], indent: Int32): String \ r with ToString[k], ToString[v] = 
             let indentString = String.repeat(indent, " ");
@@ -89,45 +89,19 @@ mod Fixpoint.BTree2 {
                     "${indentString}Leaf(${keysString})\n${leavesString}"
             }
 
-        /// Traverse the tree until a leaf containing `val` is reached
-        /// This function assumes that there is a lock on the node `root`
-        //  The function provides a single read lock on the returned node
-        pub def findLeaf(val: k, getRoot: Unit -> Node[k, v, r]  \ r): Node[k, v, r] \ r with Order[k], Order[v] = 
-            // Traverse the tree while keeping the invariant that there is a node on cur. 
-            // If aquiring a lock at any point fails release the locks you hold and retry from the top.
-            def traverse(cur: Node[k, v, r]): Node[k, v, r] \ r =
-                match cur->children {
-                    case Some(children) =>
-                        let index = binarySearch(val, cur->keys);
-                        let childToVisit = if (index < 0)
-                            MutList.rawGet(toInsertionPoint(index), children)
-                        else 
-                            MutList.rawGet(index + 1, children);
-                        // Try to get a read-lock on the next child
-                        let childLock = childToVisit->lock;
-                        let success = Lock.tryLock(childLock);
-                        Lock.unlock(cur->lock);
-                        if(success)
-                            // Unlock the current node i.e. the parent of `childToVisit`
-                            traverse(childToVisit)
-                        else {
-                            // Give up and restart the attempt. 
-                            // To allow for the writer we encountered to grab the lock 
-                            // on the node readLock the child node as a wait operation.
-                            Lock.lock(childLock);
-                            Lock.unlock(childLock);
-                            traverse(getRoot())
-                        }
-                    case None => cur
-                };
-        traverse(getRoot())
-                
+        // Traverse the tree until a leaf is reached
+        pub def findLeaf(val: k, node: Node[k, v, r]): Node[k, v, r] \ r with Order[k], Order[v] = match node->children {
+            case Some(children) =>
+                let index = binarySearch(val, node->keys);
+                let childToVisit = if (index < 0) {
+                    MutList.rawGet(toInsertionPoint(index), children)
+                } else 
+                    MutList.rawGet(index + 1, children);
+                findLeaf(val, childToVisit)
+            case None => node
+        }
 
-        def actualInsert(key: k, 
-                                 val: v, 
-                                 keys: MutList[k, r], 
-                                 leaves: MutList[MutSet[v, r], r], 
-                                 rc: Region[r]): Unit \ r with Order[k], Order[v] =
+        def insertKeyValIntoLeaf(key: k, val: v, keys: MutList[k, r], leaves: MutList[MutSet[v, r], r], rc: Region[r]): Unit \ r with Order[k], Order[v] =
             let index = binarySearch(key, keys);
             let set = if (index < 0) 
                 let set = MutSet.empty(rc);
@@ -140,20 +114,12 @@ mod Fixpoint.BTree2 {
             MutSet.add(val, set)
 
         // Insert a value into a leaf, potentially causing a split and returning a new root
-        // (Lock) Invariants: 
-        //      On invocation, the thread has a lock on `node`.
-        //      On return, the thread only holds a lock on `Some(node)`
-        pub def insertIntoLeaf(node: Node[k, v, r], 
-                               key: k, 
-                               val: v, 
-                               order: Int32, 
-                               rc: Region[r]): Option[Node[k, v, r]] \ r with ToString[k], ToString[v], Order[k], Order[v] = 
+        pub def insertIntoLeaf(node: Node[k, v, r], key: k, val: v, order: Int32, rc: Region[r]): Option[Node[k, v, r]] \ r with ToString[k], ToString[v], Order[k], Order[v] = 
             let length = MutList.length(node->keys);
-            if (length + 1 >= order)
+            if (length + 1 >= order) 
                 splitLeaf(node, key, val, order, rc)
             else {
-                actualInsert(key, val, node->keys, unwrap(node->leaves), rc);
-                Lock.unlock(node->lock);
+                insertKeyValIntoLeaf(key, val, node->keys, unwrap(node->leaves), rc);
                 None
             }
 
@@ -165,14 +131,10 @@ mod Fixpoint.BTree2 {
             MutList.truncate(i, list); 
             Array.toMutList(rc, rightArr)
 
-        // Split a leaf and push the middle key into the parent, potentially 
-        // causing the parent to split and return a new root
-        // (Lock) Invariants: 
-        //      On invocation, the thread has a lock on `leftNode`.
-        //      On return, the thread only holds a lock on `Some(node)`
+        // Split a leaf and push the middle key into the parent, potentially causing the parent to split and return a new root
         def splitLeaf(leftLeaf: Node[k, v, r], key: k, val: v, order: Int32, rc: Region[r]): Option[Node[k, v, r]] \ r with ToString[k], ToString[v], Order[k], Order[v] = 
             let values = leftLeaf->keys;
-            actualInsert(key, val, leftLeaf->keys, unwrap(leftLeaf->leaves), rc);
+            insertKeyValIntoLeaf(key, val, leftLeaf->keys, unwrap(leftLeaf->leaves), rc);
             let rightList = partition(order / 2, values, rc);            
             let rightLeaves = partition(order / 2, unwrap(leftLeaf->leaves), rc);
             // unchecked_cast(println("leftList: ${MutList.toVector(values)}") as _ \ r);
@@ -182,7 +144,6 @@ mod Fixpoint.BTree2 {
                 keys = rightList,
                 children = None,
                 leaves = Some(rightLeaves),
-                lock = Lock.mkLock(rc),
                 parent = leftLeaf->parent,
                 next = leftLeaf->next
             };
@@ -203,7 +164,6 @@ mod Fixpoint.BTree2 {
                 keys = rightKeys,
                 children = Some(rightChildren),
                 leaves = None,
-                lock = Lock.mkLock(rc),
                 parent = parent->parent,
                 next = parent->next
             };
@@ -211,9 +171,6 @@ mod Fixpoint.BTree2 {
             MutList.forEach(child -> child->parent = Some(rightNode), rightChildren);
             pushKeyToParent(parent->parent, MutList.rawGet(0, rightNode->keys), parent, rightNode, order, rc)
     
-
-        // Problem encountered: We wish to get the parent. We therefore get the parent pointer and lock it. 
-        // Someone else might have split the parent between our read and our acquiring the lock. We cannot compare pointers to discover this...
         def pushKeyToParent(parent: Option[Node[k, v, r]], 
                           newKey: k, 
                           leftChild: Node[k, v, r],
@@ -230,7 +187,7 @@ mod Fixpoint.BTree2 {
                     None
                 } else bug!("Key should be unique");
                 fixParent(node, order, rc)
-            case None =>
+            case None =>  
                 // In this case, leftChild is the root of the tree
                 // and we must construct a new root node
                 let children = MutList.empty(rc);
@@ -242,7 +199,6 @@ mod Fixpoint.BTree2 {
                     keys = keys,
                     children = Some(children),
                     leaves = None,
-                    lock = Lock.mkLock(rc),
                     parent = None,
                     next = None
                 };
@@ -251,9 +207,8 @@ mod Fixpoint.BTree2 {
                 Some(newRoot)
         }
 
-
-        pub def rangeQueryWith(f: k -> v -> Unit \ r0, min: k, max: k, getRoot: Unit -> Node[k, v, r1] \ r1): Unit \ {r0, r1} with ToString[k], ToString[v], Order[k], Order[v] =
-            let minLeaf = findLeaf(min, getRoot);
+        pub def rangeQueryWith(f: k -> v -> Unit \ r0, min: k, max: k, node: Node[k, v, r1]): Unit \ {r0, r1} with ToString[k], ToString[v], Order[k], Order[v] =
+            let minLeaf = findLeaf(min, node);
             let index = binarySearch(min, minLeaf->keys);
             if(index < 0) {
                 let insertionPoint = toInsertionPoint(index);
@@ -279,16 +234,15 @@ mod Fixpoint.BTree2 {
     }
 
     mod BLinkTree {
-        use Fixpoint.Lock
-        use Fixpoint.BTree2.{Node, unwrap}
+        use Fixpoint.BTree3.{Node, unwrap}
         import java.lang.System
 
         pub def main3(): Unit \ {IO, NonDet} = region rc {
             let tree: BLinkTree[Int32, Int32, rc] = empty(rc, 8);
             let start = System.nanoTime();
-            List.forEach(i -> insert(i, Int32.modulo(Random.runWithIO(Random.randomInt32), 30), tree), List.shuffle(List.range(0, 50)));
+            List.forEach(i -> insert(i, Int32.modulo(Random.runWithIO(Random.randomInt32), 30), tree), List.shuffle(List.range(0, 5000000)));
             let time = System.nanoTime() - start;
-            println("Time: ${time / 1000000i64} ms");
+            println("Time: ${time / 1000000000i64} s");
             // List.forEach(i -> insert(i, Int32.modulo(Random.runWithIO(Random.randomInt32), 30), tree), List.shuffle(List.range(0, 50)));
 
             insert(5, 10, tree);
@@ -315,47 +269,26 @@ mod Fixpoint.BTree2 {
                     keys = MutList.empty(rc), 
                     children = None,
                     leaves = Some(MutList.empty(rc)),
-                    lock = Lock.mkLock(rc),
                     parent = None, 
                     next = None
                 };
                 new BLinkTree @ rc { 
                     root = node,
                     order = order,
-                    rootLock = Lock.mkLock(rc),
                     rc = rc 
                 }
-    
-
+        
         pub def insert(key: k, val: v, tree: BLinkTree[k, v, r]): Unit \ r with ToString[k], ToString[v], Order[k], Order[v] = 
-            let getRoot: Unit -> Node[k, v, r] \ r = () -> getRoot(tree);
-            let leaf = Node.findLeaf(key, getRoot);
-            // Node.lock(leaf);
+            let leaf = Node.findLeaf(key, tree->root);
             let newRoot = Node.insertIntoLeaf(leaf, key, val, tree->order, tree->rc);
             match newRoot {
-                case Some(root) => 
-                    Lock.lock(tree->rootLock);
-                    tree->root = root;
-                    Lock.unlock(tree->rootLock);
-                    Lock.unlock(Node.lock(root))
+                case Some(root) => tree->root = root
                 case None => ()
             }
 
         pub def rangeQueryWith(f: k -> v -> Unit \ ef, min: k, max: k, tree: BLinkTree[k, v, r]): Unit \ {r, ef} with Order[k], Order[v], ToString[v], ToString[k] = 
-            let getRoot = () -> getRoot(tree);
-            Node.rangeQueryWith(f, min, max, getRoot)
+            Node.rangeQueryWith(f, min, max, tree->root)
 
-        pub def getRoot(tree: BLinkTree[k, v, r]): Node[k, v, r] \ r = 
-            Lock.lock(tree->rootLock);
-            let root = tree->root;
-            let success = Lock.tryLock(Node.lock(root));
-            Lock.unlock(tree->rootLock);
-            if(success) 
-                root
-            else {
-                Lock.lock(Node.lock(root));
-                getRoot(tree)
-            }
-            
     }
+
 }

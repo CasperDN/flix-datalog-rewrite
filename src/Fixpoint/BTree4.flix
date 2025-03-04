@@ -1,13 +1,15 @@
-instance ToString[Fixpoint.BTree2.Node[k, v, r]] with ToString[k], ToString[v] {
+// instance ToString[Fixpoint.BTree4.Node[k, v, r]] with ToString[k], ToString[v] {
 
-    pub def toString(x: Fixpoint.BTree2.Node[k, v, r]): String = 
-        unchecked_cast(Fixpoint.BTree2.Node.toString(x, 0) as _ \ { })
+//     pub def toString(x: Fixpoint.BTree4.Node[k, v, r]): String = 
+//         unchecked_cast(Fixpoint.BTree4.Node.toString(x, 0) as _ \ { })
 
-}
+// }
 
 // BTree with simple locking strategy: Lock node
-mod Fixpoint.BTree2 {
+mod Fixpoint.BTree4 {
     use Fixpoint.Lock
+    import java.util.concurrent.atomic.AtomicReferenceArray
+
     
     def unwrap(x: Option[a]): a = match x {
         case Some(v) => v
@@ -22,13 +24,13 @@ mod Fixpoint.BTree2 {
     }
 
     pub struct Node[k, v, r] {
-        keys:       MutList[k, r], // Acts as keys for internal nodes and values for leaves
-        children:   Option[MutList[Node[k, v, r], r]],
-        leaves:     Option[MutList[MutSet[v, r], r]],
+        keys:       AtomicReferenceArray, // Acts as keys for internal nodes and values for leaves
+        children:   Option[AtomicReferenceArray], // Option[Node[k, v, r]]
+        leaves:     Option[AtomicReferenceArray], // Option[MutList[MutSet[v, r], r]]
         lock:       Lock.Lock[r],
         mut parent: Option[Node[k, v, r]],
         mut next:   Option[Node[k, v, r]]
-    }     
+    }
 
     pub def main2(): Unit \ {IO} = region rc {
         let list = MutList.empty(rc);
@@ -67,27 +69,28 @@ mod Fixpoint.BTree2 {
 
     mod Node {
         use Fixpoint.Lock
-        use Fixpoint.BTree2.{Node, unwrap, binarySearch, toInsertionPoint, BLinkTree}
+        use Fixpoint.BTree4.{Node, unwrap, binarySearch, toInsertionPoint, BLinkTree}
         import java.util.concurrent.locks.ReentrantReadWriteLock
+    import java.util.concurrent.atomic.AtomicReferenceArray
 
         pub def parent(node: Node[k, v, r]): Option[Node[k, v, r]] \ r = node->parent
         pub def next(node: Node[k, v, r]): Option[Node[k, v, r]] \ r = node->next
-        pub def children(node: Node[k, v, r]): Option[MutList[Node[k, v, r], r]]  = node->children
-        pub def keys(node: Node[k, v, r]): MutList[k, r] = node->keys
+        pub def children(node: Node[k, v, r]): Option[AtomicReferenceArray]  = node->children
+        pub def keys(node: Node[k, v, r]): AtomicReferenceArray = node->keys
         pub def lock(node: Node[k, v, r]): Lock.Lock[r] = node->lock
 
-        pub def toString(node: Node[k, v, r], indent: Int32): String \ r with ToString[k], ToString[v] = 
-            let indentString = String.repeat(indent, " ");
-            let keysString = MutList.join(",", node->keys);
-            match node->children {
-                case Some(children) =>
-                    let childrenString = MutList.foldLeft(a -> x -> "${a}${toString(x, indent+2)}", "", children);
-                    "${indentString}Internal(${keysString})\n${childrenString}"
-                case None => 
-                    let leaves = unwrap(node->leaves);
-                    let leavesString = MutList.foldLeft(a -> x -> "${a}  ${indentString}Values(${MutSet.join(",", x)})\n", "", leaves);
-                    "${indentString}Leaf(${keysString})\n${leavesString}"
-            }
+        // pub def toString(node: Node[k, v, r], indent: Int32): String \ r with ToString[k], ToString[v] = 
+        //     let indentString = String.repeat(indent, " ");
+        //     let keysString = MutList.join(",", node->keys);
+        //     match node->children {
+        //         case Some(children) =>
+        //             let childrenString = MutList.foldLeft(a -> x -> "${a}${toString(x, indent+2)}", "", children);
+        //             "${indentString}Internal(${keysString})\n${childrenString}"
+        //         case None => 
+        //             let leaves = unwrap(node->leaves);
+        //             let leavesString = MutList.foldLeft(a -> x -> "${a}  ${indentString}Values(${MutSet.join(",", x)})\n", "", leaves);
+        //             "${indentString}Leaf(${keysString})\n${leavesString}"
+        //     }
 
         /// Traverse the tree until a leaf containing `val` is reached
         /// This function assumes that there is a lock on the node `root`
@@ -280,7 +283,7 @@ mod Fixpoint.BTree2 {
 
     mod BLinkTree {
         use Fixpoint.Lock
-        use Fixpoint.BTree2.{Node, unwrap}
+        use Fixpoint.BTree4.{Node, unwrap}
         import java.lang.System
 
         pub def main3(): Unit \ {IO, NonDet} = region rc {

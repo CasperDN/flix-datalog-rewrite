@@ -2,26 +2,6 @@ import java.util.concurrent.locks.ReentrantLock
 import java.lang.Float
 
 
-mod Ex {
-struct Hej[r] {
-    list: Int32
-}
-
-
-
-
-mod Hej {
-    struct Hej2[r] {
-        a: MutList[Int32, r]
-    }
-    mod Hej2 {
-        pub def test(t: Ex.Hej[r]): Unit = 
-        let _ = t->list; 
-        ()
-    }
-}
-}
-
 // def isConnected(s: Set[(Int32, Int32)], src: Int32, dst: Int32): Bool =
 //     let rules = #{
 //         Path(x, y) :- Edge(x, y).
