@@ -61,6 +61,7 @@ mod Fixpoint.Solver {
             case Datalog(_, _) => region rc {
                 compiler(d) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
             }
+            // TODO: Also fix here.
             case Model(_) => d
             case Join(Model(m), cs) => region rc {
                 let db = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);

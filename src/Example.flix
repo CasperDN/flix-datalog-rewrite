@@ -1,6 +1,6 @@
 import java.util.concurrent.locks.ReentrantLock
 import java.lang.Float
-
+import java.lang.reflect.Array
 
 // def isConnected(s: Set[(Int32, Int32)], src: Int32, dst: Int32): Bool =
 //     let rules = #{
@@ -51,16 +51,39 @@ def test1(x: Int32): Int32 = x
     //     case BoxedObject(x, f)  => ???
     // }
 
-// def hej(v: v): Unit = typematch 
+// def testtt(v: t): #{BBB(t)} with Order[t] =
+//     #{BBB(v)}
+
+
+
+def cyclic(): #{BBB(Int32)} = 
+    #(BBB) -> #{
+        BBB(123).
+        TTT(123).
+    }
+
+
+def makeArr(): Unit = region rc {
+    unchecked_cast (
+    // let x = Integer[];
+    let _ = MutList.empty(rc);
+    // let _ = Float;
+    // let arr = Array.empty(rc);
+    let _ = Array.newInstance(Int32.valueOf(1).getClass(), 10);
+    () as _ \ {})}
+
 
 def main(): Unit \ IO =
-    // println(Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(1.1f32).floatValue())));
+    println(query cyclic() select (b) from BBB(b));
+    // println(query testtt(1) select (b) from BBB(b));
+    // println(query testtt(1i64) select (b) from BBB(b));
+    // // println(Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(1.1f32).floatValue())));
     // println("Arr")
 println("x");
     // let y = 1 :: Nil;
     let p = #{
         Test(1).
-        AAA(3, "hej"; test1(1)).
+        AAA(3i64, "hej"; test1(1)).
 
         // Test(f(x)):- Test(x), Test(x).
 
