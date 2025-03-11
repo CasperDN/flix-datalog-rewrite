@@ -1,9 +1,3 @@
-mod MutList {
-
-    pub def rawGet(i: Int32, list: MutList[v, r]): v \ r = Array.get(i, list->values)    
-
-}
-
 instance ToString[Fixpoint.BTree.Node[k, v, r]] with ToString[k], ToString[v] {
 
     pub def toString(x: Fixpoint.BTree.Node[k, v, r]): String = 
