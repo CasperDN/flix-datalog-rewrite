@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Ast.AugmentedRam {
+mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
     use PredTrack.PredSymMapInternal
-    use Fixpoint.Ast.AugmentedRam.RamStmt
-    use Fixpoint.Ast.AugmentedRam.IndexInformation
-    use Fixpoint.Ast.AugmentedRam.FactInformation
+    use Fixpoint.Ast.ExecutableRam.RamStmt
+    use Fixpoint.Ast.ExecutableRam.IndexInformation
+    use Fixpoint.Ast.ExecutableRam.FactInformation
 
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
@@ -73,7 +73,7 @@ mod Fixpoint.Ast.AugmentedRam {
         // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, RamID) // The RamID is with respect to what comes in. The TupleVar is with respect to what comes out.
+        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, IndexInMemory)
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
     }
@@ -112,13 +112,13 @@ mod Fixpoint.Ast.AugmentedRam {
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
         case Eq(RamTerm, RamTerm)
-        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
+        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox, IntToBox)
         case Guard0(Unit -> Bool)
-        case Guard1(Boxed ->Bool, RamTerm)
-        case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
-        case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
-        case Guard4(Boxed -> Boxed  -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
-        case Guard5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard1(Boxed -> Bool, RamTerm, IntToBox)
+        case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox, IntToBox)
+        case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox)
+        case Guard4(Boxed -> Boxed  -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox, IntToBox)
+        case Guard5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox, IntToBox, IntToBox)
     }
 
     instance ToString[BoolExp] {
@@ -127,13 +127,13 @@ mod Fixpoint.Ast.AugmentedRam {
                 case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
                 case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
+                case BoolExp.Leq(_, lhs, rhs, _, _) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
-                case BoolExp.Guard1(_, v) => "<clo>(${v})"
-                case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
-                case BoolExp.Guard3(_, v1, v2, v3) => "<clo>(${v1}, ${v2}, ${v3})"
-                case BoolExp.Guard4(_, v1, v2, v3, v4) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
-                case BoolExp.Guard5(_, v1, v2, v3, v4, v5) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
+                case BoolExp.Guard1(_, v, _) => "<clo>(${v})"
+                case BoolExp.Guard2(_, v1, v2, _, _) => "<clo>(${v1}, ${v2})"
+                case BoolExp.Guard3(_, v1, v2, v3, _, _ ,_) => "<clo>(${v1}, ${v2}, ${v3})"
+                case BoolExp.Guard4(_, v1, v2, v3, v4, _, _ ,_, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
+                case BoolExp.Guard5(_, v1, v2, v3, v4, v5, _, _ ,_, _, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
             }
     }
 
@@ -150,46 +150,30 @@ mod Fixpoint.Ast.AugmentedRam {
     /// `LoadLatVar(x)` represents the lattice component in the tuple
     /// bound to the local variable `x`.
     ///
-    /// The RamID uniquely identifies the term
     @Internal
     pub enum RamTerm {
-        case Lit(Int32, RamID)
-        case RowLoad(TupleVar, Int32, RelSym, RamID)
-        case LoadLatVar(TupleVar, RelSym, RamID)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamID)
-        case App0(Unit -> Boxed, RamID)
-        case App1(Boxed -> Boxed, RamTerm, RamID)
-        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamID)
-        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamID)
-        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamID)
-        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, RamID)
-    }
-
-    pub def getTermRamId(t: RamTerm): RamID = match t {
-        case RamTerm.Lit(_, id) => id
-        case RamTerm.RowLoad(_, _, _, id) => id
-        case RamTerm.LoadLatVar(_, _, id) => id
-        case RamTerm.Meet(_, _, _, id) => id
-        case RamTerm.App0(_, id) => id
-        case RamTerm.App1(_ , _, id) => id
-        case RamTerm.App2(_, _, _, id) => id
-        case RamTerm.App3(_, _, _, _, id) => id
-        case RamTerm.App4(_, _, _, _, _, id) => id
-        case RamTerm.App5(_, _, _, _, _, _, id) => id
+        case Lit(Int32)
+        case LoadIndex(IndexInMemory)
+        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IndexInMemory, IntToBox, IntToBox, IntToBox) // The first indices are the input. The last is the output
+        case App0(Unit -> Boxed, IntToBox)
+        case App1(Boxed -> Boxed, RamTerm, IntToBox, IntToBox)
+        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox)
+        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox, IntToBox)
+        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox, IntToBox, IntToBox)
+        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox, IntToBox, IntToBox, IntToBox)
     }
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
-            case RamTerm.Lit(v, _) => "%{v}"
-            case RamTerm.RowLoad(var, index, _, _) => "${var}[${index}]"
-            case RamTerm.LoadLatVar(var, _, _) => "${var}[-1]"
-            case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
+            case RamTerm.Lit(v) => "%{v}"
+            case RamTerm.LoadIndex(index) => "$Load[${index}]"
+            case RamTerm.Meet(_, lhs, rhs, _, _, _, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App0(_, _) => "<clo>()"
-            case RamTerm.App1(_, v, _) => "<clo>(${v})"
-            case RamTerm.App2(_, v1, v2, _) => "<clo>(${v1}, ${v2})"
-            case RamTerm.App3(_, v1, v2, v3, _) => "<clo>(${v1}, ${v2}, ${v3})"
-            case RamTerm.App4(_, v1, v2, v3, v4, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
-            case RamTerm.App5(_, v1, v2, v3, v4, v5, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
+            case RamTerm.App1(_, v, _, _) => "<clo>(${v})"
+            case RamTerm.App2(_, v1, v2, _, _, _) => "<clo>(${v1}, ${v2})"
+            case RamTerm.App3(_, v1, v2, v3, _, _, _, _) => "<clo>(${v1}, ${v2}, ${v3})"
+            case RamTerm.App4(_, v1, v2, v3, v4, _, _, _, _, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
+            case RamTerm.App5(_, v1, v2, v3, v4, v5, _, _, _, _, _, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
         }
     }
 
@@ -244,11 +228,6 @@ mod Fixpoint.Ast.AugmentedRam {
     }
 
     @Internal
-    pub def toPredID(ramSym: RelSym): Int64 = match ramSym {
-        case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
-    }
-
-    @Internal
     pub def arityOf(ramSym: RelSym): Int32 = match ramSym {
         case RelSym.Symbol(_, arity, _) => arity
     }
@@ -294,58 +273,12 @@ mod Fixpoint.Ast.AugmentedRam {
         }
     }
 
-    // A RamID is is either an identifier on a RAM-instruction, or an index in a RelSym.
-    // Identifiers should be <0 for RamID.ID. Might be avoidable
-    pub enum RamID {
-        case ID(Int32) // (ID)
-        case InID(Int32, Int32) // (ID, index)
-        case FunctionalOutID(Int32, Int32) // (OutID, index)
-        case TuplePos(Int32, Int32) // (TupleVar, index)
-        case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for normalization.
-    }
-
-    instance Eq[RamID] {
-        pub def eq(a: RamID, b: RamID): Bool = match (a, b) {
-            case (RamID.ID(i1), RamID.ID(i2)) => i1 == i2
-            case (RamID.TuplePos(i0, i1), RamID.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
-            case (RamID.InID(id1, index1), RamID.InID(id2, index2)) => id1 == id2 and index1 == index2
-            case (RamID.FunctionalOutID(id1, index1), RamID.FunctionalOutID(id2, index2)) => id1 == id2 and index1 == index2
-        //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
-            case _ => false
-        }
-    }
-
-    instance Order[RamID] {
-        pub def compare(a: RamID, b: RamID): Comparison = match (a, b) {
-            case (RamID.ID(i1), RamID.ID(i2)) => i1 <=> i2
-            // case (RamID.)
-            case (RamID.TuplePos(i0, i1), RamID.TuplePos(j0, j1)) =>
-                let firstComp = i0 <=> j0;
-                if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            case (RamID.RelPos(i0, i1), RamID.RelPos(j0, j1)) =>
-                let firstComp = i0 <=> j0;
-                if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            case (RamID.FunctionalOutID(i0, i1), RamID.FunctionalOutID(j0, j1)) =>
-                let firstComp = i0 <=> j0;
-                if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            case (RamID.InID(i0, i1), RamID.InID(j0, j1)) =>
-                let firstComp = i0 <=> j0;
-                if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            // TODO: This is perhaps not transitive. Should add cases for all...
-            case (RamID.TuplePos(_, _), _) => Comparison.LessThan
-            case (RamID.RelPos(_, _), _) => Comparison.LessThan
-            case (RamID.ID(_), _) => Comparison.GreaterThan
-            case (RamID.FunctionalOutID(_, _), _) => Comparison.GreaterThan
-            case (RamID.InID(_, _), _) => Comparison.GreaterThan
-            // case _ => ???
-        }
-    }
+    type alias IndexInMemory = Int32
+    type alias IntToBox = Int32
 
 
-
-
-    // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
-    pub enum AugmentedProgram {
+    // RamProgram consisting of the the ExecutableRam program/statements, the starting database/facts and information about which indices should be used.
+    pub enum RamProgram {
         case Program(RamStmt, FactInformation, MetaInformation, IndexInformation)
     }
 

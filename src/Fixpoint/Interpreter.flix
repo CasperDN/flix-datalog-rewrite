@@ -25,7 +25,7 @@ mod Fixpoint.Interpreter {
     use PredTrack.PredSymMapInternal
     use Fixpoint.Boxed;
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, QueryExp, RamProgram}
+    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, toDenotation, RamProgram}
     use Fixpoint.Ast.Shared.Denotation
     // use PredTrack
 

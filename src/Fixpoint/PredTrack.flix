@@ -65,7 +65,23 @@ mod PredTrack {
             } else {
                 id - 2i64 * max
             }
-        
+
+
+        // Could use previos method, but would duplicate computation... 
+        pub def fullIDtoPredType(id: Int64, wantedType: PredType, self: PredSymMapInternal): Int64 =
+            let (max, _, _) = self; match wantedType {
+                case Full => wantedType
+                case Delta => WantedType + max
+                case New => WantedType + max * 2i64
+            }
+            // if(id <= max) {
+            //     id
+            // } else if (id <= max * 2i64) {
+            //     id - max
+            // } else {
+            //     id - 2i64 * max
+            // }
+
 
         ///
         /// Collect all predicate symbols in a map
@@ -112,7 +128,6 @@ mod PredTrack {
 
         pub def oldIDSymToRelSym(self: PredSymMapInternal, id: Int64, t: PredType): RelSym = 
             let (max, map, _) = self;
-
             let new_ = oldIDSymToNewRelSymInternal(id, map);
             match t {
                 case PredType.Full => new_
