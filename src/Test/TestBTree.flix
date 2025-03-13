@@ -125,6 +125,25 @@ mod TestBTree {
             BLinkTree.memberOf(x, y, tree)
         }, pairs) and testTreeInvariant(tree)
     }
+
+    @test
+    pub def insert05(): Bool = region rc {
+        List.forAll(order -> 
+            let tree = BLinkTree.empty(rc, order);
+            let pairs = List.map(p -> {
+                let (x, y) = p;
+                (Int32.modulo(x * 1000, 179), Int32.modulo(y * 1003, 109))
+            }, List.zip(List.range(1, 100), List.reverse(List.range(1, 100))));
+            List.forEach(p -> {
+                let (x, y) = p;
+                BLinkTree.insert(x, y, tree)
+            }, pairs);
+            List.forAll(p -> {
+                let (x, y) = p;
+                BLinkTree.memberOf(x, y, tree)
+            }, pairs) and testTreeInvariant(tree)
+        , List.range(3, 10))
+    }
     
     /////////////////////////////////////////////////////////////////////////////
     // rangeQueryWith                                                          //

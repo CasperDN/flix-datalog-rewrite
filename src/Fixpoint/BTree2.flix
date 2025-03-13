@@ -4,7 +4,6 @@ instance ToString[Fixpoint.BLTNode[k, v, r]] with ToString[k], ToString[v] {
 }
 
 // TODO: Possible optimzations: Instead of giving up as often as we do we could try test whether something changed
-// TODO: Currently the arrays are of size order+1. Reorder the code to insert after the split.
 // TODO: Need non-concurrent methods that dont use locks for faster traversal etc.
 
 // BTree with simple locking strategy: Lock node
