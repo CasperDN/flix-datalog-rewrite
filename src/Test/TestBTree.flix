@@ -115,7 +115,7 @@ mod TestBTree {
         let pairs = List.map(p -> {
             let (x, y) = p;
             (Int32.modulo(x * 1000, 179), Int32.modulo(y * 1003, 109))
-        }, List.zip(List.range(1, 100), List.reverse(List.range(1, 100))));
+        }, List.zip(List.range(1, 1000), List.reverse(List.range(1, 1000))));
         List.forEach(p -> {
             let (x, y) = p;
             BLinkTree.insert(x, y, tree)
@@ -133,7 +133,7 @@ mod TestBTree {
             let pairs = List.map(p -> {
                 let (x, y) = p;
                 (Int32.modulo(x * 1000, 179), Int32.modulo(y * 1003, 109))
-            }, List.zip(List.range(1, 100), List.reverse(List.range(1, 100))));
+            }, List.zip(List.range(1, 1000), List.reverse(List.range(1, 1000))));
             List.forEach(p -> {
                 let (x, y) = p;
                 BLinkTree.insert(x, y, tree)
@@ -144,6 +144,39 @@ mod TestBTree {
             }, pairs) and testTreeInvariant(tree)
         , List.range(3, 10))
     }
+
+
+    @test
+    pub def insert06(): Bool = region rc {
+        List.forAll(_threads ->
+            let tree = BLinkTree.empty(rc, 5);
+            let pairs = List.map(p -> {
+                let (x, y) = p;
+                (Int32.modulo(x * 1000, 15_013), Int32.modulo(y * 1003, 16_901))
+            }, List.zip(List.range(1, 100_000), List.reverse(List.range(1, 100_000))));
+            
+            List.forEach(p -> {
+                let (x, y) = p;
+                BLinkTree.insert(x, y, tree)
+            }, pairs);
+            List.forAll(p -> {
+                let (x, y) = p;
+                BLinkTree.memberOf(x, y, tree)
+            }, pairs) and testTreeInvariant(tree)
+        , List.range(7, 10))
+    }
+
+    // def _repeatN(f: Unit -> Unit \ r, n: Int32): Unit = region rc {
+    //     if (n == 0) () 
+    //     else {
+    //         if (n == 1) {
+    //             f(); ()
+    //         } else {
+    //         spawn f() @ rc;
+    //         _repeatN(f, n-1)
+    //         }
+    //     }
+    // }
     
     /////////////////////////////////////////////////////////////////////////////
     // rangeQueryWith                                                          //

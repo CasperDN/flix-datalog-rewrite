@@ -142,20 +142,6 @@ mod Fixpoint.BLTNode {
         Array.insert(key, insertionPoint, size, node->keys);
         node->size = size + 1
 
-
-    def actualInsertInternal(
-            key: k,
-            child: BLTNode[k, v, r],
-            insertionPoint: Int32,
-            node: BLTNode[k, v, r]): Unit \ r with Order[k], Order[v], ToString[k], ToString[v] =
-        let size = node->size;
-        let children = unwrap(node->children);
-        Array.insert(child, insertionPoint + 1, size, children);
-        // if(insertionPoint != 0) {
-            Array.insert(key, insertionPoint, size, node->keys);
-        // } else ();
-        node->size = size + 1
-
     /// Insert key-value pair `(key, val)` into the leaf `node`, 
     /// potentially causing a split and returning a new root
     /// (Lock) Invariants: 
@@ -235,82 +221,75 @@ mod Fixpoint.BLTNode {
         else actualInsertLeaf(key, val, insertionPoint - mid, rightLeaf, rc);
         // Push key up to parent
         Lock.lock(rightLeaf->lock);
-        pushKeyToParent(leftLeaf->parent, leftLeaf, rightLeaf, Array.get(0, rightLeaf->keys), order, rc)
+        pushKeyToParent(leftLeaf->parent, leftLeaf, rightLeaf, Array.get(0, rightKeys), order, rc)
     
     // (Lock) Invariants: 
     //   On invocation, the thread has a lock on `parent`.
     //   On return, the thread only holds a lock if the return value is Some. In that case it holds a lock on the new root and the old root.
     def splitParent(
-            parent: BLTNode[k, v, r],
+            leftNode: BLTNode[k, v, r],
             insertedChild: BLTNode[k, v, r],
             insertionPoint: Int32,
             newKey: k,
             order: Int32,
             rc: Region[r]): Option[BLTNode[k, v, r]] \ r with ToString[k], ToString[v], Order[k], Order[v] =
-        lockParent(parent); // TODO: Move this to be last instruction and update new right as necessary.
-        // let newKey = Array.get(0, insertedChild->keys);
+        lockParent(leftNode); // TODO: Move this to be last instruction and update new right as necessary.
         let prev_mid = order / 2;
-        let (mid, insertInLeft) = if (insertionPoint >= prev_mid) (prev_mid + 1, false) else (prev_mid, true);
+        let (mid, insertInLeft, rightSize) = if (insertionPoint >= prev_mid) (prev_mid + 1, false, order - prev_mid) else (prev_mid, true, order - prev_mid);
         let rightKeys = Array.empty(rc, order - 1);
         let rightChildren = Array.empty(rc, order);
-        let rightSizeWithoutNew = parent->size - mid;
-        // Copy while omitting the middle key. If insertionPoint == prev_mid exclude the new key.
-        parent->size = mid;
-        let (rightSize, keyToPass) = if (insertInLeft) {
-            let keyToPass_ = Array.get(mid - 1, parent->keys);
+        leftNode->size = mid;
+        let keyOfRight = if (insertInLeft) {
+            let keyToPass_ = Array.get(mid - 1, leftNode->keys);
+            let leftChildren = unwrap(leftNode->children);
+            let leftKeys = leftNode->keys;
             // No problems. Just copy everything from mid and forward. Finish by inserting the new element in old node.
-            Array.copyInto(srcPos = mid, dstPos = 0, len = rightSizeWithoutNew - 1, src = parent->keys, rightKeys);
-            Array.copyInto(srcPos = mid, dstPos = 0, len = rightSizeWithoutNew, src = unwrap(parent->children), rightChildren);
-            // parent->size = parent->size;
-            actualInsertInternal(newKey, insertedChild, insertionPoint, parent);
-            (rightSizeWithoutNew, keyToPass_)
+            Array.copyInto(srcPos = mid, dstPos = 0, len = rightSize - 1, src = leftKeys, rightKeys);
+            Array.copyInto(srcPos = mid, dstPos = 0, len = rightSize, src = leftChildren, rightChildren);
+            Array.insert(insertedChild, insertionPoint + 1, mid, leftChildren);
+            Array.insert(newKey, insertionPoint, mid, leftKeys);
+            leftNode->size = mid + 1;
+            keyToPass_
         } else {
-            // Can avoid somewhat. Just only insert in right if it will not be the first element.
-            let keyToPass_ = if(insertionPoint + 1 == mid) {
+            // Insert the new node in the new right node and copy the relevant elements of the leftNode (index>=mid).
+            let rightSizeWithoutNew = rightSize - 1;
+            if(insertionPoint + 1 == mid) {
                 // If insertionPoint is the first element copy all old keys and old elements and insert new child at 0.
-                Array.copyInto(srcPos = mid - 1, dstPos = 0, len = rightSizeWithoutNew, src = parent->keys, rightKeys);
-                Array.copyInto(srcPos = mid, dstPos = 1, len = rightSizeWithoutNew, src = unwrap(parent->children), rightChildren);
+                Array.copyInto(srcPos = mid - 1, dstPos = 0, len = rightSizeWithoutNew, src = leftNode->keys, rightKeys);
+                Array.copyInto(srcPos = mid, dstPos = 1, len = rightSizeWithoutNew, src = unwrap(leftNode->children), rightChildren);
                 Array.put(insertedChild, 0, rightChildren);
                 newKey
             } else {
                 let childIndexInRight = insertionPoint + 1 - mid;
-                Array.copyInto(srcPos = mid, dstPos = 0, len = childIndexInRight - 1, src = parent->keys, rightKeys);
-                Array.copyInto(srcPos = mid, dstPos = 0, len = childIndexInRight, src = unwrap(parent->children), rightChildren);
+                Array.copyInto(srcPos = mid, dstPos = 0, len = childIndexInRight - 1, src = leftNode->keys, rightKeys);
+                Array.copyInto(srcPos = mid, dstPos = 0, len = childIndexInRight, src = unwrap(leftNode->children), rightChildren);
                 Array.put(newKey, childIndexInRight - 1, rightKeys);
                 Array.put(insertedChild, childIndexInRight, rightChildren);
                 // If insertionPoint is the last index we are done, otherwise insert rest of list.
                 if(childIndexInRight != rightSizeWithoutNew) {
-                    // TODO: -1?
-                    Array.copyInto(srcPos = mid + childIndexInRight - 1, dstPos = childIndexInRight, len = rightSizeWithoutNew - childIndexInRight, src = parent->keys, rightKeys);
-                    Array.copyInto(srcPos = mid + childIndexInRight, dstPos = childIndexInRight + 1, len = rightSizeWithoutNew - childIndexInRight, src = unwrap(parent->children), rightChildren)
+                    Array.copyInto(srcPos = mid + childIndexInRight - 1, dstPos = childIndexInRight, len = rightSizeWithoutNew - childIndexInRight, src = leftNode->keys, rightKeys);
+                    Array.copyInto(srcPos = mid + childIndexInRight, dstPos = childIndexInRight + 1, len = rightSizeWithoutNew - childIndexInRight, src = unwrap(leftNode->children), rightChildren)
                 } else ();
-                Array.get(mid - 1, parent->keys)
-            };
-            (rightSizeWithoutNew + 1, keyToPass_)
+                Array.get(mid - 1, leftNode->keys)
+            }
         };
 
-
-        // Array.copyInto(srcPos = mid - 1, dstPos = 0, len = rightSize - 1, src = parent->keys, rightKeys);
-        // Array.copyInto(srcPos = mid, dstPos = 0, len = rightSize, src = unwrap(parent->children), rightChildren);
         let rightNode = new BLTNode @ rc {
             keys = rightKeys,
             children = Some(rightChildren),
             values = None,
             lock = Lock.mkLock(rc),
             size = rightSize,
-            parent = parent->parent,
-            next = parent->next
+            parent = leftNode->parent,
+            next = leftNode->next
         };
-        // parent->size = mid;
-        parent->next = Some(rightNode);
-        // if (insertInLeft) actualInsertInternal(newKey, insertedChild, insertionPoint, parent)
-        // else actualInsertInternal(newKey, insertedChild, insertionPoint - mid, rightNode);
+        leftNode->next = Some(rightNode);
         Array.forEachWithIndex(i -> child -> 
             if (i < rightSize)
                 child->parent = Some(rightNode)
             else (), rightChildren);
         Lock.lock(rightNode->lock); // pushKeyToParent expects a lock on the parent
-        pushKeyToParent(parent->parent, parent, rightNode, keyToPass, order, rc)
+        pushKeyToParent(leftNode->parent, leftNode, rightNode, keyOfRight, order, rc)
 
     // (Lock) Invariants: 
     //   On invocation, the thread has a lock on `parent`, `leftChild` and `rightChild`.
@@ -489,11 +468,7 @@ mod Fixpoint.BLinkTree {
     pub def main4(): Unit \ IO = region rc {
         let tree: BLinkTree[Int32, Int32, rc] = empty(rc, 5);
         List.forEach(i -> insert(i, i+1, tree), List.range(0, 100));
-        // insert(5, 10, tree);
-        // insert(6, 11, tree);
-        // insert(7, 11, tree);
         println(tree->root);
-        // println("");
         ()
     }
 
