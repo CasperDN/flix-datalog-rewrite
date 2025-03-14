@@ -4,16 +4,16 @@ import java.lang.System;
 
 def testLink(n: Int32, order: Int32): Unit \ IO = region rc {
     let start = System.currentTimeMillis();
-    let tree = Fixpoint.BLinkTree.empty(rc, order);
+    let tree = BPlusTree.empty(rc, order);
     let pairs = List.map(p -> {
         let (x, y) = p;
         (Int32.modulo(x * 1000, 1091), Int32.modulo(y * 1003, 109))
     }, List.zip(List.range(1, n), List.reverse(List.range(1, n))));
     List.forEach(p -> {
         let (x, y) = p;
-        Fixpoint.BLinkTree.insert(x, y, tree)
+        BPlusTree.insert(x, y, tree)
     }, pairs);
-    Fixpoint.BLinkTree.memberOf(0, 1, tree);
+    BPlusTree.memberOf(0, tree);
     let end = System.currentTimeMillis();
     println(end-start);
     ()
@@ -54,11 +54,11 @@ def testMultiMap(n: Int32): Unit \ IO =
 
 def testLinkRandom(vec: Vector[Int32], order: Int32): Unit \ IO = region rc {
     let start = System.currentTimeMillis();
-    let tree = Fixpoint.BLinkTree.empty(rc, order);
+    let tree = BPlusTree.empty(rc, order);
     Vector.forEach(x -> {
-        Fixpoint.BLinkTree.insert(x, 0, tree)
+        BPlusTree.insert(x, 0, tree)
     }, vec);
-    Fixpoint.BLinkTree.memberOf(0, 1, tree);
+    BPlusTree.memberOf(0, tree);
     let end = System.currentTimeMillis();
     println(end-start);
     ()

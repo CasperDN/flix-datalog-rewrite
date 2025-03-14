@@ -1,54 +1,52 @@
 mod TestBTree {
+    import java.lang.Object
     import java.util.concurrent.Helpers
+    import java.util.Objects
     use Array.sameElements
-    use Fixpoint.BLinkTree
-    use Fixpoint.BLTNode
-    use Fixpoint.Helpers.{unwrap, ptrEqual}
-
-    type alias StandardTree[r: Eff] = BLinkTree[Int32, Int32, r]
+    use BPlusTree.Node
 
     /////////////////////////////////////////////////////////////////////////////
     // Test invariant about the BTree                                          //
     /////////////////////////////////////////////////////////////////////////////
-    pub def testTreeInvariant(tree: BLinkTree[k, v, r]): Bool \ r with Order[k], Order[v] = 
-        let root = BLinkTree.getRootUnsafe(tree);
-        let order = BLinkTree.getOrder(tree);
+    def testTreeInvariant(tree: BPlusTree[k, v, r]): Bool \ r with Order[k], Order[v] = 
+        let root = BPlusTree.getRootUnsafe(tree);
+        let order = BPlusTree.order(tree);
         let nodeWorks = testNodeInvariant(root, order, true);
-        let rootHasNoParent = Option.isEmpty(BLTNode.parent(root));
-        nodeWorks and rootHasNoParent
+        let rootIsUnlocked = not BPlusTree.Lock.isLocked(BPlusTree.lock(tree));
+        let rootHasNoParent = Option.isEmpty(Node.parent(root));
+        nodeWorks and rootHasNoParent and rootIsUnlocked
 
-    pub def testNodeInvariant(node: BLTNode[k, v, r], order: Int32, isRightMost: Bool): Bool \ r with Order[k], Order[v] = 
-        match BLTNode.children(node) {
+    def testNodeInvariant(node: Node[k, v, r], order: Int32, isRightMost: Bool): Bool \ r with Order[k], Order[v] = 
+        match Node.children(node) {
         case Some(c) =>
-            let size = BLTNode.size(node);
-            let keys = toLength(Array.toVector(BLTNode.keys(node)), size - 1);
+            let size = Node.size(node);
+            let keys = toLength(Array.toVector(Node.keys(node)), size - 1);
             let children = toLength(Array.toVector(c), size);
             let keysInOrder = isInOrder(keys);
             let childrenWorks = Vector.forAll(x -> testNodeInvariant(x, order, false), toLength(children, size - 1))
                                 and testNodeInvariant(unwrap(Vector.last(children)), order, isRightMost);
-            let parentPointerCorrect = Vector.foldLeft(workingSoFar -> cur -> workingSoFar and ptrEqual(node, unwrap(BLTNode.parent(cur))), true, children);
-            let nextPointerCorrect = applyPredicate(children, prev -> cur -> ptrEqual(unwrap(BLTNode.next(prev)), cur));
-            let lastHasNoNext = not isRightMost or Option.isEmpty(BLTNode.next(unwrap(Vector.last(children))));
-            let noLeaves = Option.isEmpty(BLTNode.values(node));
-            parentPointerCorrect and nextPointerCorrect and lastHasNoNext and noLeaves and keysInOrder and childrenWorks
+            let parentPointerCorrect = Vector.foldLeft(workingSoFar -> cur -> workingSoFar and ptrEqual(node, unwrap(Node.parent(cur))), true, children);
+            let nextPointerCorrect = applyPredicate(children, prev -> cur -> ptrEqual(unwrap(Node.next(prev)), cur));
+            let lastHasNoNext = not isRightMost or Option.isEmpty(Node.next(unwrap(Vector.last(children))));
+            let noLeaves = Option.isEmpty(Node.values(node));
+            let nodeIsUnlocked = not BPlusTree.Lock.isLocked(Node.lock(node));
+            parentPointerCorrect and nextPointerCorrect and lastHasNoNext and noLeaves and keysInOrder and childrenWorks and nodeIsUnlocked
         case None => 
-            let size = BLTNode.size(node);
-            let keys = toLength(Array.toVector(BLTNode.keys(node)), size);
-            let leaves = Array.toVector(unwrap(BLTNode.values(node)));
+            let size = Node.size(node);
+            let keys = toLength(Array.toVector(Node.keys(node)), size);
             let keysInOrder = isInOrder(toLength(keys, size));
             let sizeInRange = size <= order and 0 <= size;
-            let leavesNonEmpty = Vector.foldLeft(workingSoFar -> cur -> 
-                workingSoFar and (MutSet.size(cur) > 0), true, toLength(leaves, size));
-            leavesNonEmpty and sizeInRange and keysInOrder
+            let leafIsUnlocked = not BPlusTree.Lock.isLocked(Node.lock(node));
+            sizeInRange and keysInOrder and leafIsUnlocked
     }
 
-    pub def toLength(v: Vector[v], length: Int32): Vector[v] =
+    def toLength(v: Vector[v], length: Int32): Vector[v] =
         Vector.slice(start = 0, end = length, v)
 
-    pub def isInOrder(v: Vector[k]): Bool with Order[k] =
+    def isInOrder(v: Vector[k]): Bool with Order[k] =
         applyPredicate(v, x -> y -> x <= y)
 
-    pub def applyPredicate(v: Vector[k], f: k -> k -> Bool \ r): Bool \ r = 
+    def applyPredicate(v: Vector[k], f: k -> k -> Bool \ r): Bool \ r = 
         let zipped = Vector.map(x -> (x, true), v);
         let reduced =  Vector.reduceLeft(old -> cur -> 
             let (oldNum, oldBool) = old;
@@ -60,225 +58,244 @@ mod TestBTree {
             case Some((_, bool)) => bool
         }
 
+    def listToMap(l: List[(k, v)]): Map[k, v] with Order[k], Order[v] = List.foldLeft(acc -> p -> let (x, y) = p; Map.insert(x, y, acc), Map#{}, l)
+
     /////////////////////////////////////////////////////////////////////////////
     // empty                                                                   //
     /////////////////////////////////////////////////////////////////////////////
     @test
-    pub def empty01(): Bool = region rc {
-        let tree: StandardTree[rc] = BLinkTree.empty(rc, 120);
-        BLinkTree.isEmpty(tree)
+    def empty01(): Bool = region rc {
+        let tree: BPlusTree[Int32, Int32, rc] = BPlusTree.empty(rc, 120);
+        BPlusTree.isEmpty(tree)
     }
 
     /////////////////////////////////////////////////////////////////////////////
     // insert                                                                  //
     /////////////////////////////////////////////////////////////////////////////
+
+    def getRandomListOfPairs(n: Int32): List[(Int32, Int32)] \ Random =
+        List.map(_ -> (Random.randomInt32(), Random.randomInt32()), List.range(0, n))
+
     @test
-    pub def insert01(): Bool = region rc {
-        let tree = BLinkTree.empty(rc, 3);
-        BLinkTree.insert(4, 2, tree);
-        BLinkTree.memberOf(4, 2 ,tree)
+    def insert01(): Bool = region rc {
+        let tree = BPlusTree.empty(rc, 3);
+        BPlusTree.insert(4, 2, tree);
+        BPlusTree.containsPair(4, 2 ,tree) and testTreeInvariant(tree)
     }
 
     @test
-    pub def insert02(): Bool = region rc {
-        let tree = BLinkTree.empty(rc, 3);
-        BLinkTree.insert(1, 10, tree);
-        BLinkTree.insert(2, 11, tree);
-        BLinkTree.insert(3, 12, tree);
-        BLinkTree.memberOf(1, 10, tree) and
-            BLinkTree.memberOf(2, 11, tree) and
-            BLinkTree.memberOf(3, 12, tree) and
+    def insert02(): Bool = region rc {
+        let tree = BPlusTree.empty(rc, 3);
+        BPlusTree.insert(1, 10, tree);
+        BPlusTree.insert(2, 11, tree);
+        BPlusTree.insert(3, 12, tree);
+        BPlusTree.containsPair(1, 10, tree) and
+            BPlusTree.containsPair(2, 11, tree) and
+            BPlusTree.containsPair(3, 12, tree) and
             testTreeInvariant(tree)
     }
 
     @test
-    pub def insert03(): Bool = region rc {
-        let tree = BLinkTree.empty(rc, 3);
-        BLinkTree.insert(6, 15, tree);
-        BLinkTree.insert(5, 14, tree);
-        BLinkTree.insert(4, 13, tree);
-        BLinkTree.insert(3, 12, tree);
-        BLinkTree.insert(2, 11, tree);
-        BLinkTree.insert(1, 10, tree);
-        BLinkTree.memberOf(1, 10, tree) and
-            BLinkTree.memberOf(2, 11, tree) and
-            BLinkTree.memberOf(3, 12, tree) and 
-            BLinkTree.memberOf(4, 13, tree) and 
-            BLinkTree.memberOf(5, 14, tree) and
-            BLinkTree.memberOf(6, 15, tree) and
+    def insert03(): Bool = region rc {
+        let tree = BPlusTree.empty(rc, 3);
+        BPlusTree.insert(6, 15, tree);
+        BPlusTree.insert(5, 14, tree);
+        BPlusTree.insert(4, 13, tree);
+        BPlusTree.insert(3, 12, tree);
+        BPlusTree.insert(2, 11, tree);
+        BPlusTree.insert(1, 10, tree);
+        BPlusTree.containsPair(1, 10, tree) and
+            BPlusTree.containsPair(2, 11, tree) and
+            BPlusTree.containsPair(3, 12, tree) and 
+            BPlusTree.containsPair(4, 13, tree) and 
+            BPlusTree.containsPair(5, 14, tree) and
+            BPlusTree.containsPair(6, 15, tree) and
             testTreeInvariant(tree)
     }
     
     @test
-    pub def insert04(): Bool = region rc {
-        let tree = BLinkTree.empty(rc, 5);
+    def insert04(): Bool = region rc {
+        let tree = BPlusTree.empty(rc, 5);
         let pairs = List.map(p -> {
             let (x, y) = p;
             (Int32.modulo(x * 1000, 179), Int32.modulo(y * 1003, 109))
-        }, List.zip(List.range(1, 1000), List.reverse(List.range(1, 1000))));
+        }, List.zip(List.range(1, 10_000), List.reverse(List.range(1, 10_000))));
         List.forEach(p -> {
             let (x, y) = p;
-            BLinkTree.insert(x, y, tree)
+            BPlusTree.insert(x, y, tree)
         }, pairs);
-        List.forAll(p -> {
-            let (x, y) = p;
-            BLinkTree.memberOf(x, y, tree)
-        }, pairs) and testTreeInvariant(tree)
+        Map.forAll(x -> y -> {
+            BPlusTree.containsPair(x, y, tree)
+        }, listToMap(pairs)) and testTreeInvariant(tree)
     }
 
     @test
-    pub def insert05(): Bool = region rc {
-        List.forAll(order -> 
-            let tree = BLinkTree.empty(rc, order);
+    def insert05(): Bool = region rc {
+        List.forAll(order -> {
+            let tree = BPlusTree.empty(rc, order);
             let pairs = List.map(p -> {
                 let (x, y) = p;
                 (Int32.modulo(x * 1000, 179), Int32.modulo(y * 1003, 109))
-            }, List.zip(List.range(1, 1000), List.reverse(List.range(1, 1000))));
+            }, List.zip(List.range(1, 100_000), List.reverse(List.range(1, 100_000))));
             List.forEach(p -> {
                 let (x, y) = p;
-                BLinkTree.insert(x, y, tree)
+                BPlusTree.insert(x, y, tree)
             }, pairs);
-            List.forAll(p -> {
-                let (x, y) = p;
-                BLinkTree.memberOf(x, y, tree)
-            }, pairs) and testTreeInvariant(tree)
-        , List.range(3, 10))
+            Map.forAll((x, y) -> {
+                BPlusTree.containsPair(x, y, tree)
+            }, listToMap(pairs)) and testTreeInvariant(tree)
+        }, List.range(3, 10))
     }
 
 
     @test
-    pub def insert06(): Bool = region rc {
-        List.forAll(_threads ->
-            let tree = BLinkTree.empty(rc, 5);
-            let pairs = List.map(p -> {
-                let (x, y) = p;
-                (Int32.modulo(x * 1000, 15_013), Int32.modulo(y * 1003, 16_901))
-            }, List.zip(List.range(1, 100_000), List.reverse(List.range(1, 100_000))));
-            
-            List.forEach(p -> {
-                let (x, y) = p;
-                BLinkTree.insert(x, y, tree)
-            }, pairs);
-            List.forAll(p -> {
-                let (x, y) = p;
-                BLinkTree.memberOf(x, y, tree)
-            }, pairs) and testTreeInvariant(tree)
-        , List.range(7, 10))
+    def insert06(): Bool = region rc {
+        List.forAll(threads -> {
+            // let ref = Ref.fresh(rc, 0);
+            let tree: BPlusTree[Int32, Int32, rc]  = BPlusTree.empty(rc, 5);
+            let pairsList = Random.handleWithSeed(0i64, () -> Vector.map(_ -> getRandomListOfPairs(10_000), Vector.range(0, threads)))();
+            unchecked_cast(repeatN(() ->
+                Vector.forEach(list -> 
+                    List.forEach(p -> {
+                        let (x, y) = p;
+                        BPlusTree.insert(x, y, tree)
+                    }, list), 
+                pairsList), threads)
+            as _ \ rc);
+            Vector.forAll(list -> 
+                List.forAll(p -> {
+                    let (x, _) = p;
+                    BPlusTree.memberOf(x, tree)
+            }, list), pairsList) and testTreeInvariant(tree)
+        }, List.range(1, 11))
     }
 
-    // def _repeatN(f: Unit -> Unit \ r, n: Int32): Unit = region rc {
-    //     if (n == 0) () 
-    //     else {
-    //         if (n == 1) {
-    //             f(); ()
-    //         } else {
-    //         spawn f() @ rc;
-    //         _repeatN(f, n-1)
-    //         }
-    //     }
-    // }
+    def repeatN(f: Unit -> Unit \ r, n: Int32): Unit \ IO = 
+        let f_ = unchecked_cast(f as Unit -> Unit \ IO);
+        let _: Unit = region rc {
+            if (n == 0) ()
+            else {
+                if (n == 1) {
+                    spawn f_() @ rc
+                } else {
+                spawn f_() @ rc;
+                repeatN(f, n-1); ()
+                }
+            }
+        };
+        ()
     
     /////////////////////////////////////////////////////////////////////////////
     // rangeQueryWith                                                          //
     /////////////////////////////////////////////////////////////////////////////
-    pub def rangeQueryDefaultTree(rc: Region[r]): BLinkTree[Int32, Int32, r] \ r =
-        let tree: BLinkTree[Int32, Int32, r] = BLinkTree.empty(rc, 3);
-        BLinkTree.insert(0, 10, tree);
-        BLinkTree.insert(1, 11, tree);
-        BLinkTree.insert(2, 12, tree);
-        BLinkTree.insert(3, 13, tree);
-        BLinkTree.insert(4, 14, tree);
-        BLinkTree.insert(5, 15, tree);
+    def rangeQueryDefaultTree(rc: Region[r]): BPlusTree[Int32, Int32, r] \ r =
+        let tree: BPlusTree[Int32, Int32, r] = BPlusTree.empty(rc, 3);
+        BPlusTree.insert(0, 10, tree);
+        BPlusTree.insert(1, 11, tree);
+        BPlusTree.insert(2, 12, tree);
+        BPlusTree.insert(3, 13, tree);
+        BPlusTree.insert(4, 14, tree);
+        BPlusTree.insert(5, 15, tree);
         tree
 
-    pub def rangeQueryMultipleValues(rc: Region[r]): BLinkTree[Int32, Int32, r] \ r =
-        let tree = BLinkTree.empty(rc, 3);
-        BLinkTree.insert(0, 10, tree);
-        BLinkTree.insert(0, 11, tree);
-        BLinkTree.insert(0, 12, tree);
-        BLinkTree.insert(1, 11, tree);
-        BLinkTree.insert(1, 12, tree);
-        BLinkTree.insert(2, 13, tree);
-        BLinkTree.insert(3, 14, tree);
+    def rangeQueryMultipleValues(rc: Region[r]): BPlusTree[Int32, Int32, r] \ r =
+        let tree = BPlusTree.empty(rc, 3);
+        BPlusTree.insert(0, 10, tree);
+        BPlusTree.insert(0, 11, tree);
+        BPlusTree.insert(0, 12, tree);
+        BPlusTree.insert(1, 11, tree);
+        BPlusTree.insert(1, 12, tree);
+        BPlusTree.insert(2, 13, tree);
+        BPlusTree.insert(3, 14, tree);
         tree
 
     @test
-    pub def rangeQueryWith01(): Bool = region rc {
+    def rangeQueryWith01(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, 0, 5, tree);
+        BPlusTree.rangeQueryWith(f, 0, 5, tree);
         let res = Vector#{0, 1, 2, 3, 4, 5};
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith02(): Bool = region rc {
+    def rangeQueryWith02(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, -2, 5, tree);
+        BPlusTree.rangeQueryWith(f, -2, 5, tree);
         let res = Vector#{0, 1, 2, 3, 4, 5};
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith03(): Bool = region rc {
+    def rangeQueryWith03(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, -2, 7, tree);
+        BPlusTree.rangeQueryWith(f, -2, 7, tree);
         let res = Vector#{0, 1, 2, 3, 4, 5};
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith04(): Bool = region rc {
+    def rangeQueryWith04(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, 1, 1, tree);
+        BPlusTree.rangeQueryWith(f, 1, 1, tree);
         let res = Vector#{1};
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith05(): Bool = region rc {
+    def rangeQueryWith05(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, 1, 3, tree);
+        BPlusTree.rangeQueryWith(f, 1, 3, tree);
         let res = Vector#{1, 2, 3};
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith06(): Bool = region rc {
+    def rangeQueryWith06(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, -2, -2, tree);
+        BPlusTree.rangeQueryWith(f, -2, -2, tree);
         let res = Vector#{ };
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith07(): Bool = region rc {
+    def rangeQueryWith07(): Bool = region rc {
         let tree = rangeQueryDefaultTree(rc);
         let list = MutList.empty(rc);
         let f = k -> _ -> MutList.push(k, list);
-        BLinkTree.rangeQueryWith(f, 7, 7, tree);
+        BPlusTree.rangeQueryWith(f, 7, 7, tree);
         let res = Vector#{ };
         MutList.toVector(list) `Vector.equals` res
     }
 
     @test
-    pub def rangeQueryWith08(): Bool = region rc {
+    def rangeQueryWith08(): Bool = region rc {
         let tree = rangeQueryMultipleValues(rc);
         let list = MutList.empty(rc);
         let f = k -> v -> MutList.push((k, v), list);
-        BLinkTree.rangeQueryWith(f, 0, 3, tree);
-        let res = Vector#{(0, 10), (0, 11), (0, 12), (1, 11), (1, 12), (2, 13), (3, 14)};
+        BPlusTree.rangeQueryWith(f, 0, 3, tree);
+        let res = Vector#{(0, 12), (1, 12), (2, 13), (3, 14)};
         MutList.toVector(list) `Vector.equals` res
+    }
+
+    def ptrEqual(o1: v, o2: v): Bool \ r = 
+        let obj1 = unchecked_cast(o1 as Object \ r);
+        let obj2 = unchecked_cast(o2 as Object \ r);
+        unchecked_cast(Objects.equals(obj1, obj2) as _ \ r)
+
+    def unwrap(x: Option[a]): a = match x {
+        case Some(v) => v
+        case None => bug!("Attempted unwrapping None")
     }
 }
