@@ -180,6 +180,13 @@ mod BPlusTree {
     ///
     /// Helper methods 
     ///
+    pub def arrayInsert(x: a, i: Int32, len: Int32, v: Array[a, r]): Unit \ r =
+        if (len == i)
+            Array.put(x, i, v)
+        else 
+            Array.copyInto(srcPos = i, dstPos = i + 1, len = len - i, src = v, v);
+            Array.put(x, i, v)
+
     def ptrEqual(o1: v, o2: v): Bool \ r = 
         let obj1 = unchecked_cast(o1 as Object \ r);
         let obj2 = unchecked_cast(o2 as Object \ r);
@@ -328,8 +335,8 @@ mod BPlusTree {
                 insertionPoint: Int32,
                 node: Node[k, v, r]): Unit \ r with Order[k] =
             let size = node->size;
-            Array.insert(val, insertionPoint, size, unwrap(node->values));
-            Array.insert(key, insertionPoint, size, node->keys);
+            BPlusTree.arrayInsert(val, insertionPoint, size, unwrap(node->values));
+            BPlusTree.arrayInsert(key, insertionPoint, size, node->keys);
             node->size = size + 1
 
         /// Insert key-value pair `(key, val)` into the leaf `node`, 
@@ -387,7 +394,6 @@ mod BPlusTree {
                 insertionPoint: Int32,
                 order: Int32,
                 rc: Region[r]): Option[Node[k, v, r]] \ r with Order[k] =
-            lockParent(leftLeaf); // TODO: For performance move this to be last and update rightLeaf as necessary.
             let prev_mid = order / 2;
             let (mid, insertInLeft) = if (insertionPoint <= prev_mid) (prev_mid, true) else (prev_mid + 1, false);
             let rightKeys = Array.empty(rc, order);
@@ -412,6 +418,8 @@ mod BPlusTree {
             else actualInsertLeaf(key, val, insertionPoint - mid, rightLeaf);
             // Push rightLeaf's smallest key up to parent
             Lock.lock(rightLeaf->lock);
+            lockParent(leftLeaf);
+            rightLeaf->parent = leftLeaf->parent;
             pushKeyToParent(leftLeaf->parent, leftLeaf, rightLeaf, Array.get(0, rightKeys), order, rc)
         
 
@@ -430,7 +438,7 @@ mod BPlusTree {
                 newKey: k,
                 order: Int32,
                 rc: Region[r]): Option[Node[k, v, r]] \ r with Order[k] =
-            lockParent(leftNode); // TODO: Move this to be last instruction and update new right as necessary.
+            Lock.unlock(insertedChild->lock); // TODO: Could be done earlier?
             let prev_mid = order / 2;
             let (mid, insertInLeft, rightSize) = if (insertionPoint >= prev_mid) (prev_mid + 1, false, order - prev_mid) else (prev_mid, true, order - prev_mid);
             let rightKeys = Array.empty(rc, order - 1);
@@ -443,8 +451,8 @@ mod BPlusTree {
                 // No problems. Just copy everything from mid and forward. Finish by inserting the new element in old node.
                 Array.copyInto(srcPos = mid, dstPos = 0, len = rightSize - 1, src = leftKeys, rightKeys);
                 Array.copyInto(srcPos = mid, dstPos = 0, len = rightSize, src = leftChildren, rightChildren);
-                Array.insert(insertedChild, insertionPoint + 1, mid, leftChildren);
-                Array.insert(newKey, insertionPoint, mid, leftKeys);
+                BPlusTree.arrayInsert(insertedChild, insertionPoint + 1, mid, leftChildren);
+                BPlusTree.arrayInsert(newKey, insertionPoint, mid, leftKeys);
                 leftNode->size = mid + 1;
                 keyToPass_
             } else {
@@ -484,8 +492,9 @@ mod BPlusTree {
                 if (i < rightSize)
                     child->parent = Some(rightNode)
                 else (), rightChildren);
-            Lock.unlock(insertedChild->lock); // TODO: Could be done earlier?
             Lock.lock(rightNode->lock); // pushKeyToParent expects a lock on the parent
+            lockParent(leftNode);
+            rightNode->parent = leftNode->parent;
             pushKeyToParent(leftNode->parent, leftNode, rightNode, keyOfRight, order, rc)
 
         // (Lock) Invariants: 
@@ -504,8 +513,8 @@ mod BPlusTree {
                 let insertionPoint = toInsertionPoint(binarySearch(newKey, node->size - 1, node->keys));
                 let size = node->size;
                 if(size < order) {
-                    Array.insert(newKey, insertionPoint, size - 1, node->keys);
-                    Array.insert(rightChild, insertionPoint + 1, size, children);
+                    BPlusTree.arrayInsert(newKey, insertionPoint, size - 1, node->keys);
+                    BPlusTree.arrayInsert(rightChild, insertionPoint + 1, size, children);
                     node->size = size + 1;
                     Lock.unlock(leftChild->lock);
                     Lock.unlock(rightChild->lock);

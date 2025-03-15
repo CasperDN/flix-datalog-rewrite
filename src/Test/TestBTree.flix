@@ -5,6 +5,8 @@ mod TestBTree {
     use Array.sameElements
     use BPlusTree.Node
 
+    import java.lang.System
+
     /////////////////////////////////////////////////////////////////////////////
     // Test invariant about the BTree                                          //
     /////////////////////////////////////////////////////////////////////////////
@@ -151,17 +153,18 @@ mod TestBTree {
     @test
     def insert06(): Bool = region rc {
         List.forAll(threads -> {
-            // let ref = Ref.fresh(rc, 0);
-            let tree: BPlusTree[Int32, Int32, rc]  = BPlusTree.empty(rc, 5);
-            let pairsList = Random.handleWithSeed(0i64, () -> Vector.map(_ -> getRandomListOfPairs(10_000), Vector.range(0, threads)))();
-            unchecked_cast(repeatN(() ->
-                Vector.forEach(list -> 
-                    List.forEach(p -> {
-                        let (x, y) = p;
-                        BPlusTree.insert(x, y, tree)
-                    }, list), 
-                pairsList), threads)
-            as _ \ rc);
+            let tree: BPlusTree[Int32, Int32, rc]  = BPlusTree.empty(rc, 10);
+            let pairsList = Random.handleWithSeed(0i64, () -> Vector.map(_ -> getRandomListOfPairs(2_000_000 / threads), Vector.range(0, threads)))();
+            let _: Unit = region rc2 {
+                unchecked_cast(
+                    Vector.forEach(list -> spawn unchecked_cast(() ->
+                        List.forEach(p -> {
+                            let (x, y) = p;
+                            BPlusTree.insert(x, y, tree)
+                        }, list) as Unit -> Unit \ IO)() @ rc2
+                    , pairsList)
+                as _ \ rc)
+            };
             Vector.forAll(list -> 
                 List.forAll(p -> {
                     let (x, _) = p;
@@ -170,20 +173,34 @@ mod TestBTree {
         }, List.range(1, 11))
     }
 
-    def repeatN(f: Unit -> Unit \ r, n: Int32): Unit \ IO = 
-        let f_ = unchecked_cast(f as Unit -> Unit \ IO);
-        let _: Unit = region rc {
-            if (n == 0) ()
-            else {
-                if (n == 1) {
-                    spawn f_() @ rc
-                } else {
-                spawn f_() @ rc;
-                repeatN(f, n-1); ()
-                }
-            }
-        };
-        ()
+
+    pub def performance(): Bool \ IO + Sys = region rc {
+        List.forAll(threads -> {
+            println(threads);
+            System.gc();
+            let tree: BPlusTree[Int32, Int32, rc]  = BPlusTree.empty(rc, 10);
+            let pairsList = Random.handleWithSeed(0i64, () -> Vector.map(_ -> getRandomListOfPairs(2_000_000 / threads), Vector.range(0, threads)))();
+            println(Vector.size(Vector.flatten(Vector.map(x -> List.toVector(x), pairsList))));
+            let start = System.currentTimeMillis();
+            let _: Unit = region rc2 {
+                unchecked_cast(
+                    Vector.forEach(list -> spawn unchecked_cast(() ->
+                        List.forEach(p -> {
+                            let (x, y) = p;
+                            BPlusTree.insert(x, y, tree)
+                        }, list) as Unit -> Unit \ IO)() @ rc2
+                    , pairsList)
+                as _ \ rc)
+            };
+            let end = System.currentTimeMillis();
+            println(end-start);
+            Vector.forAll(list -> 
+                List.forAll(p -> {
+                    let (x, _) = p;
+                    BPlusTree.memberOf(x, tree)
+            }, list), pairsList) and testTreeInvariant(tree)
+        }, List.range(1, 11))
+    }
     
     /////////////////////////////////////////////////////////////////////////////
     // rangeQueryWith                                                          //

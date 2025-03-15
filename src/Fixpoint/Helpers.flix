@@ -10,18 +10,4 @@ mod Array {
         let srcObj: Object = checked_cast(src#src);
         let dstObj: Object = checked_cast(dst);
         unchecked_cast(System.arraycopy(srcObj, srcPos#srcPos, dstObj, dstPos#dstPos, len#len) as _ \ { r1, r2 })
-
-    pub def insert(x: a, i: Int32, len: Int32, v: Array[a, r]): Unit \ r =
-        if (len == i)
-            Array.put(x, i, v)
-        else 
-            copyInto(srcPos = i, dstPos = i + 1, len = len - i, src = v, v);
-            Array.put(x, i, v)
-
-}
-
-mod MutList {
-
-    pub def rawGet(i: Int32, list: MutList[v, r]): v \ r = Array.get(i, list->values)    
-
 }
