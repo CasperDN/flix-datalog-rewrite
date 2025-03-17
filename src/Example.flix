@@ -86,6 +86,34 @@ def testMultiMapRandom(vec: Vector[Int32]): Unit \ IO =
     println(end-start);
     ()
 
+    // pub def performance(): Bool \ IO + Sys = region rc {
+    //     List.forAll(threads -> {
+    //         println(threads);
+    //         System.gc();
+    //         let tree: BPlusTree[Int32, Int32, rc]  = BPlusTree.empty(rc, 10);
+    //         let pairsList = Random.handleWithSeed(0i64, () -> Vector.map(_ -> getRandomListOfPairs(2_000_000 / threads), Vector.range(0, threads)))();
+    //         println(Vector.size(Vector.flatten(Vector.map(x -> List.toVector(x), pairsList))));
+    //         let start = System.currentTimeMillis();
+    //         let _: Unit = region rc2 {
+    //             unchecked_cast(
+    //                 Vector.forEach(list -> spawn unchecked_cast(() ->
+    //                     List.forEach(p -> {
+    //                         let (x, y) = p;
+    //                         BPlusTree.insert(x, y, tree)
+    //                     }, list) as Unit -> Unit \ IO)() @ rc2
+    //                 , pairsList)
+    //             as _ \ rc)
+    //         };
+    //         let end = System.currentTimeMillis();
+    //         println(end-start);
+    //         Vector.forAll(list -> 
+    //             List.forAll(p -> {
+    //                 let (x, _) = p;
+    //                 BPlusTree.memberOf(x, tree)
+    //         }, list), pairsList) and testTreeInvariant(tree)
+    //     }, List.range(1, 11))
+    // }
+
 
 def main(): Unit \ IO =
     let n = 10_000_000;
