@@ -8,7 +8,7 @@ Also: Why does it even have it, if it is not used and why use strings internally
 mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Phase.FixPredSyms.FixInformation
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, RamProgram}
+    use Fixpoint.Ast.AugmentedRam.{RelSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model}
     use Fixpoint.Ast.Datalog.Constraint.Constraint

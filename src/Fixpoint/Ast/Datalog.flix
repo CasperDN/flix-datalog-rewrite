@@ -22,7 +22,7 @@ mod Fixpoint.Ast.Datalog {
     use Fixpoint.PredSymsOf.predSymsOf
     use Fixpoint.SubstitutePredSym
     use Fixpoint.SubstitutePredSym.substitute
-    use Fixpoint.Ast.Ram.RelSym
+    use Fixpoint.Ast.AugmentedRam.RelSym
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
 
@@ -71,7 +71,7 @@ mod Fixpoint.Ast.Datalog {
                     |> Iterator.join(String.lineSeparator())
             }
             case Datalog.Model(db) => region rc {
-                use Fixpoint.Ast.Ram.toDenotation;
+                use Fixpoint.Ast.AugmentedRam.toDenotation;
                 Map.iterator(rc, db)
                     |> Iterator.flatMap(match (ramSym, rel) -> {
                         Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {

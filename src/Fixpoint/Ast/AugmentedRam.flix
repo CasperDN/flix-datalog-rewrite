@@ -73,7 +73,7 @@ mod Fixpoint.Ast.AugmentedRam {
         // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, RamID) // The RamID is with respect to what comes in. The TupleVar is with respect to what comes out.
+        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32, RamID) // The RamID is with respect to what comes in. The TupleVar is with respect to what comes out. The second to last is the arity
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
     }
@@ -89,7 +89,7 @@ mod Fixpoint.Ast.AugmentedRam {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
+                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
@@ -102,10 +102,6 @@ mod Fixpoint.Ast.AugmentedRam {
     /////////////////////////////////////////////////////////////////////////////
     // BoolExp                                                                 //
     /////////////////////////////////////////////////////////////////////////////
-
-    /**
-    TODO: Maybe add not equal? Could allow more optimal searching of structures
-    */
 
     @Internal
     pub enum BoolExp {
@@ -307,9 +303,10 @@ mod Fixpoint.Ast.AugmentedRam {
     instance Eq[RamID] {
         pub def eq(a: RamID, b: RamID): Bool = match (a, b) {
             case (RamID.ID(i1), RamID.ID(i2)) => i1 == i2
-            case (RamID.TuplePos(i0, i1), RamID.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
             case (RamID.InID(id1, index1), RamID.InID(id2, index2)) => id1 == id2 and index1 == index2
             case (RamID.FunctionalOutID(id1, index1), RamID.FunctionalOutID(id2, index2)) => id1 == id2 and index1 == index2
+            case (RamID.TuplePos(i0, i1), RamID.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
+            case (RamID.RelPos(i0, i1), RamID.RelPos(j0, j1)) => i0 == j0 and i1 == j1
         //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
             case _ => false
         }

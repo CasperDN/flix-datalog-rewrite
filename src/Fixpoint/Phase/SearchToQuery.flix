@@ -1,16 +1,16 @@
 mod Fixpoint.Phase.IndexSelection2 {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
-    use Fixpoint.Ast.Ram.RelOp.{Search, SearchWithIndex, Functional, Project, If}
-    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, LoadLatVar, Meet, App0, App1, App2, App3, App4, App5}
+    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
+    use Fixpoint.Ast.AugmentedRam.RelOp.{Search, SearchWithIndex, Functional, Project, If}
+    use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit, RowLoad, LoadLatVar, Meet, App0, App1, App2, App3, App4, App5}
 
     // Hoist if-constructions as far as possible and merge into SearchWithQuery when possible/relevant.
     // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
     @Internal
-    pub def queryProgram(program: RamProgram): RamProgram = match program { 
-        case RamProgram.Program(stmt, facts, meta, _) => 
+    pub def queryProgram(program: AugmentedProgram): AugmentedProgram = match program { 
+        case AugmentedProgram.Program(stmt, facts, meta, _) => 
             
-            RamProgram.Program(queryStmt(stmt), facts, meta, ???)
+            AugmentedProgram.Program(queryStmt(stmt), facts, meta, ???)
     }
 
     @Internal
@@ -59,7 +59,7 @@ mod Fixpoint.Phase.IndexSelection2 {
                 newOp
 
             // TODO: Do we want to extend behavior?
-            case Functional(TupleVar.Named(id), func, terms, rest) => Functional(TupleVar.Named(id), func, terms, recursiveCall(rest))
+            case Functional(TupleVar.Named(id), func, terms, rest, arity, inId) => Functional(TupleVar.Named(id), func, terms, recursiveCall(rest), arity, inId)
             case Project(_, _) => op
             case If(boolExps, rest) => 
                 // let insertt = b -> MutList.push(b, independentBool);
@@ -98,16 +98,16 @@ mod Fixpoint.Phase.IndexSelection2 {
 
     @Internal
     def collectTermVariables(term: RamTerm): Set[Int32] = match term {
-        case Lit(_)                         => Set#{}
-        case RowLoad(TupleVar.Named(id), _) => Set#{id}
-        case LoadLatVar(TupleVar.Named(id)) => Set#{id}
-        case Meet(_, t1, t2)                => Set.union(collectTermVariables(t1), collectTermVariables(t2))
-        case App0(_)                        => Set#{}
-        case App1(_, t1)                    => collectTermVariables(t1)
-        case App2(_, t1, t2)                => Set.union(collectTermVariables(t1), collectTermVariables(t2))
-        case App3(_, t1, t2, t3)            => Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3))
-        case App4(_, t1, t2, t3, t4)        => Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4))
-        case App5(_, t1, t2, t3, t4, t5)    => Set.union(Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4)), collectTermVariables(t5))
+        case Lit(_, _)                              => Set#{}
+        case RowLoad(TupleVar.Named(id), _, _, _)   => Set#{id}
+        case LoadLatVar(TupleVar.Named(id), _, _)   => Set#{id}
+        case Meet(_, t1, t2, _)                     => Set.union(collectTermVariables(t1), collectTermVariables(t2))
+        case App0(_, _)                             => Set#{}
+        case App1(_, t1, _)                         => collectTermVariables(t1)
+        case App2(_, t1, t2, _)                     => Set.union(collectTermVariables(t1), collectTermVariables(t2))
+        case App3(_, t1, t2, t3, _)                 => Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3))
+        case App4(_, t1, t2, t3, t4, _)             => Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4))
+        case App5(_, t1, t2, t3, t4, t5, _)         => Set.union(Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4)), collectTermVariables(t5))
     }
 
     @Internal
@@ -128,18 +128,15 @@ mod Fixpoint.Phase.IndexSelection2 {
 
     @Internal
     def isTermGround(term: RamTerm, grounding: Set[Int32]): Bool = match term {
-        case Lit(_) => true
-        case RowLoad(TupleVar.Named(id), _) => Set.memberOf(id, grounding)
-        case LoadLatVar(TupleVar.Named(id)) => Set.memberOf(id, grounding)
-        case Meet(_, t1, t2)                => isTermGround(t1, grounding) and isTermGround(t2, grounding)
-        case App0(_)                        => true
-        case App1(_, t1)                    => isTermGround(t1, grounding)
-        case App2(_, t1, t2)                => isTermGround(t1, grounding) and isTermGround(t2, grounding)
-        case App3(_, t1, t2, t3)            => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding)
-        case App4(_, t1, t2, t3, t4)        => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding) and isTermGround(t4, grounding)
-        case App5(_, t1, t2, t3, t4, t5)    => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding) and isTermGround(t4, grounding) and isTermGround(t5, grounding)
+        case Lit(_, _) => true
+        case RowLoad(TupleVar.Named(id), _, _, _)   => Set.memberOf(id, grounding)
+        case LoadLatVar(TupleVar.Named(id), _, _)   => Set.memberOf(id, grounding)
+        case Meet(_, t1, t2, _)                     => isTermGround(t1, grounding) and isTermGround(t2, grounding)
+        case App0(_, _)                             => true
+        case App1(_, t1, _)                         => isTermGround(t1, grounding)
+        case App2(_, t1, t2, _)                     => isTermGround(t1, grounding) and isTermGround(t2, grounding)
+        case App3(_, t1, t2, t3, _)                 => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding)
+        case App4(_, t1, t2, t3, t4, _)             => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding) and isTermGround(t4, grounding)
+        case App5(_, t1, t2, t3, t4, t5, _)         => isTermGround(t1, grounding) and isTermGround(t2, grounding) and isTermGround(t3, grounding) and isTermGround(t4, grounding) and isTermGround(t5, grounding)
     }
-
-
-
 }

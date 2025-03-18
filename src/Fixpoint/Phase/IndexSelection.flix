@@ -16,7 +16,7 @@
 
 mod Fixpoint.Phase.IndexSelection {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
+    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
 
     ///
     /// Hoist and query optimize `stmt`.
@@ -77,8 +77,8 @@ mod Fixpoint.Phase.IndexSelection {
     }
 
     @Internal
-    pub def queryProgram(program: RamProgram): RamProgram = match program { 
-        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(queryStmt(stmt), facts, meta, index)
+    pub def queryProgram(program: AugmentedProgram): AugmentedProgram = match program { 
+        case AugmentedProgram.Program(stmt, facts, meta, index) => AugmentedProgram.Program(queryStmt(stmt), facts, meta, index)
     }
 
 
@@ -89,25 +89,25 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     def queryOp(op: RelOp, freeVars: Set[TupleVar]): (RelOp, Vector[BoolExp]) = match op {
         case RelOp.Search(var, ramSym, body) =>
-            use Fixpoint.Ast.Ram.BoolExp.Eq;
-            use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
+            use Fixpoint.Ast.AugmentedRam.BoolExp.Eq;
+            use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, Lit};
             let (innerOp, innerGround) = queryOp(body, Set.insert(var, freeVars));
             let (ground, notGround) = Vector.partition(isExpGround(freeVars), innerGround);
             let (varQuery, rest1) =
                 // Make sure `var` is on the lhs of all equalities.
                 Vector.map(exp -> match exp {
-                    case Eq(RowLoad(row1, i), RowLoad(row2, j)) =>
+                    case Eq(RowLoad(row1, i, r1, id1), RowLoad(row2, j, r2, id2)) =>
                         if (row2 == var)
-                            Eq(RowLoad(row2, j), RowLoad(row1, i))
+                            Eq(RowLoad(row2, j, r1, id1), RowLoad(row1, i, r2, id2))
                         else
                             exp
-                    case Eq(Lit(v), RowLoad(row, i)) => Eq(RowLoad(row, i), Lit(v))
+                    case Eq(Lit(v, id1), RowLoad(row, i, r, id2)) => Eq(RowLoad(row, i, r, id2), Lit(v, id1))
                     case _ => exp
                 }, notGround) |>
                 // Partition into those equalities that have `var` on the lhs and those that don't.
                 Vector.partition(exp -> match exp {
-                    case Eq(RowLoad(row1, _), RowLoad(row2, _)) => row1 != row2 and row1 == var
-                    case Eq(RowLoad(row, _), Lit(_)) => row == var
+                    case Eq(RowLoad(row1, _, _, _), RowLoad(row2, _, _, _)) => row1 != row2 and row1 == var
+                    case Eq(RowLoad(row, _, _, _), Lit(_, _)) => row == var
                     case _ => false
                 });
             let (prefixQuery, rest2) = longestPrefixQuery(varQuery);
@@ -140,7 +140,7 @@ mod Fixpoint.Phase.IndexSelection {
                     (search, ground)
         case RelOp.SearchWithIndex(_, _, _, _) => (op, Vector.empty())
         // case RelOp.Query(_, _, _, _) => (op, Vector.empty())
-        case RelOp.Functional(_, _, _, _) => (op, Vector.empty())
+        case RelOp.Functional(_, _, _, _, _, _) => (op, Vector.empty())
         case RelOp.Project(_, _) => (op, Vector.empty())
         case RelOp.If(test, then) =>
             let (innerOp, innerGround) = queryOp(then, freeVars);
@@ -148,22 +148,22 @@ mod Fixpoint.Phase.IndexSelection {
     }
 
     def longestPrefixQuery(varQuery: Vector[BoolExp]): (Vector[BoolExp], Vector[BoolExp]) =
-        use Fixpoint.Ast.Ram.BoolExp.Eq;
-        use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
+        use Fixpoint.Ast.AugmentedRam.BoolExp.Eq;
+        use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, Lit};
         // Sort equalities of the form `var[i] = rhs` ascending on `i`.
         Vector.sortWith(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1), _), Eq(RowLoad(_, index2), _)) => Comparison.fromInt32(index1 - index2)
+            case (Eq(RowLoad(_, index1, _, _), _), Eq(RowLoad(_, index2, _, _), _)) => Comparison.fromInt32(index1 - index2)
             case _ => ???
         }, varQuery) |>
         // Group `var[i] = rhs` by `i`.
         // TODO: groupBy potentially expensive/wastefull since we already knows they are in order. Probably not real problem since list is likely to be short.
         Vector.groupBy(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1), _), Eq(RowLoad(_, index2), _)) => index1 == index2
+            case (Eq(RowLoad(_, index1, _, _), _), Eq(RowLoad(_, index2, _, _), _)) => index1 == index2
             case _ => ???
         }) |>
         Vector.foldLeft(match (i, prefix, rest) -> e -> {
                 let (p, r) = Vector.partition(be -> match be {
-                    case BoolExp.Eq(RamTerm.RowLoad(_, j), _) => i == j
+                    case BoolExp.Eq(RamTerm.RowLoad(_, j, _, _), _) => i == j
                     case _ => ???
                 }, e);
                 (i + 1, Vector.append(prefix, p), Vector.append(rest, r))
@@ -205,27 +205,27 @@ mod Fixpoint.Phase.IndexSelection {
     /// A term is ground if it is a literal or a free variable.
     ///
     def isTermGround(freeVars: Set[TupleVar], term: RamTerm): Bool = match term {
-        case RamTerm.Lit(_) => true
-        case RamTerm.RowLoad(var, _) => Set.memberOf(var, freeVars)
-        case RamTerm.LoadLatVar(var) => Set.memberOf(var, freeVars)
-        case RamTerm.Meet(_, t1, t2) =>
+        case RamTerm.Lit(_, _) => true
+        case RamTerm.RowLoad(var, _, _, _) => Set.memberOf(var, freeVars)
+        case RamTerm.LoadLatVar(var, _, _) => Set.memberOf(var, freeVars)
+        case RamTerm.Meet(_, t1, t2, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2)
-        case RamTerm.App0(_) => true
-        case RamTerm.App1(_, t) => isTermGround(freeVars, t)
-        case RamTerm.App2(_, t1, t2) =>
+        case RamTerm.App0(_, _) => true
+        case RamTerm.App1(_, t, _) => isTermGround(freeVars, t)
+        case RamTerm.App2(_, t1, t2, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2)
-        case RamTerm.App3(_, t1, t2, t3) =>
+        case RamTerm.App3(_, t1, t2, t3, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2) and
             isTermGround(freeVars, t3)
-        case RamTerm.App4(_, t1, t2, t3, t4) =>
+        case RamTerm.App4(_, t1, t2, t3, t4, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2) and
             isTermGround(freeVars, t3) and
             isTermGround(freeVars, t4)
-        case RamTerm.App5(_, t1, t2, t3, t4, t5) =>
+        case RamTerm.App5(_, t1, t2, t3, t4, t5, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2) and
             isTermGround(freeVars, t3) and

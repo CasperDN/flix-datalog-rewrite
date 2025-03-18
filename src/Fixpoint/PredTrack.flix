@@ -17,7 +17,7 @@ mod PredTrack {
         use Fixpoint.Ast.Datalog.Constraint.Constraint
         use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
         use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-        use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, RamProgram}
+        use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, AugmentedProgram}
 
         // (max+1, map from old index to RelSym, map from new index to old PredSym)
         pub type alias PredSymMapInternal = (Int64, Map[Int64, RelSym], Map[Int64, PredSym])
@@ -70,9 +70,9 @@ mod PredTrack {
         // Could use previos method, but would duplicate computation... 
         pub def fullIDtoPredType(id: Int64, wantedType: PredType, self: PredSymMapInternal): Int64 =
             let (max, _, _) = self; match wantedType {
-                case Full => wantedType
-                case Delta => WantedType + max
-                case New => WantedType + max * 2i64
+                case PredType.Full => id
+                case PredType.Delta => id + max
+                case PredType.New => id + max * 2i64
             }
             // if(id <= max) {
             //     id

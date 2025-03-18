@@ -25,6 +25,7 @@ mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
+    use Fixpoint.Ast.AugmentedRam.RelSym
 
     /////////////////////////////////////////////////////////////////////////////
     // RamStmt                                                                 //
@@ -35,7 +36,7 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
-        case Merge(RelSym, RelSym)
+        case Merge(RelSym, RelSym, IntToBox) // IntToBox here only means something for lattice-tuples.
         case Swap(RelSym, RelSym)
         case Purge(RelSym)
         case Seq(Vector[RamStmt])
@@ -49,7 +50,7 @@ mod Fixpoint.Ast.ExecutableRam {
             let nl = String.lineSeparator();
             match stmt {
                 case RamStmt.Insert(op) => ToString.toString(op)
-                case RamStmt.Merge(src, dst) => "merge ${src} into ${dst}"
+                case RamStmt.Merge(src, dst, _) => "merge ${src} into ${dst}"
                 case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
                 case RamStmt.Purge(ramSym) => "purge ${ramSym}"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
@@ -73,8 +74,8 @@ mod Fixpoint.Ast.ExecutableRam {
         // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, IndexInMemory)
-        case Project(Vector[RamTerm], RelSym)
+        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Vector[IntToBox])
+        case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
     }
 
@@ -91,7 +92,7 @@ mod Fixpoint.Ast.ExecutableRam {
                     "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(TupleVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Project(terms, ramSym) =>
+                case RelOp.Project(terms, ramSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
                 case RelOp.If(test, then) =>
                     let tst = test |> Vector.join(" ∧ ");
@@ -110,9 +111,9 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum BoolExp {
         case IsEmpty(RelSym)
-        case NotMemberOf(Vector[RamTerm], RelSym)
+        case NotMemberOf(Vector[RamTerm], RelSym, IntToBox)
         case Eq(RamTerm, RamTerm)
-        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox, IntToBox)
+        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm, IntToBox)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox, IntToBox)
@@ -125,9 +126,9 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(exp: BoolExp): String =
             match exp {
                 case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
-                case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
+                case BoolExp.NotMemberOf(terms, ramSym, _) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                case BoolExp.Leq(_, lhs, rhs, _, _) => "${lhs} <= ${rhs}"
+                case BoolExp.Leq(_, lhs, rhs, _) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v, _) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2, _, _) => "<clo>(${v1}, ${v2})"
@@ -152,9 +153,10 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     @Internal
     pub enum RamTerm {
-        case Lit(Int32)
+        case Lit(Int64)
         case LoadIndex(IndexInMemory)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IndexInMemory, IntToBox, IntToBox, IntToBox) // The first indices are the input. The last is the output
+        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
+        // The first indices are the input. The last is the output
         case App0(Unit -> Boxed, IntToBox)
         case App1(Boxed -> Boxed, RamTerm, IntToBox, IntToBox)
         case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox, IntToBox, IntToBox)
@@ -167,7 +169,7 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(term: RamTerm): String = match term {
             case RamTerm.Lit(v) => "%{v}"
             case RamTerm.LoadIndex(index) => "$Load[${index}]"
-            case RamTerm.Meet(_, lhs, rhs, _, _, _, _) => "(${lhs} ⊓ ${rhs})"
+            case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _, _) => "<clo>(${v})"
             case RamTerm.App2(_, v1, v2, _, _, _) => "<clo>(${v1}, ${v2})"
@@ -181,6 +183,9 @@ mod Fixpoint.Ast.ExecutableRam {
     // RelSym                                                                  //
     /////////////////////////////////////////////////////////////////////////////
 
+    pub type alias RelSym = RelSym
+
+
     /**
         Represents the relations (also delta relations) of the program.
             The first is the symbol of the relation
@@ -188,54 +193,54 @@ mod Fixpoint.Ast.ExecutableRam {
             The third depends denotes whether we are dealing with a lattice or a 'normal' relation.
     */
 
-    @Internal
-    pub enum RelSym {
-        case Symbol(PredSym, Int32, Denotation)
-    }
+    // @Internal
+    // pub enum RelSym {
+    //     case Symbol(PredSym, Int32, Denotation)
+    // }
 
-    // TODO: Implement equality for PredSym using only int id.
-    instance Eq[RelSym] {
-        pub def eq(a: RelSym, b: RelSym): Bool = match (a, b) {
-            case (RelSym.Symbol(s1, _, _),  RelSym.Symbol(s2, _, _))  => s1 == s2
-        }
-    }
+    // // TODO: Implement equality for PredSym using only int id.
+    // instance Eq[RelSym] {
+    //     pub def eq(a: RelSym, b: RelSym): Bool = match (a, b) {
+    //         case (RelSym.Symbol(s1, _, _),  RelSym.Symbol(s2, _, _))  => s1 == s2
+    //     }
+    // }
 
-    // TODO: Implement order for PredSym using only int id.
-    instance Order[RelSym] {
-        pub def compare(a: RelSym, b: RelSym): Comparison = match (a, b) {
-            case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) =>  s1 <=> s2
-        }
-    }
+    // // TODO: Implement order for PredSym using only int id.
+    // instance Order[RelSym] {
+    //     pub def compare(a: RelSym, b: RelSym): Comparison = match (a, b) {
+    //         case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) =>  s1 <=> s2
+    //     }
+    // }
 
-    instance PredSymsOf[RelSym] {
-        pub def predSymsOf(x: RelSym): Set[PredSym] = match x {
-            case RelSym.Symbol(predSym, _, _)    => Set.singleton(predSym)
-        }
-    }
+    // instance PredSymsOf[RelSym] {
+    //     pub def predSymsOf(x: RelSym): Set[PredSym] = match x {
+    //         case RelSym.Symbol(predSym, _, _)    => Set.singleton(predSym)
+    //     }
+    // }
 
-    instance SubstitutePredSym[RelSym] {
-        pub def substitute(x: RelSym, s: Map[PredSym, PredSym]): RelSym = match x {
-            case RelSym.Symbol(predSym, arity, den)  =>
-                let newSym = Map.getWithDefault(predSym, predSym, s);
-                RelSym.Symbol(newSym, arity, den)
-        }
-    }
+    // instance SubstitutePredSym[RelSym] {
+    //     pub def substitute(x: RelSym, s: Map[PredSym, PredSym]): RelSym = match x {
+    //         case RelSym.Symbol(predSym, arity, den)  =>
+    //             let newSym = Map.getWithDefault(predSym, predSym, s);
+    //             RelSym.Symbol(newSym, arity, den)
+    //     }
+    // }
 
-    instance ToString[RelSym] {
-        pub def toString(ramSym: RelSym): String = match ramSym {
-            case RelSym.Symbol(sym, _, _)    => "${sym}"
-        }
-    }
+    // instance ToString[RelSym] {
+    //     pub def toString(ramSym: RelSym): String = match ramSym {
+    //         case RelSym.Symbol(sym, _, _)    => "${sym}"
+    //     }
+    // }
 
-    @Internal
-    pub def arityOf(ramSym: RelSym): Int32 = match ramSym {
-        case RelSym.Symbol(_, arity, _) => arity
-    }
+    // @Internal
+    // pub def arityOf(ramSym: RelSym): Int32 = match ramSym {
+    //     case RelSym.Symbol(_, arity, _) => arity
+    // }
 
-    @Internal
-    pub def toDenotation(ramSym: RelSym): Denotation = match ramSym {
-        case RelSym.Symbol(_, _, den) => den
-    }
+    // @Internal
+    // pub def toDenotation(ramSym: RelSym): Denotation = match ramSym {
+    //     case RelSym.Symbol(_, _, den) => den
+    // }
 
     /////////////////////////////////////////////////////////////////////////////
     // TupleVar                                                                //
@@ -284,7 +289,7 @@ mod Fixpoint.Ast.ExecutableRam {
 
     pub type alias MetaInformation = PredTrack.PredSymMapInternal
 
-    pub type alias FactInformation = Map[Int64, Vector[Vector[Boxed]]]
+    pub type alias FactInformation = Map[Int64, Vector[Vector[Int64]]]
     // TODO: Implement this
     pub type alias IndexInformation = Int32
 }

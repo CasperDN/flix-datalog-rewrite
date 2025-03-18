@@ -15,18 +15,17 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, RamProgram}
+    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, AugmentedProgram, RamID}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-    use Fixpoint.Ast.Datalog.BodyPredicate.{Functional}
-    use Fixpoint.Ast.Datalog.BodyPredicate.{Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Datalog.BodyPredicate.{Guard0, Guard1, Guard2, Guard3, Guard4, Guard5, Functional, BodyAtom}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.isRelational
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
+    use Fixpoint.Counter
     use PredTrack.{PredSymMapInternal}
     use PredTrack.PredType.{Full, Delta, New}
 
@@ -49,41 +48,18 @@ mod Fixpoint.Phase.Compiler {
             // let metaInformation = collectMetaInformation(d, predSymMaps);
             // Vector.forEach(x -> compileRule(stmts, x, predSymMaps), facts);
             // Create map of stratum to list of rules in stratum
+            let counter = Counter.empty(rc);
             Vector.foldRight(rule -> match rule {
                 case Constraint(HeadAtom(p, _, _), _) =>
                     let ruleStratum = Map.getWithDefault(p, 0, strat);
                     Map.insertWith(List.append, ruleStratum, rule :: Nil)
             }, Map#{}, rules) |>
-            Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps));
+            Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps, counter));
             // TODO: Fix
-            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, 2)
+            AugmentedProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, 2)
         }
         case _ => bug!("Datalog normalization bug")
     }
-
-    // ///
-    // /// Collect all predicate symbols in a map
-    // ///
-    // def collectMetaInformation(program: Datalog[v], predSymMaps: PredTrack[r1]): MetaInformation[v] \ r1 = match program {
-    //     case Datalog(facts, rules) => Map.union(collectPredicates(facts, predSymMaps), collectPredicates(rules, predSymMaps))
-    //     case _ => bug!("Datalog normalization bug")
-    // }
-
-    // def collectPredicates(constraints: Vector[Constraint[v]], predSymMaps: PredTrack[r1]): Map[Int64, RelSym[v]] \ r1 = 
-    //     Vector.foldRight(constraint -> map -> {match constraint { case Constraint(HeadAtom(oldPred, den, terms), body) =>
-    //         let predSym = PredTrack.oldPredSymToNewRelSymFull(predSymMaps, oldPred);
-    //         let mapWithHead = match predSym {
-    //             case PredSym(_, id) => Map.insert(id, RelSym.Symbol(predSym, Vector.length(terms), den), map)
-    //         };
-    //         Vector.foldLeft(curMap -> bodyConstraint -> match bodyConstraint {
-    //             case BodyAtom(oldBodyPred, bodyDen, _, _, bodyTerms) => 
-    //                 let bodyPredSym = PredTrack.oldPredSymToNewRelSymFull(predSymMaps, oldBodyPred);
-    //                 match bodyPredSym {
-    //                     case PredSym(_, bodyID) => Map.insert(bodyID, RelSym.Symbol(bodyPredSym, Vector.length(bodyTerms), bodyDen), curMap)
-    //                 }
-    //             case _ => curMap
-    //         }, mapWithHead, body)
-    //     }}, Map#{}, constraints)
 
     ///
     /// Collect all facts by their predicate
@@ -120,7 +96,7 @@ mod Fixpoint.Phase.Compiler {
     /// Note that Eval-Rule is the code emitted by `compileRule`
     /// and Eval-Rule-Incr is the code emitted by `compileRuleIncr`.
     ///
-    def compileStratum(stmts: MutList[RamStmt, r], stratum: List[Constraint], predSymMaps: PredSymMapInternal): Unit \ r = region rc {
+    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: PredSymMapInternal, counter: Counter[r2]): Unit \ r1 + r2 = region rc {
         let idb = List.foldRight(match Constraint(HeadAtom(pred, den, terms), _) -> {
             let arity = Vector.length(terms);
             Map.insert(pred, (arity, den))
@@ -129,7 +105,7 @@ mod Fixpoint.Phase.Compiler {
             Set.insert(id)
         }, Set#{}, stratum);
         let loopBody = MutList.empty(rc);
-        List.forEach(x -> compileRule(stmts, x, predSymMaps), stratum);
+        List.forEach(x -> compileRule(stmts, x, predSymMaps, counter), stratum);
         Map.forEach(predSym -> match (_arity, _den) -> {
             let full = PredTrack.oldPredSymToRelSym(predSymMaps, predSym, Full);
             let delta = PredTrack.oldPredSymToRelSym(predSymMaps, predSym, Delta);
@@ -143,7 +119,7 @@ mod Fixpoint.Phase.Compiler {
             let purge = RamStmt.Purge(PredTrack.oldPredSymToRelSym(predSymMaps, predSym, New));
             MutList.push(purge, loopBody)
         }, idb);
-        List.forEach(x -> compileRuleIncr(loopBody, x, idbIDs, predSymMaps), stratum);
+        List.forEach(x -> compileRuleIncr(loopBody, x, idbIDs, predSymMaps, counter), stratum);
         Map.forEach(predSym -> match (_arity, _den) -> {
             let newr = PredTrack.oldPredSymToRelSym(predSymMaps, predSym, New);
             let full = PredTrack.oldPredSymToRelSym(predSymMaps, predSym, Full);
@@ -187,11 +163,11 @@ mod Fixpoint.Phase.Compiler {
     ///         end
     ///     end
     ///
-    def compileRule(stmts: MutList[RamStmt, r], rule: Constraint, predSymMaps: PredSymMapInternal): Unit \ r = match rule {
+    def compileRule(stmts: MutList[RamStmt, r1], rule: Constraint, predSymMaps: PredSymMapInternal, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(HeadAtom(headSym, _, headTerms), body) =>
-            let augBody = augmentBody(body);
+            let augBody = augmentBody(body, counter);
             let env = unifyVars(augBody);
-            let ramTerms = Vector.map(compileHeadTerm(env), headTerms);
+            let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
             // let projection = RelOp.Project(ramTerms, RelSym.Full(headSym, arity, headDen));
             let projection = RelOp.Project(ramTerms, PredTrack.oldPredSymToRelSym(predSymMaps, headSym, Full));
             let join = compileBody(env, augBody, predSymMaps);
@@ -248,9 +224,9 @@ mod Fixpoint.Phase.Compiler {
     // Note: This has been modified to only generate using the delta-relations for the current strata.
     // Reasoning: The older delta-relations will all be empty so it is a simple optimization that can also allow optimizations for index selection (of the delta relations).
 
-    def compileRuleIncr(stmts: MutList[RamStmt, r], rule: Constraint, idbSet: Set[Int64], predSymMaps: PredSymMapInternal): Unit \ r = match rule {
+    def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, idbSet: Set[Int64], predSymMaps: PredSymMapInternal, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(HeadAtom(headSym, _, headTerms), body) =>
-            let augBody = augmentBody(body);
+            let augBody = augmentBody(body, counter);
             let env = unifyVars(augBody);
             let ramTerms = Vector.map(compileHeadTerm(env), headTerms);
             let projection = RelOp.Project(ramTerms, PredTrack.oldPredSymToRelSym(predSymMaps, headSym, New));
@@ -299,47 +275,45 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Substitute Datalog head term `term` for a RAM term according to the given substitution `env`.
     ///
-    def compileHeadTerm(env: Map[VarSym, RamTerm], term: HeadTerm): RamTerm = match term {
+    def compileHeadTerm(env: Map[VarSym, RamTerm], counter: Counter[r], term: HeadTerm): RamTerm \ r = match term {
         case HeadTerm.Var(var) => unwrap(Map.get(var, env))
-        case HeadTerm.Lit(v) => RamTerm.Lit(v)
-        case HeadTerm.App0(f) => RamTerm.App0(f)
+        case HeadTerm.Lit(v) => RamTerm.Lit(v, RamID.ID(Counter.getNewID(counter)))
+        case HeadTerm.App0(f) => RamTerm.App0(f, RamID.ID(Counter.getNewID(counter)))
         case HeadTerm.App1(f, v) =>
             let t = unwrap(Map.get(v, env));
-            RamTerm.App1(f, t)
+            RamTerm.App1(f, t, RamID.ID(Counter.getNewID(counter)))
         case HeadTerm.App2(f, v1, v2) =>
             let t1 = unwrap(Map.get(v1, env));
             let t2 = unwrap(Map.get(v2, env));
-            RamTerm.App2(f, t1, t2)
+            RamTerm.App2(f, t1, t2, RamID.ID(Counter.getNewID(counter)))
         case HeadTerm.App3(f, v1, v2, v3) =>
             let t1 = unwrap(Map.get(v1, env));
             let t2 = unwrap(Map.get(v2, env));
             let t3 = unwrap(Map.get(v3, env));
-            RamTerm.App3(f, t1, t2, t3)
+            RamTerm.App3(f, t1, t2, t3, RamID.ID(Counter.getNewID(counter)))
         case HeadTerm.App4(f, v1, v2, v3, v4) =>
             let t1 = unwrap(Map.get(v1, env));
             let t2 = unwrap(Map.get(v2, env));
             let t3 = unwrap(Map.get(v3, env));
             let t4 = unwrap(Map.get(v4, env));
-            RamTerm.App4(f, t1, t2, t3, t4)
+            RamTerm.App4(f, t1, t2, t3, t4, RamID.ID(Counter.getNewID(counter)))
         case HeadTerm.App5(f, v1, v2, v3, v4, v5) =>
             let t1 = unwrap(Map.get(v1, env));
             let t2 = unwrap(Map.get(v2, env));
             let t3 = unwrap(Map.get(v3, env));
             let t4 = unwrap(Map.get(v4, env));
             let t5 = unwrap(Map.get(v5, env));
-            RamTerm.App5(f, t1, t2, t3, t4, t5)
+            RamTerm.App5(f, t1, t2, t3, t4, t5, RamID.ID(Counter.getNewID(counter)))
     }
 
     ///
-    /// Augment body atoms with row variables.
-    /// Every atom is thus identified by a unique row variable, regardless of its position in the body.
+    /// Augment body atoms with TupleVars.
+    /// Every atom is thus identified by a unique TupleVar, regardless of its position in the body.
     ///
-    /// Note that row variables not unique across rules.
-    ///
-    def augmentBody(body: Vector[BodyPredicate]): Vector[(BodyPredicate, TupleVar)] =
-        Vector.mapWithIndex(i -> atom -> match atom {
-            case BodyAtom(_, _, Polarity.Positive, _, _) => (atom, TupleVar.Named(i))
-            case Functional(_, _, _)                                 => (atom, TupleVar.Named(i))
+    def augmentBody(body: Vector[BodyPredicate], counter: Counter[r]): Vector[(BodyPredicate, TupleVar)] \ r =
+        Vector.map(atom -> match atom {
+            case BodyAtom(_, _, Polarity.Positive, _, _) => (atom, TupleVar.Named(Counter.getNewID(counter)))
+            case Functional(_, _, _)                     => (atom, TupleVar.Named(Counter.getNewID(counter)))
             case _ => ???
             // case BodyAtom(predSym, _, Polarity.Positive, _, _) => (atom, TupleVar.Named("${predSym}$${i}"))
             // case Functional(_, _, _)                                 => (atom, TupleVar.Named("l$${i}"))
@@ -403,9 +377,9 @@ mod Fixpoint.Phase.Compiler {
     def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, TupleVar)], predSymMaps: PredSymMapInternal): Vector[BoolExp] =
         Vector.flatMap(match (atom, rowVar) ->
             let compileBodyTerm = j -> term -> match term {
-                case BodyTerm.Wild      => RamTerm.RowLoad(rowVar, j)
+                case BodyTerm.Wild      => RamTerm.RowLoad(rowVar, j, RamID.TuplePos(rowVar, j))
                 case BodyTerm.Var(var)  => unwrap(Map.get(var, env))
-                case BodyTerm.Lit(v)    => RamTerm.Lit(v)
+                case BodyTerm.Lit(v)    => RamTerm.Lit(v, RamID.ID(Counter.getNewID(counter)))
             };
             match atom {
                 case BodyAtom(_, denotation, Polarity.Positive, _, terms) =>

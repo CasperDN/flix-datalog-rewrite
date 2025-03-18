@@ -56,6 +56,7 @@ mod Fixpoint.Solver {
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.IndexSelection.queryProgram
             |> Fixpoint.Phase.VarsToIndices.lowerProgram
+            |> Fixpoint.Phase.AugmentToExec.compileToExec
         };
         let model = match d {
             case Datalog(_, _) => region rc {

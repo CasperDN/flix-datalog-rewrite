@@ -15,8 +15,8 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, RamProgram}
-    use Fixpoint.Ast.Ram.RamTerm.{RowLoad, LoadLatVar, Lit, Meet}
+    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, AugmentedProgram}
+    use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, LoadLatVar, Lit, Meet}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.
@@ -33,8 +33,8 @@ mod Fixpoint.Phase.Simplifier {
     ///     end
     ///
     @Internal
-    pub def simplifyProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(simplifyStmt(stmt), facts, meta, index)
+    pub def simplifyProgram(program: AugmentedProgram): AugmentedProgram = match program {
+        case AugmentedProgram.Program(stmt, facts, meta, index) => AugmentedProgram.Program(simplifyStmt(stmt), facts, meta, index)
     }
     @Internal
     pub def simplifyStmt(stmt: RamStmt): RamStmt =
@@ -93,8 +93,8 @@ mod Fixpoint.Phase.Simplifier {
             let (memberOf, rest) =
                 // Delete checks of the form `x[i] == x[i]` and `x ≤ x` and `x ⊓ y ≤ x`.
                 Vector.filter(e -> match e {
-                    case BoolExp.Eq(RowLoad(lhs1, lhs2), RowLoad(rhs1, rhs2)) => (lhs1, lhs2) != (rhs1, rhs2)
-                    case BoolExp.Leq(_, lhs, LoadLatVar(rhsVar)) =>
+                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _, _), RowLoad(rhs1, rhs2, _, _)) => (lhs1, lhs2) != (rhs1, rhs2)
+                    case BoolExp.Leq(_, lhs, LoadLatVar(rhsVar, _, _)) =>
                         let lhsVars = ramTermVars(lhs);
                         not Set.memberOf(rhsVar, lhsVars)
                     case _ => true
@@ -144,10 +144,10 @@ mod Fixpoint.Phase.Simplifier {
         //         newBody <- simplifyOp(stratum, body);
         //         res <- f(newBody)
         //     ) yield res
-        case RelOp.Functional(rowVar, f, terms, body) =>
+        case RelOp.Functional(rowVar, f, terms, body, arity, idID) =>
             forM(
                 newBody <- simplifyOp(stratum, body)
-            ) yield RelOp.Functional(rowVar, f, terms, newBody)
+            ) yield RelOp.Functional(rowVar, f, terms, newBody, arity, idID)
         case RelOp.Project(_, _)    => Some(op)
     }
 
@@ -155,25 +155,25 @@ mod Fixpoint.Phase.Simplifier {
     /// Returns the set of variables that occur in `term`.
     ///
     def ramTermVars(term: RamTerm): Set[TupleVar] = match term {
-        case RamTerm.Lit(_) => Set#{}
-        case RamTerm.RowLoad(var, _) => Set#{var}
-        case RamTerm.LoadLatVar(var) => Set#{var}
-        case RamTerm.Meet(_, lhs, rhs) => Set.union(ramTermVars(lhs), ramTermVars(rhs))
-        case RamTerm.App0(_) => Set#{}
-        case RamTerm.App1(_, t) => ramTermVars(t)
-        case RamTerm.App2(_, t1, t2) => Set.union(ramTermVars(t1), ramTermVars(t2))
-        case RamTerm.App3(_, t1, t2, t3) =>
+        case RamTerm.Lit(_, _) => Set#{}
+        case RamTerm.RowLoad(var, _, _, _) => Set#{var}
+        case RamTerm.LoadLatVar(var, _, _) => Set#{var}
+        case RamTerm.Meet(_, lhs, rhs, _) => Set.union(ramTermVars(lhs), ramTermVars(rhs))
+        case RamTerm.App0(_, _) => Set#{}
+        case RamTerm.App1(_, t, _) => ramTermVars(t)
+        case RamTerm.App2(_, t1, t2, _) => Set.union(ramTermVars(t1), ramTermVars(t2))
+        case RamTerm.App3(_, t1, t2, t3, _) =>
             let v1 = ramTermVars(t1);
             let v2 = ramTermVars(t2);
             let v3 = ramTermVars(t3);
             Set.union(v1, Set.union(v2, v3))
-        case RamTerm.App4(_, t1, t2, t3, t4) =>
+        case RamTerm.App4(_, t1, t2, t3, t4, _) =>
             let v1 = ramTermVars(t1);
             let v2 = ramTermVars(t2);
             let v3 = ramTermVars(t3);
             let v4 = ramTermVars(t4);
             Set.union(v1, Set.union(v2, Set.union(v3, v4)))
-        case RamTerm.App5(_, t1, t2, t3, t4, t5) =>
+        case RamTerm.App5(_, t1, t2, t3, t4, t5, _) =>
             let v1 = ramTermVars(t1);
             let v2 = ramTermVars(t2);
             let v3 = ramTermVars(t3);
