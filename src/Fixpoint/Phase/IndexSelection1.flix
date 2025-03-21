@@ -5,8 +5,12 @@ mod Fixpoint.IndexSelection1 {
     // Matching is a `Map` here so we can call `rangeQueryWith`
     type alias Matching = Map[Edge, Unit]
 
+    ///
+    /// Find the maximum matching in the bipartite graph `(us, vs, edges)`.
+    ///
     def maximumMatching(us: List[Vertex], vs: List[Vertex], edges: List[Edge]): Matching = region rc {
         let matching = Array.empty(rc, List.length(vs));
+        let matchingRev = Array.empty(rc, List.length(us));
         Array.transform(_ -> -1, matching);
         def getMatching(u: Vertex, seen: Array[Bool, rc], currentEdges: List[Edge]): Bool \ rc = match currentEdges {
             case (u0, v) :: rest => 
@@ -14,23 +18,18 @@ mod Fixpoint.IndexSelection1 {
                     Array.put(true, v, seen);
                     if (Array.get(v, matching) < 0 or getMatching(Array.get(v, matching), seen, edges)) {
                         Array.put(u, v, matching);
+                        Array.put(v, u, matchingRev);
                         true
                     } else getMatching(u, seen, rest)
                 } else getMatching(u, seen, rest)        
             case _ => false
         };
         let matchedVertices = List.filter(u -> getMatching(u, Array.empty(rc, List.length(us)), edges), us);
-        List.foldLeft(acc -> u -> {
-            let v = match Array.findIndexOf(u0 -> u0 == u, matching) {
-                case Some(i) => i
-                case None => bug!("Something went wrong")
-            };
-            Map.insert((u, v), (), acc)
-        }, Map.empty(), matchedVertices)
+        List.foldLeft(acc -> u -> Map.insert((u, Array.get(u, matchingRev)), (), acc), Map.empty(), matchedVertices)
     }
 
     ///
-    /// Find the maximal path starting from the vertex `from_` in `matching`
+    /// Find the maximal path starting from the vertex `from_` in `matching`.
     ///
     def maximalPath(from_: Vertex, matching: Matching): List[Edge] = region rc {
         let allPaths = MutMap.empty(rc);
@@ -55,7 +54,10 @@ mod Fixpoint.IndexSelection1 {
         }
     }
 
-    def bipartiteGraphFromSearches(searches: List[Search]): (List[Vertex], List[Edge]) =
+    ///
+    /// Create a graph from the list of searches `searches`.
+    ///
+    def graphFromSearches(searches: List[Search]): (List[Vertex], List[Edge]) =
         // The vertices are are simply the indices of the searches in the list
         let vertices = List.range(0, List.length(searches));
         let sets = List.map(s -> Vector.toSet(s), searches);
@@ -69,22 +71,19 @@ mod Fixpoint.IndexSelection1 {
         }, zipped);
         (vertices, edges)
 
-    def minChainCover(searches: List[Search]): List[List[Search]] \ IO = 
-        let (vertices, edges) = bipartiteGraphFromSearches(searches);
-        let map = List.toMap(List.zip(vertices, searches)); // To map back to searches
+    ///
+    /// Find the minimum chain cover of `searches`.
+    ///
+    def minChainCover(searches: List[Search]): List[List[Search]] = 
+        let (vertices, edges) = graphFromSearches(searches);
+        let searchesVec = List.toVector(searches);
         let matching = maximumMatching(vertices, vertices, edges);
         let cond = v -> not Map.exists(edge -> _ -> snd(edge) == v, matching);
         let valid = List.filter(cond, vertices);
-        let toSearch = i -> match Map.get(i, map) {
-            case Some(v) => v
-            case None => ???
-        };
+        let toSearch = i -> Vector.get(i, searchesVec);
         List.foldLeft(acc -> u1 -> {
-            let maxPath = maximalPath(u1, matching);
-            match maxPath {
-                case x :: xs => (toSearch(fst(x)) :: List.map(e -> toSearch(snd(e)) , maxPath)) :: acc
-                case Nil => (toSearch(u1) :: Nil) :: acc
-            }
+            let chain = toSearch(u1) :: List.map(e -> toSearch(snd(e)), maximalPath(u1, matching));
+            chain :: acc
         }, List.empty(), valid)
 
     pub def main(): Unit \ IO = 
