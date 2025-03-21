@@ -86,11 +86,16 @@ mod Fixpoint.IndexSelection1 {
             chain :: acc
         }, List.empty(), valid)
 
+    def minIndex(searches: List[Search]): List[List[Search]] = 
+        let chainCover = minChainCover(searches);
+        let chainCoverSets = List.map(chain -> List.zip(chain, Vector.empty() :: chain), chainCover); 
+        List.map(chain -> List.map(match (s1, s2) -> Vector.filter(x -> not Vector.memberOf(x, s2), s1), chain), chainCoverSets)
+
     pub def main(): Unit \ IO = 
         let u0: Search = Vector#{1};
         let u1: Search = Vector#{1,2};
         let u2: Search = Vector#{1,3};
         let u3: Search = Vector#{1,2,3};
-        let chains = minChainCover(u0::u1::u2::u3::Nil);
-        println(chains)
+        let indexes = minIndex(u0::u1::u2::u3::Nil);
+        println(indexes)
 }
