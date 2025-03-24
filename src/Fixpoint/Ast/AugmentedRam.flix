@@ -149,7 +149,7 @@ mod Fixpoint.Ast.AugmentedRam {
     /// The RamID uniquely identifies the term
     @Internal
     pub enum RamTerm {
-        case Lit(Int32, RamID)
+        case Lit(Int64, RamID)
         case RowLoad(TupleVar, Int32, RelSym, RamID)
         case LoadLatVar(TupleVar, RelSym, RamID)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamID)
