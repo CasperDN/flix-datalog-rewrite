@@ -1,4 +1,27 @@
 import java.lang.System
+import java.util.TreeMap
+import java.lang.Long
+
+
+
+// def mainBTreeExperiment(): Unit \ IO  = 
+//     println("Before");
+//     Thread.sleep(Time.Duration.fromSeconds(30));
+//     println("ARRRR");
+//     ()
+
+
+def mainBTreeExperiment(): Unit \ IO + NonDet + Sys = 
+    insertElementsDifferentOrder();
+    insertFewElementsOften();
+    insertManyElements();
+    readExperiment();
+    flixInsertExperiment();
+    flixReadExperiment();
+    javaInsertExperiment();
+    javaReadExperiment();
+    ()
+
 
 def getRandomListOfPairs(n: Int32): List[(Int64, Int64)] \ Random =
     List.map(_ -> (Random.randomInt64(), Random.randomInt64()), List.range(0, n))
@@ -26,57 +49,13 @@ def runSingleTest(toInsert: InsertLists): Int64 \ IO = region rc {
     })
 }
 
-def runNTests(testNum: Int32, toInsert: InsertLists): Vector[Int64] \ IO + Sys =
-    let times = Vector.map(_ -> {System.gc(); runSingleTest(toInsert)}, Vector.range(0, testNum));
+def runNTestsGeneral(testNum: Int32, func: Unit -> Int64 \ ef): Vector[Int64] \ IO + Sys + ef =
+    let times = Vector.map(_ -> {System.gc(); func()}, Vector.range(0, testNum));
     times
 
 def runWithThreadsRandom(testNum: Int32, threadsNum: Int32, totalInsert: Int32): Vector[Int64] \ IO + NonDet + Sys =
     let pairs = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInsert / threadsNum), Vector.range(0, threadsNum)));
-    runNTests(testNum, pairs)
-
-
-
-// def insertUntil(toInsert: PiecewiseInsertLists, timeLimit: Int64): Int64 \ IO = region rc {
-//     let threadNum = Vector.size(toInsert);
-//     let reffNumVec = Vector.map(_ -> Ref.fresh(rc, 0i64), Vector.range(0, threadNum));
-//     Clock.runWithIO(() -> {
-//         let start = Clock.currentTime(TimeUnit.Nanoseconds);
-//         let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, 10);
-//         let _: Unit = region rc2 {
-//             unchecked_cast(
-//                 Vector.forEach(match (listt, ref) -> spawn unchecked_cast(() ->
-//                 Ref.put (Vector.foldRightWithCont(list -> f -> {
-//                     List.forEach(p -> {
-//                         let (x, y) = p;
-//                         BPlusTree.insert(x, y, tree)
-//                     }, list);
-//                     if(Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start < timeLimit) 
-//                         f() + 1i64
-//                      else 0i64
-//                     }
-//                     , 0i64, listt), ref)
-//                      as Unit -> Unit \ IO)() @ rc2
-//                 , Vector.zip(toInsert, reffNumVec))
-//             as _ \ rc)
-//         };
-//         Vector.foldLeft(acc -> x -> acc + Ref.get(x), 0i64, reffNumVec)
-//         // let end = Clock.currentTime(TimeUnit.Nanoseconds);
-//         // end - start
-//     })
-// }
-
-// def runNTests(testNum: Int32, toInsert: PiecewiseInsertLists, timeLimit: Int64): Vector[Int64] \ IO =
-//     let times = Vector.map(_ -> insertUntil(toInsert, timeLimit), Vector.range(0, testNum));
-//     times
-
-// def runWithThreadsRandom(testNum: {testNum = Int32}, threadNum: {threadNum = Int32}, maxInsert: {maxInsert = Int32}, pieceSize: {pieceSize = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet =
-//     let pairs = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairsInPieces(maxInsert#maxInsert, pieceSize#pieceSize), Vector.range(0, threadNum#threadNum)));
-//     runNTests(testNum#testNum, pairs, timeLimit)
-
-
-
-
-
+    runNTestsGeneral(testNum, () -> runSingleTest(pairs))
 
 
 def repeatUntil(f: Unit -> Unit \ ef1, stopFunc: Unit -> Bool \ ef2): Int64 \ ef1 + ef2 = 
@@ -111,14 +90,9 @@ def insertUntil(toInsert: InsertLists, timeLimit: Int64, order: Int32): Int64 \ 
     })
 }
 
-def runNTestsUntil(testNum: Int32, toInsert: InsertLists, timeLimit: Int64, order: Int32): Vector[Int64] \ IO + Sys =
-    let times = Vector.map(_ -> {System.gc(); insertUntil(toInsert, timeLimit, order)}, Vector.range(0, testNum));
-    times
-
 def runWithThreadsRandomUntil(testNum: {testNum = Int32}, threadNum: {threadNum = Int32}, totalInserts: {totalInserts = Int32}, timeLimit: Int64, order: Int32): Vector[Int64] \ IO + NonDet + Sys =
     let pairs = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts / threadNum#threadNum), Vector.range(0, threadNum#threadNum)));
-    runNTestsUntil(testNum#testNum, pairs, timeLimit, order)
-
+    runNTestsGeneral(testNum#testNum, () -> insertUntil(pairs, timeLimit, order))
 
 def readUntil(toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Int64 \ IO = region rc {
     let threadNum = Vector.size(toInsert);
@@ -139,38 +113,157 @@ def readUntil(toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Int
                 , lookup)
         };
         repeatUntil(insertFunc, timeFunc)
-        // Vector.foldLeft(acc -> x -> acc + Ref.get(x), 0i64, reffNumVec)
     })
 }
-
-def runNTestsReadUntil(testNum: Int32, toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Vector[Int64] \ IO + Sys =
-    let times = Vector.map(_ -> {System.gc(); readUntil(toInsert, lookup, timeLimit)}, Vector.range(0, testNum));
-    times
 
 def runWithThreadsReadRandomUntil(testNum: {testNum = Int32}, threadNum: {threadNum = Int32}, totalInserts: {totalInserts = Int32}, generatedReads: {generatedReads = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
     let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, threadNum#threadNum)));
     let lookup = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(generatedReads#generatedReads), Vector.range(0, threadNum#threadNum)));
-    runNTestsReadUntil(testNum#testNum, inserted, lookup, timeLimit)
+    runNTestsGeneral(testNum#testNum, () -> readUntil(inserted, lookup, timeLimit))
+
+def insertUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], timeLimit: Int64): Int64 \ IO = region rc {
+    let insertNum = List.size(Vector.get(0, toInsert));
+    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+        let start = Clock.currentTime(TimeUnit.Nanoseconds);
+        let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
+        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+                Vector.forEach(match list -> spawn unchecked_cast(() -> {
+            let tree  = MutMap.empty(rc);
+            List.forEach(p -> {
+                let (x, y) = p;
+                MutMap.put(x, y, tree)
+            }, list)} as Unit -> Unit \ IO)() @ rc2
+        , toInsert)};
+        repeatUntil(insertFunc, timeFunc)
+    })
+}
+
+def runFlixMap(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
+    runNTestsGeneral(testNum#testNum, () -> insertUntilFlixMap(inserted, timeLimit))
+
+def readUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists, timeLimit: Int64): Int64 \ IO = region rc {
+    let insertNum = List.size(Vector.get(0, toInsert));
+    let tree  = MutMap.empty(rc);
+    Vector.forEach(List.forEach(match (x, y) -> MutMap.put(x, y, tree)), toInsert);
+    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+        let start = Clock.currentTime(TimeUnit.Nanoseconds);
+        let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
+        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+                Vector.forEach(match list -> spawn unchecked_cast(() -> {
+            List.forEach(p -> {
+                let (x, _) = p;
+                MutMap.memberOf(x, tree);
+                ()
+            }, list)} as Unit -> Unit \ IO)() @ rc2
+        , lookup)};
+        repeatUntil(insertFunc, timeFunc)
+    })
+}
+
+def runFlixMapRead(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, generatedReads: {generatedReads = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
+    let lookup = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(generatedReads#generatedReads), Vector.range(0, 1)));
+    runNTestsGeneral(testNum#testNum, () -> readUntilFlixMap(inserted, lookup, timeLimit))
+
+def insertUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], timeLimit: Int64): Int64 \ IO =
+    let insertNum = List.size(Vector.get(0, toInsert));
+    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+        let start = Clock.currentTime(TimeUnit.Nanoseconds);
+        let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
+        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+            Vector.forEach(match list -> spawn unchecked_cast(() -> {
+                let tree  = new TreeMap();
+                List.forEach(p -> {
+                    let (x, y) = p;
+                    tree.put(Long.valueOf(x), Long.valueOf(y));
+                    ()
+                }, list)} as Unit -> Unit \ IO)() @ rc2
+        , toInsert)};
+        repeatUntil(insertFunc, timeFunc)
+    })
 
 
+def runJavaMap(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
+    runNTestsGeneral(testNum#testNum, () -> insertUntilJavaMap(inserted, timeLimit))
+
+def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists, timeLimit: Int64): Int64 \ IO = 
+    let insertNum = List.size(Vector.get(0, toInsert));
+    let tree  = new TreeMap();
+    Vector.forEach(List.forEach(match (x, y) -> {tree.put(Long.valueOf(x), Long.valueOf(y)); ()}), toInsert);
+    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+        let start = Clock.currentTime(TimeUnit.Nanoseconds);
+        let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
+        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+                Vector.forEach(match list -> spawn unchecked_cast(() -> {
+            List.forEach(p -> {
+                let (x, _) = p;
+                tree.get(Long.valueOf(x));
+                ()
+            }, list)} as Unit -> Unit \ IO)() @ rc2
+        , lookup)};
+        repeatUntil(insertFunc, timeFunc)
+    })
 
 
-def mainBTreeExperiment(): Unit \ IO + NonDet + Sys = 
-    insertElementsDifferentOrder();
-    insertFewElementsOften();
-    insertManyElements();
-    ()
+def runJavaMapRead(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, generatedReads: {generatedReads = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
+    let lookup = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(generatedReads#generatedReads), Vector.range(0, 1)));
+    runNTestsGeneral(testNum#testNum, () -> readUntilJavaMap(inserted, lookup, timeLimit))
 
+def javaReadExperiment(): Unit \ IO + NonDet + Sys = {
+    let secondLimit = 60i64;
+    let nanoLimit = secondLimit * 1_000_000_000i64;
+    println("Java: Read experiment");
+    Vector.forEach(inserts -> {
+        println("Inserts");
+        println(inserts);
+        println(runJavaMapRead(testNum = 20, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
+def javaInsertExperiment(): Unit \ IO + NonDet + Sys = {
+    let secondLimit = 60i64;
+    let nanoLimit = secondLimit * 1_000_000_000i64;
+    println("Java: Insert experiment");
+    Vector.forEach(inserts -> {
+        println("Inserts");
+        println(inserts);
+        println(runJavaMap(testNum = 20, totalInserts = inserts, nanoLimit))
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
+
+def flixInsertExperiment(): Unit \ IO + NonDet + Sys = {
+    let secondLimit = 60i64;
+    let nanoLimit = secondLimit * 1_000_000_000i64;
+    println("Flix: Insert experiment");
+    Vector.forEach(inserts -> {
+        println("Inserts");
+        println(inserts);
+        println(runFlixMap(testNum = 20, totalInserts = inserts, nanoLimit))
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
+
+def flixReadExperiment(): Unit \ IO + NonDet + Sys = {
+    let secondLimit = 60i64;
+    let nanoLimit = secondLimit * 1_000_000_000i64;
+    println("Flix: Read experiment");
+    Vector.forEach(inserts -> {
+        println("Inserts");
+        println(inserts);
+        println(runFlixMapRead(testNum = 20, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
 
 def readExperiment(): Unit \ IO + NonDet + Sys = {
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
-    println("Experiment with 10 million inserts");
+    println("BPlusTree: Read experiment");
     Vector.forEach(inserts -> {
         println("Inserts");
         println(inserts);
         println(runWithThreadsReadRandomUntil(testNum = 20, threadNum = 1, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
-    }, Vector#{1_000_000})
+    }, Vector#{10_000, 100_000, 1_000_000})
 }
 def insertManyElements(): Unit \ IO + NonDet + Sys = {
     println("Experiment with 10 million inserts");
