@@ -56,7 +56,7 @@ mod Fixpoint.Phase.Compiler {
             }, Map#{}, rules) |>
             Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps));
             // TODO: Fix
-            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, 2)
+            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, Map.empty())
         }
         case _ => bug!("Datalog normalization bug")
     }

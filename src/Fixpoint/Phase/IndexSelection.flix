@@ -1,235 +1,151 @@
-/*
- * Copyright 2021 Benjamin Dahse
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 mod Fixpoint.Phase.IndexSelection {
+    use AutomaticIndexSelection.{minIndex}
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, toId, Search};
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
-
-    ///
-    /// Hoist and query optimize `stmt`.
-    ///
-    /// This is an optimization phase and can be omitted with no semantic effect.
-    ///
-    /// The purpose of this phase is to:
-    /// 1) Hoist if-statements from inner loops to outer loops.
-    /// An if-statement can be hoisted from its enclosing loop if it only reads variables
-    /// that are bound in an outer loop.
-    /// 2) Rewrite searches on relations to queries on indices, when possible.
-    /// It is possible to rewrite a search when it searches on attributes that form a prefix
-    /// of the attribute sequence used to lexicographically define the index.
-    /// Consider the following example:
-    /// search x ∈ B do
-    ///     search (y, z, w) ∈ R do
-    ///         search u ∈ C do
-    ///             if (x = y ∧ x = w ∧ z = u ∧ x ∉ A) then
-    ///                 inject x into A
-    /// After step 1 (hoisting):
-    /// search x ∈ B do
-    ///     if (x ∉ A) then
-    ///         search (y, z, w) ∈ R do
-    ///             if (x = y ∧ x = w) then
-    ///                 search u ∈ C do
-    ///                     if (z = u) then
-    ///                         inject x into A
-    /// After step 2 (query rewriting):
-    /// search x ∈ B do
-    ///     if (x ∉ A) then
-    ///         query {(y, z, w) ∈ R | x = y} do
-    ///             if (x = w) then
-    ///                 query {u ∈ C | z = u} do
-    ///                     inject x into A
-    ///
-    /// Note how the search `x = y` is optimized, but `x = w` is not.
-    /// The index for R is defined by the attribute sequence Y < Z < W.
-    /// Therefore the search `x = y` is a prefix search.
-    /// But `x = w` is not part of any prefix and hence cannot be optimized.
-    ///
-    /// Step 1 and Step 2 are implemented as one pass.
-    ///
-    @Internal
-    pub def queryStmt(stmt: RamStmt): RamStmt = match stmt {
-        case RamStmt.Insert(op) =>
-            let (innerOp, ground) = queryOp(op, Set#{});
-            if (Vector.isEmpty(ground))
-                RamStmt.Insert(innerOp)
-            else
-                RamStmt.Insert(RelOp.If(ground, innerOp))
-        case RamStmt.Merge(_, _) => stmt
-        case RamStmt.Swap(_, _) => stmt
-        case RamStmt.Purge(_) => stmt
-        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(queryStmt, xs))
-        case RamStmt.Until(test, body) => RamStmt.Until(test, queryStmt(body))
-        case RamStmt.Comment(_) => stmt
-        case RamStmt.Par(_) => ???
+    pub def indexProgram(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, meta, _) => 
+            let index = Map.map(minIndex, indexStmt(stmt));
+            RamProgram.Program(stmt, facts, meta, index)
     }
 
-    @Internal
-    pub def queryProgram(program: RamProgram): RamProgram = match program { 
-        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(queryStmt(stmt), facts, meta, index)
+    def indexStmt(stmt: RamStmt): Map[Int64, List[Search]] = match stmt {
+        case RamStmt.Seq(xs) => Vector.foldMap(x -> indexStmt(x), xs)
+        case RamStmt.Insert(op) => indexOp(op)
+        case _ => Map.empty()
     }
 
-
-    /// Hoist and query optimize `op`.
-    ///
-    /// `freeVars` is the set of variables bound by an outer loop.
-    /// Returns the optimized op and the conditions that occur in `op` that have to be hoisted.
-    ///
-    def queryOp(op: RelOp, freeVars: Set[TupleVar]): (RelOp, Vector[BoolExp]) = match op {
-        case RelOp.Search(var, ramSym, body) =>
-            use Fixpoint.Ast.Ram.BoolExp.Eq;
-            use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
-            let (innerOp, innerGround) = queryOp(body, Set.insert(var, freeVars));
-            let (ground, notGround) = Vector.partition(isExpGround(freeVars), innerGround);
-            let (varQuery, rest1) =
-                // Make sure `var` is on the lhs of all equalities.
-                Vector.map(exp -> match exp {
-                    case Eq(RowLoad(row1, i), RowLoad(row2, j)) =>
-                        if (row2 == var)
-                            Eq(RowLoad(row2, j), RowLoad(row1, i))
-                        else
-                            exp
-                    case Eq(Lit(v), RowLoad(row, i)) => Eq(RowLoad(row, i), Lit(v))
-                    case _ => exp
-                }, notGround) |>
-                // Partition into those equalities that have `var` on the lhs and those that don't.
-                Vector.partition(exp -> match exp {
-                    case Eq(RowLoad(row1, _), RowLoad(row2, _)) => row1 != row2 and row1 == var
-                    case Eq(RowLoad(row, _), Lit(_)) => row == var
-                    case _ => false
-                });
-            let (prefixQuery, rest2) = longestPrefixQuery(varQuery);
-            let test = Vector.append(rest1, rest2);
-            if (Vector.isEmpty(prefixQuery))
-                if (Vector.isEmpty(test))
-                    let search = RelOp.Search(var, ramSym, innerOp);
-                    (search, ground)
-                else
-                    let search = RelOp.Search(var, ramSym, RelOp.If(test, innerOp));
-                    (search, ground)
-            else
-                // let qry =
-                //     Vector.map(x -> match x {
-                //         case Eq(RamTerm.RowLoad(_, j), rhs) => (j, rhs)
-                //         case _ => ???
-                //     }, prefixQuery);
-                let qry = Vector.map(x -> match x {
-                        // case Eq(lhs, rhs) => QueryExp.Eq(lhs, rhs)
-                        case Eq(lhs, rhs) => BoolExp.Eq(lhs, rhs)
-                        case _ => ???
-                    }, prefixQuery);
-                if (Vector.isEmpty(test))
-                    let search = RelOp.SearchWithIndex(var, ramSym, qry, innerOp);
-                    // let search = RelOp.Query(var, ramSym, qry, innerOp);
-                    (search, ground)
-                else
-                    let search = RelOp.SearchWithIndex(var, ramSym, qry, RelOp.If(test, innerOp));
-                    // let search = RelOp.Query(var, ramSym, qry, RelOp.If(test, innerOp));
-                    (search, ground)
-        case RelOp.SearchWithIndex(_, _, _, _) => (op, Vector.empty())
-        // case RelOp.Query(_, _, _, _) => (op, Vector.empty())
-        case RelOp.Functional(_, _, _, _) => (op, Vector.empty())
-        case RelOp.Project(_, _) => (op, Vector.empty())
-        case RelOp.If(test, then) =>
-            let (innerOp, innerGround) = queryOp(then, freeVars);
-            (innerOp, Vector.append(test, innerGround))
-    }
-
-    def longestPrefixQuery(varQuery: Vector[BoolExp]): (Vector[BoolExp], Vector[BoolExp]) =
-        use Fixpoint.Ast.Ram.BoolExp.Eq;
-        use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit};
-        // Sort equalities of the form `var[i] = rhs` ascending on `i`.
-        Vector.sortWith(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1), _), Eq(RowLoad(_, index2), _)) => Comparison.fromInt32(index1 - index2)
-            case _ => ???
-        }, varQuery) |>
-        // Group `var[i] = rhs` by `i`.
-        // TODO: groupBy potentially expensive/wastefull since we already knows they are in order. Probably not real problem since list is likely to be short.
-        Vector.groupBy(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1), _), Eq(RowLoad(_, index2), _)) => index1 == index2
-            case _ => ???
-        }) |>
-        Vector.foldLeft(match (i, prefix, rest) -> e -> {
-                let (p, r) = Vector.partition(be -> match be {
-                    case BoolExp.Eq(RamTerm.RowLoad(_, j), _) => i == j
+    def indexOp(op: RelOp): Map[Int64, List[Search]] = match op {
+        case RelOp.Search(tupleVar, relSym, rest) => indexOp(rest)
+        case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, rest) =>
+            let prefix = Vector.foldLeft(acc -> exp -> match exp {
+                case BoolExp.Eq(t1, t2) => match t1 {
+                    case RamTerm.RowLoad(_, i) => i :: acc
                     case _ => ???
-                }, e);
-                (i + 1, Vector.append(prefix, p), Vector.append(rest, r))
-            }, (0, Vector.empty(), Vector.empty())) |>
-        match (_, prefix, rest) ->
-            (prefix, rest)
-
-    ///
-    /// An expression is ground if all its terms are ground.
-    ///
-    def isExpGround(freeVars: Set[TupleVar], exp: BoolExp): Bool = match exp {
-        case BoolExp.IsEmpty(_) => true
-        case BoolExp.NotMemberOf(terms, _) => Vector.forAll(isTermGround(freeVars), terms)
-        case BoolExp.Eq(lhs, rhs) => isTermGround(freeVars, lhs) and isTermGround(freeVars, rhs)
-        case BoolExp.Leq(_, lhs, rhs) => isTermGround(freeVars, lhs) and isTermGround(freeVars, rhs)
-        case BoolExp.Guard0(_) => true
-        case BoolExp.Guard1(_, t) => isTermGround(freeVars, t)
-        case BoolExp.Guard2(_, t1, t2) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2)
-        case BoolExp.Guard3(_, t1, t2, t3) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3)
-        case BoolExp.Guard4(_, t1, t2, t3, t4) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3) and
-            isTermGround(freeVars, t4)
-        case BoolExp.Guard5(_, t1, t2, t3, t4, t5) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3) and
-            isTermGround(freeVars, t4) and
-            isTermGround(freeVars, t5)
+                }
+                case _ => acc
+            }, List.empty(), boolExps);
+            let search = List.toVector(List.reverse(prefix));
+            let id = toId(relSym);
+            let map = indexOp(rest);
+            Map.insert(id, search :: Map.getWithDefault(id, List.empty(), map), map)
+        case RelOp.If(_, rest) => indexOp(rest)
+        case RelOp.Functional(_, _, _, rest) => indexOp(rest)
+        case RelOp.Project(_, _) => Map.empty() 
     }
 
-    ///
-    /// A term is ground if it is a literal or a free variable.
-    ///
-    def isTermGround(freeVars: Set[TupleVar], term: RamTerm): Bool = match term {
-        case RamTerm.Lit(_) => true
-        case RamTerm.RowLoad(var, _) => Set.memberOf(var, freeVars)
-        case RamTerm.LoadLatVar(var) => Set.memberOf(var, freeVars)
-        case RamTerm.Meet(_, t1, t2) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2)
-        case RamTerm.App0(_) => true
-        case RamTerm.App1(_, t) => isTermGround(freeVars, t)
-        case RamTerm.App2(_, t1, t2) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2)
-        case RamTerm.App3(_, t1, t2, t3) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3)
-        case RamTerm.App4(_, t1, t2, t3, t4) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3) and
-            isTermGround(freeVars, t4)
-        case RamTerm.App5(_, t1, t2, t3, t4, t5) =>
-            isTermGround(freeVars, t1) and
-            isTermGround(freeVars, t2) and
-            isTermGround(freeVars, t3) and
-            isTermGround(freeVars, t4) and
-            isTermGround(freeVars, t5)
+    mod AutomaticIndexSelection {
+        //
+        // This is based on the paper "Automatic Index Selection for Large-Scale Datalog
+        // Computation" by Pavle Subotić, Herbert Jordan, Lijun Chang, Alan Fekete,
+        // Bernhard Scholz (https://www.vldb.org/pvldb/vol12/p141-subotic.pdf)
+        //
+        use Fixpoint.Ast.Ram.{Search}
+        type alias Vertex = Int32
+        type alias Edge = (Vertex, Vertex)
+        // Matching is a `Map` here so we can call `rangeQueryWith`
+        type alias Matching = Map[Edge, Unit]
+        type alias AdjacencyList = MultiMap[Vertex, Vertex]
+
+        ///
+        /// Find the maximum matching in the bipartite graph `(us, vs, edges)`.
+        ///
+        def maximumMatching(us: List[Vertex], vs: List[Vertex], adjList: AdjacencyList): Matching = region rc {
+            let matching = Array.empty(rc, List.length(vs));
+            let matchingRev = Array.empty(rc, List.length(us));
+            Array.transform(_ -> -1, matching);
+            def getMatching(u: Vertex, seen: Array[Bool, rc]): Bool \ rc = {
+                let cond = v -> if (not Array.get(v, seen)) {
+                    Array.put(true, v, seen);
+                    if (Array.get(v, matching) < 0 or getMatching(Array.get(v, matching), seen)) {
+                        Array.put(u, v, matching);
+                        Array.put(v, u, matchingRev);
+                        true
+                    } else false
+                } else false;
+                Set.exists(cond, MultiMap.get(u, adjList))
+            };
+            List.filter(u -> getMatching(u, Array.empty(rc, List.length(us))), us) |>
+            List.foldLeft(acc -> u -> Map.insert((u, Array.get(u, matchingRev)), (), acc), Map.empty())
+        }
+
+        ///
+        /// Find the maximal path starting from the vertex `from_` in `matching`.
+        ///
+        def maximalPath(from_: Vertex, matching: Matching): List[Edge] = region rc {
+            let allPaths = MutMap.empty(rc);
+            def f(u: Vertex): Unit \ rc = match MutMap.get(u, allPaths) {
+                case None => Map.rangeQueryWith(
+                    edge -> fst(edge) <=> u, 
+                    edge -> _ -> {
+                        let (u0, v0) = edge;
+                        f(v0); // Compute the longest path of v0 and store in allPaths
+                        let largest = l1 -> l2 -> if (List.length(l1) <= List.length(l2)) l2 else l1;
+                        MutMap.putWith(
+                            largest, u0, 
+                            edge :: Option.getWithDefault(List.empty(), MutMap.get(v0, allPaths)), 
+                            allPaths)
+                    }, matching)
+                case _ => ()
+            };
+            f(from_);
+            match MutMap.get(from_, allPaths) {
+                case Some(x) => x
+                case None => List.empty()
+            }
+        }
+
+        ///
+        /// Create a graph from the list of searches `searches`.
+        ///
+        def graphFromSearches(searches: List[Search]): (List[Vertex], AdjacencyList) =
+            // The vertices are are simply the indices of the searches in the list
+            let vertices = List.range(0, List.length(searches));
+            let sets = List.map(s -> Vector.toSet(s), searches);
+            let zipped = List.zip(vertices, sets);
+            let edgeList = List.foldMap(match (v1, s1) -> {
+                List.filterMap(match (v2, s2) -> {
+                    if (Set.isProperSubsetOf(s1, s2))
+                        Some((v1, v2))
+                    else None
+                }, zipped)
+            }, zipped);
+            let adjList = List.foldLeft(a -> e -> {
+                let (u, v) = e;
+                MultiMap.insert(u, v, a)
+            }, MultiMap.empty(), edgeList);
+            (vertices, adjList)
+
+        ///
+        /// Find the minimum chain cover of `searches`.
+        ///
+        def minChainCover(searches: List[Search]): List[List[Search]] = 
+            let (vertices, adjList) = graphFromSearches(searches);
+            let searchesVec = List.toVector(searches);
+            let matching = maximumMatching(vertices, vertices, adjList);
+            let toSearch = i -> Vector.get(i, searchesVec);
+            List.filter(v -> not Map.exists(edge -> _ -> snd(edge) == v, matching), vertices) |>
+            List.foldLeft(acc -> u1 -> {
+                let chain = toSearch(u1) :: List.map(e -> toSearch(snd(e)), maximalPath(u1, matching));
+                chain :: acc
+            }, List.empty())
+
+        ///
+        /// Find the minimum set of indexes that covers `searches`.
+        ///
+        pub def minIndex(searches: List[Search]): List[Search] = 
+            minChainCover(searches) |> 
+            List.map(chain -> List.zip(chain, Vector.empty() :: chain)) |>
+            List.map(List.map(match (s1, s2) -> Vector.filter(x -> not Vector.memberOf(x, s2), s1))) |>
+            List.map(chain -> List.fold(chain))
+
+        pub def main(): Unit \ IO = 
+            let u0: Search = Vector#{1,2};
+            let u1: Search = Vector#{1,2,3};
+            let u2: Search = Vector#{1,3};
+            let u3: Search = Vector#{2};
+            let indexes = minIndex(u0::u1::u2::u3::Nil);
+            println(indexes)
+
     }
+
 }

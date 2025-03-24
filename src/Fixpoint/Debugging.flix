@@ -68,7 +68,7 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreInterpret(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, _meta, _index) => unchecked_cast({
+        case RamProgram.Program(stmt, facts, _meta, index) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
                 println(String.repeat(80, "*"));
                 println("** Facts");
@@ -82,6 +82,12 @@ mod Fixpoint.Debugging {
                 println(String.repeat(80, "*"));
                 println("");                
                 println(String.indent(4, "${stmt}"));
+                println("");
+                println(String.repeat(80, "*"));
+                println("** Index Information");
+                println(String.repeat(80, "*"));
+                println("");
+                println(String.indent(4, "${index}"));
                 println("");
                 program
             } else {

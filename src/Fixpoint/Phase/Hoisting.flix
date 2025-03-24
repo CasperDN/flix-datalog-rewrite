@@ -1,29 +1,28 @@
-mod Fixpoint.Phase.IndexSelection2 {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
+mod Fixpoint.Phase.Hoisting {
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, RamProgram}
     use Fixpoint.Ast.Ram.RelOp.{Search, SearchWithIndex, Functional, Project, If}
     use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, LoadLatVar, Meet, App0, App1, App2, App3, App4, App5}
 
-    // Hoist if-constructions as far as possible and merge into SearchWithQuery when possible/relevant.
+    // Hoist if-constructions as far as possible and merge into SearchWithIndex when possible/relevant.
     // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
     @Internal
-    pub def queryProgram(program: RamProgram): RamProgram = match program { 
-        case RamProgram.Program(stmt, facts, meta, _) => 
-            
-            RamProgram.Program(queryStmt(stmt), facts, meta, ???)
+    pub def hoistProgram(program: RamProgram): RamProgram = match program { 
+        case RamProgram.Program(stmt, facts, meta, index) => 
+            RamProgram.Program(hoistStmt(stmt), facts, meta, index)
     }
 
     @Internal
-    pub def queryStmt(stmt: RamStmt): RamStmt = match stmt {
+    pub def hoistStmt(stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) => region rc {
             let independent = MutList.empty(rc);
-            let newOp = queryOp(op, rc, MutSet.empty(rc), MutMap.empty(rc), independent);
+            let newOp = hoistOp(op, rc, MutSet.empty(rc), MutMap.empty(rc), independent);
             if(MutList.size(independent) == 0) 
                 RamStmt.Insert(newOp) else RamStmt.Insert(If(MutList.toVector(independent), newOp))
         }
-        case RamStmt.Seq(xs) => Vector.map(x -> queryStmt(x), xs) |> RamStmt.Seq
-        case RamStmt.Par(xs) => Vector.map(x -> queryStmt(x), xs) |> RamStmt.Seq
-        case RamStmt.Until(test, body) => RamStmt.Until(test, queryStmt(body))
+        case RamStmt.Seq(xs) => Vector.map(x -> hoistStmt(x), xs) |> RamStmt.Seq
+        case RamStmt.Par(xs) => Vector.map(x -> hoistStmt(x), xs) |> RamStmt.Seq
+        case RamStmt.Until(test, body) => RamStmt.Until(test, hoistStmt(body))
 
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
@@ -34,8 +33,8 @@ mod Fixpoint.Phase.IndexSelection2 {
     /// Takes the relative operator, op, region rc, and tuple-vars defined so far, seenTupleVars 
     /// Rewrites the relative operator, op, as the first return value, and a map from tuple-vars to 
     @Internal
-    def queryOp(op: RelOp, rc: Region[r], seenTupleVars: MutSet[Int32, r], idToBool: MutMap[Int32, MutList[BoolExp, r], r], independentBool: MutList[BoolExp, r]): RelOp \ r = 
-        let recursiveCall = x -> queryOp(x, rc, seenTupleVars, idToBool, independentBool);
+    def hoistOp(op: RelOp, rc: Region[r], seenTupleVars: MutSet[Int32, r], idToBool: MutMap[Int32, MutList[BoolExp, r], r], independentBool: MutList[BoolExp, r]): RelOp \ r = 
+        let recursiveCall = x -> hoistOp(x, rc, seenTupleVars, idToBool, independentBool);
         match op {
         // We could here keep the BoolExps that we do not want to handle as if, but then we limit later iterations of the query algorithms, or require that this file is changed later
             case Search(TupleVar.Named(id), relSym, rest) => 
@@ -49,7 +48,7 @@ mod Fixpoint.Phase.IndexSelection2 {
                     MutSet.remove(id, seenTupleVars);
                     let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
                     let hoistedToHere = List.toVector(List.filter(x -> not isBoolGround(x, seenWithoutCurrent), relevant));
-                    SearchWithIndex(TupleVar.Named(id), relSym, hoistedToHere, newRest)
+                    SearchWithIndex(TupleVar.Named(id), relSym, hoistedToHere, -1, newRest)
 
 
                     case None => Search(TupleVar.Named(id), relSym, newRest)
@@ -77,7 +76,7 @@ mod Fixpoint.Phase.IndexSelection2 {
                         }, vars)
                 }, boolExps);
                 recursiveCall(rest)
-            case SearchWithIndex(_, _, _, _) => bug!("SearchWithIndex should not exists when introducing SearchWithIndex")
+            case SearchWithIndex(_, _, _, _, _) => bug!("SearchWithIndex should not exists when introducing SearchWithIndex")
         }
 
 

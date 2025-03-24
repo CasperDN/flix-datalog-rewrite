@@ -46,7 +46,7 @@ mod Fixpoint.Phase.VarsToIndices {
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(var, newVar, rowVars);
                 RelOp.Search(newVar, ramSym, lowerOp(body, newVars, depth + 1))
-            case RelOp.SearchWithIndex(var, ramSym, prefixQuery, body) =>
+            case RelOp.SearchWithIndex(var, ramSym, prefixQuery, index, body) =>
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(var, newVar, rowVars);
                 let newQuery = Vector.map(x -> match x {
@@ -54,13 +54,13 @@ mod Fixpoint.Phase.VarsToIndices {
                     case BoolExp.Eq(j, t) => BoolExp.Eq(j, lowerTerm(rowVars, t))
                     case _ => ???
                 }, prefixQuery);
-                RelOp.SearchWithIndex(newVar, ramSym, newQuery, lowerOp(body, newVars, depth + 1))
+                RelOp.SearchWithIndex(newVar, ramSym, newQuery, index, lowerOp(body, newVars, depth + 1))
             // case RelOp.Query(var, ramSym, prefixQuery, body) =>
             //     let newVar = TupleVar.Named(depth);
             //     let newVars = Map.insert(var, newVar, rowVars);
             //     let newQuery = Vector.map(match (j, t) -> (j, lowerTerm(rowVars, t)), prefixQuery);
             //     RelOp.Query(newVar, ramSym, newQuery, lowerOp(body, newVars, depth + 1))
-            case RelOp.SearchWithIndex(_, _, _, _) => ???
+            case RelOp.SearchWithIndex(_, _, _, _, _) => ???
             case RelOp.Functional(rowVar, f, terms, body) =>
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(rowVar, newVar, rowVars);
