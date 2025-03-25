@@ -11,9 +11,9 @@ mod Fixpoint.Phase.IndexSelection {
             let (indexes, newStmt) = region rc {
                 let indexes = MutMap.empty(rc);
                 let newStmt = collectSearchesStmt(stmt, indexes, rc);
-                let newIndexes = 
-                    MutMap.map(rc, minIndex, indexes) |>
+                let newIndexes = indexes |>
                     MutMap.toMap |> 
+                    Map.map(minIndex) |>
                     Map.map(List.toVector);
                 (newIndexes, newStmt)
             };
@@ -93,7 +93,9 @@ mod Fixpoint.Phase.IndexSelection {
             let newBody = collectSearchesOp(body, indexes, rc);
             if (Vector.length(search) != 0)
                 let searches = MutMap.getWithDefault(id, List.empty(), indexes);
-                MutMap.put(id, search :: searches, indexes)
+                if (not List.memberOf(search, searches))
+                    MutMap.put(id, search :: searches, indexes)
+                else ()
             else ();
             let otherBoolExps = MutList.toVector(otherBoolExpList);
             let nestedBody = 
@@ -212,11 +214,10 @@ mod Fixpoint.Phase.IndexSelection {
             List.map(List.fold)
 
         pub def main(): Unit \ IO = 
-            let u0: Search = Vector#{2,1};
-            let u1: Search = Vector#{1,2,3};
-            let u2: Search = Vector#{1,3};
-            let u3: Search = Vector#{2,3};
-            let indexes = minIndex(u0::u1::u2::u3::Nil);
+            let u0: Search = Vector#{0,1};
+            let u1: Search = Vector#{0,2};
+            let u2: Search = Vector#{0,1,2};
+            let indexes = minIndex(u0::u1::u2::Nil);
             println(indexes)
 
     }

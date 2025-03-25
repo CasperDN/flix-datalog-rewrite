@@ -5,12 +5,23 @@ def main(): Unit \ IO =
         Path(x, y) :- Edge(x, y).
         Path(x, y) :- Path(x, z), Path(z, y).
     };
-    let hej = #{
-        Hej1(1, 2, 3).
-        Hej2(2, 3, 4).
-        Hej3(x, w) :- Hej1(x, y, z), Hej2(y, z, w).
-        Hej3(y, w) :- Hej1(y, z, w), Hej2(_, y, z).
+    let indexSelection1 = #{
+        A(1, 2, 3).
+        B(1, 2, 3).
+        B(x, y, z) :- A(x, y, z), B(x, _, _).
+        B(x, y, z) :- A(x, y, z), B(x, y, _).
+        B(x, y, z) :- A(x, y, z), B(x, y, z).
+        B(x, y, z) :- A(x, y, z), B(x, z, _).
+    };
+    let indexSelection2 = #{
+        A(1, 2, 3).
+        B(1, 2, 3).
+        B(x, y, z) :- A(x, y, z), B(x, _, z).
+        B(x, y, z) :- A(x, y, z), B(x, y, _).
+        B(x, y, z) :- A(x, y, z), B(x, y, z).
+        B(x, y, z) :- A(x, y, z), B(x, z, _).
     };
     let _ = query path select (x, y) from Path(x,y);
-    let r = query hej select (x, w) from Hej3(x, w);
+    let _ = query indexSelection1 select (x, y, z) from B(x, y, z);
+    let r = query indexSelection2 select (x, y, z) from B(x, y, z);
     println(r)
