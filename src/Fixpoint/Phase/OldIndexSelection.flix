@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Phase.IndexSelection {
+mod Fixpoint.Phase.OldIndexSelection {
 
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
 

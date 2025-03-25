@@ -137,7 +137,8 @@ mod Fixpoint.Interpreter {
                 let toSend = Vector.map(x -> match x {
                     // case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
                     case BoolExp.Eq(RamTerm.RowLoad(_, index), t2) => (index, t2)
-                    case _ => ???
+                    case BoolExp.Eq(t1, RamTerm.RowLoad(_, index)) => (index, t1)
+                    case _ => unchecked_cast(println("Hello ${Debug.stringify(x)}") as _ \ r1); ???
                 }, qry);
                 MutMap.rangeQueryWith(evalQuery(env, Vector.toList(toSend)), t -> l -> {
                     Array.put(t, i, tupleEnv);

@@ -34,23 +34,26 @@ mod Fixpoint.Phase.Hoisting {
     /// Rewrites the relative operator, op, as the first return value, and a map from tuple-vars to 
     @Internal
     def hoistOp(op: RelOp, rc: Region[r], seenTupleVars: MutSet[Int32, r], idToBool: MutMap[Int32, MutList[BoolExp, r], r], independentBool: MutList[BoolExp, r]): RelOp \ r = 
-        let recursiveCall = x -> hoistOp(x, rc, seenTupleVars, idToBool, independentBool);
+        let hoistOpRec = x -> hoistOp(x, rc, seenTupleVars, idToBool, independentBool);
         match op {
-        // We could here keep the BoolExps that we do not want to handle as if, but then we limit later iterations of the query algorithms, or require that this file is changed later
-            case Search(TupleVar.Named(id), relSym, rest) => 
+        // We could here keep the BoolExps that we do not want to handle as if, but then we limit 
+        // later iterations of the query algorithms, or require that this file is changed later
+            case Search(tupleVar, relSym, rest) => 
+                let TupleVar.Named(id) = tupleVar;
                 MutSet.add(id, seenTupleVars);
-                let newRest = recursiveCall(rest);
-
+                let newRest = hoistOpRec(rest);
                 let newOp = match MutMap.get(id, idToBool) {
                     case Some(v) => 
-                    let seenAsSet = MutSet.toSet(seenTupleVars);
-                    let relevant = List.filter(x -> isBoolGround(x, seenAsSet), MutList.toList(v));
-                    MutSet.remove(id, seenTupleVars);
-                    let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
-                    let hoistedToHere = List.toVector(List.filter(x -> not isBoolGround(x, seenWithoutCurrent), relevant));
-                    SearchWithIndex(TupleVar.Named(id), relSym, hoistedToHere, -1, newRest)
-
-
+                        let seenAsSet = MutSet.toSet(seenTupleVars);
+                        let relevant = List.filter(x -> isBoolGround(x, seenAsSet), MutList.toList(v));
+                        MutSet.remove(id, seenTupleVars);
+                        let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
+                        let hoistedToHere = 
+                            List.filter(x -> not isBoolGround(x, seenWithoutCurrent), relevant) |> 
+                            List.toVector;
+                        if (Vector.length(hoistedToHere) != 0)
+                            SearchWithIndex(tupleVar, relSym, hoistedToHere, -1, newRest)
+                        else Search(tupleVar, relSym, newRest)
                     case None => Search(TupleVar.Named(id), relSym, newRest)
                 };
                 MutSet.remove(id, seenTupleVars); // Corectness
@@ -58,7 +61,7 @@ mod Fixpoint.Phase.Hoisting {
                 newOp
 
             // TODO: Do we want to extend behavior?
-            case Functional(TupleVar.Named(id), func, terms, rest) => Functional(TupleVar.Named(id), func, terms, recursiveCall(rest))
+            case Functional(TupleVar.Named(id), func, terms, rest) => Functional(TupleVar.Named(id), func, terms, hoistOpRec(rest))
             case Project(_, _) => op
             case If(boolExps, rest) => 
                 // let insertt = b -> MutList.push(b, independentBool);
@@ -75,7 +78,7 @@ mod Fixpoint.Phase.Hoisting {
                             MutList.push(b, boolList)
                         }, vars)
                 }, boolExps);
-                recursiveCall(rest)
+                hoistOpRec(rest)
             case SearchWithIndex(_, _, _, _, _) => bug!("SearchWithIndex should not exists when introducing SearchWithIndex")
         }
 

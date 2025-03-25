@@ -316,5 +316,5 @@ mod Fixpoint.Ast.Ram {
     pub type alias FactInformation = Map[Int64, Vector[Vector[Boxed]]]
     // TODO: Implement this
     pub type alias Search = Vector[Int32]
-    pub type alias IndexInformation = Map[Int64, List[Search]]
+    pub type alias IndexInformation = Map[Int64, Vector[Search]]
 }

@@ -52,7 +52,7 @@ mod Fixpoint.Phase.VarsToIndices {
                 let newQuery = Vector.map(x -> match x {
                     // case QueryExp.Eq(j, t) => QueryExp.Eq(j, lowerTerm(rowVars, t))
                     case BoolExp.Eq(j, t) => BoolExp.Eq(j, lowerTerm(rowVars, t))
-                    case _ => ???
+                    case _ => lowerExp(rowVars, x)
                 }, prefixQuery);
                 RelOp.SearchWithIndex(newVar, ramSym, newQuery, index, lowerOp(body, newVars, depth + 1))
             // case RelOp.Query(var, ramSym, prefixQuery, body) =>

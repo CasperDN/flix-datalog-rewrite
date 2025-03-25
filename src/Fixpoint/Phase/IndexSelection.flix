@@ -1,36 +1,111 @@
 mod Fixpoint.Phase.IndexSelection {
     use AutomaticIndexSelection.{minIndex}
-    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, toId, Search};
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, toId, Search, IndexInformation};
+    type alias Indexes[r: Eff] = MutMap[Int64, List[Search], r]
+
+    def _testtt(tupleVar: Int32, position: Int32, data: Map[k, Vector[RamTerm]]): Vector[RamTerm] = 
+        ???
 
     pub def indexProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, meta, _) => 
-            let index = Map.map(minIndex, indexStmt(stmt));
-            RamProgram.Program(stmt, facts, meta, index)
+            let (indexes, newStmt) = region rc {
+                let indexes = MutMap.empty(rc);
+                let newStmt = collectSearchesStmt(stmt, indexes, rc);
+                let newIndexes = 
+                    MutMap.map(rc, minIndex, indexes) |>
+                    MutMap.toMap |> 
+                    Map.map(List.toVector);
+                (newIndexes, newStmt)
+            };
+            RamProgram.Program(indexStmt(newStmt, indexes), facts, meta, indexes)
     }
 
-    def indexStmt(stmt: RamStmt): Map[Int64, List[Search]] = match stmt {
-        case RamStmt.Seq(xs) => Vector.foldMap(x -> indexStmt(x), xs)
-        case RamStmt.Insert(op) => indexOp(op)
-        case _ => Map.empty()
+    def indexStmt(stmt: RamStmt, indexInformation: IndexInformation): RamStmt = match stmt {
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, indexInformation), xs))
+        case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, indexInformation))
+        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.Swap(_, _) => stmt
+        case RamStmt.Purge(_) => stmt
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, indexInformation), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, indexInformation))
+        case RamStmt.Comment(_) => stmt 
     }
 
-    def indexOp(op: RelOp): Map[Int64, List[Search]] = match op {
-        case RelOp.Search(tupleVar, relSym, rest) => indexOp(rest)
-        case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, rest) =>
-            let prefix = Vector.foldLeft(acc -> exp -> match exp {
-                case BoolExp.Eq(t1, t2) => match t1 {
-                    case RamTerm.RowLoad(_, i) => i :: acc
-                    case _ => ???
-                }
-                case _ => acc
-            }, List.empty(), boolExps);
-            let search = List.toVector(List.reverse(prefix));
+    def indexOp(op: RelOp, indexInformation: IndexInformation): RelOp = match op {
+        case RelOp.Search(tupleVar, relSym, body) => RelOp.Search(tupleVar, relSym, indexOp(body, indexInformation))
+        case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, body) =>
+            let search = 
+                Vector.foldLeft(acc -> exp -> match exp {
+                    case BoolExp.Eq(RamTerm.RowLoad(_, i), _) => i :: acc
+                    case BoolExp.Eq(_, RamTerm.RowLoad(_, i)) => i :: acc
+                    case _ => bug!("In IndexSelection.indexOp: Found non-equality BoolExp in indexOp!")
+                }, List.empty(), boolExps) |> List.toVector;
+            let index = match Map.get(toId(relSym), indexInformation) {
+                case Some(indexes) => 
+                    match Vector.findIndexOf(index ->
+                        Vector.slice(start = 0, end = Vector.length(search), index) |> 
+                        Vector.forAll(x -> Vector.memberOf(x, search))
+                    , indexes) {
+                        case Some(v) => v
+                        case None => 
+                            bug!("In IndexSelection.indexOp: Could not find an index for search ${search} for relation ${relSym}")
+                    }
+                case None => 
+                    bug!("In IndexSelection.indexOp: ${relSym} has no indexes!")
+            };
+            RelOp.SearchWithIndex(tupleVar, relSym, boolExps, index, body)
+        case RelOp.If(boolExps, body) => RelOp.If(boolExps, indexOp(body, indexInformation))
+        case RelOp.Functional(tupleVar, func, terms, body) => 
+            RelOp.Functional(tupleVar, func, terms, indexOp(body, indexInformation))
+        case RelOp.Project(_, _) => op
+    }
+
+    def collectSearchesStmt(stmt: RamStmt, indexes: Indexes[r], rc: Region[r]): RamStmt \ r = match stmt {
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> collectSearchesStmt(x, indexes, rc), xs))
+        case RamStmt.Insert(op) => RamStmt.Insert(collectSearchesOp(op, indexes, rc))
+        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.Swap(_, _) => stmt
+        case RamStmt.Purge(_) => stmt
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> collectSearchesStmt(x, indexes, rc), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, collectSearchesStmt(body, indexes, rc))
+        case RamStmt.Comment(_) => stmt 
+    }
+
+    def collectSearchesOp(op: RelOp, indexes: Indexes[r], rc: Region[r]): RelOp \ r = match op {
+        case RelOp.Search(tupleVar, relSym, body) => 
+            RelOp.Search(tupleVar, relSym, collectSearchesOp(body, indexes, rc))
+        case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, body) =>
+            let otherBoolExpList = MutList.empty(rc);
+            let equalExpList = MutList.empty(rc);
+            let search = 
+                Vector.foldLeft(acc -> exp -> match exp {
+                    case BoolExp.Eq(RamTerm.RowLoad(_, i), _) => 
+                        MutList.push(exp, equalExpList);
+                        i :: acc
+                    case BoolExp.Eq(_, RamTerm.RowLoad(_, i)) => 
+                        MutList.push(exp, equalExpList);
+                        i :: acc
+                    case _ => 
+                        MutList.push(exp, otherBoolExpList);
+                        acc
+                }, List.empty(), boolExps) |> List.reverse |> List.toVector;
             let id = toId(relSym);
-            let map = indexOp(rest);
-            Map.insert(id, search :: Map.getWithDefault(id, List.empty(), map), map)
-        case RelOp.If(_, rest) => indexOp(rest)
-        case RelOp.Functional(_, _, _, rest) => indexOp(rest)
-        case RelOp.Project(_, _) => Map.empty() 
+            let newBody = collectSearchesOp(body, indexes, rc);
+            let searchList = MutMap.getWithDefault(id, List.empty(), indexes);
+            MutMap.put(id, search :: searchList, indexes);
+            let otherBoolExps = MutList.toVector(otherBoolExpList);
+            let nestedBody = 
+                if (Vector.length(otherBoolExps) == 0) newBody 
+                else RelOp.If(otherBoolExps, newBody);
+            let equalExps = MutList.toVector(equalExpList);
+            if (Vector.length(equalExps) == 0)
+                RelOp.Search(tupleVar, relSym, nestedBody)
+            else
+                RelOp.SearchWithIndex(tupleVar, relSym, equalExps, -1, nestedBody)
+        case RelOp.If(boolExps, body) => RelOp.If(boolExps, collectSearchesOp(body, indexes, rc))
+        case RelOp.Functional(tupleVar, func, terms, body) => 
+            RelOp.Functional(tupleVar, func, terms, collectSearchesOp(body, indexes, rc))
+        case RelOp.Project(_, _) => op
     }
 
     mod AutomaticIndexSelection {
@@ -100,19 +175,15 @@ mod Fixpoint.Phase.IndexSelection {
         def graphFromSearches(searches: List[Search]): (List[Vertex], AdjacencyList) =
             // The vertices are are simply the indices of the searches in the list
             let vertices = List.range(0, List.length(searches));
-            let sets = List.map(s -> Vector.toSet(s), searches);
-            let zipped = List.zip(vertices, sets);
-            let edgeList = List.foldMap(match (v1, s1) -> {
-                List.filterMap(match (v2, s2) -> {
-                    if (Set.isProperSubsetOf(s1, s2))
-                        Some((v1, v2))
-                    else None
-                }, zipped)
-            }, zipped);
-            let adjList = List.foldLeft(a -> e -> {
-                let (u, v) = e;
-                MultiMap.insert(u, v, a)
-            }, MultiMap.empty(), edgeList);
+            let zipped = searches |> List.map(s -> Vector.toSet(s)) |> List.zip(vertices); 
+            let adjList = List.foldMap(match (u, s) -> {
+                    List.filter(p -> Set.isProperSubsetOf(s, snd(p)), zipped) |>
+                    List.map(p -> (u, fst(p)))
+                }, zipped) |> 
+                List.foldLeft(a -> p -> {
+                    let (u, v) = p;
+                    MultiMap.insert(u, v, a)
+                }, MultiMap.empty());
             (vertices, adjList)
 
         ///
@@ -136,13 +207,13 @@ mod Fixpoint.Phase.IndexSelection {
             minChainCover(searches) |> 
             List.map(chain -> List.zip(chain, Vector.empty() :: chain)) |>
             List.map(List.map(match (s1, s2) -> Vector.filter(x -> not Vector.memberOf(x, s2), s1))) |>
-            List.map(chain -> List.fold(chain))
+            List.map(List.fold)
 
         pub def main(): Unit \ IO = 
-            let u0: Search = Vector#{1,2};
+            let u0: Search = Vector#{2,1};
             let u1: Search = Vector#{1,2,3};
             let u2: Search = Vector#{1,3};
-            let u3: Search = Vector#{2};
+            let u3: Search = Vector#{2,3};
             let indexes = minIndex(u0::u1::u2::u3::Nil);
             println(indexes)
 
