@@ -91,8 +91,10 @@ mod Fixpoint.Phase.IndexSelection {
                 }, List.empty(), boolExps) |> List.reverse |> List.toVector;
             let id = toId(relSym);
             let newBody = collectSearchesOp(body, indexes, rc);
-            let searchList = MutMap.getWithDefault(id, List.empty(), indexes);
-            MutMap.put(id, search :: searchList, indexes);
+            if (Vector.length(search) != 0)
+                let searches = MutMap.getWithDefault(id, List.empty(), indexes);
+                MutMap.put(id, search :: searches, indexes)
+            else ();
             let otherBoolExps = MutList.toVector(otherBoolExpList);
             let nestedBody = 
                 if (Vector.length(otherBoolExps) == 0) newBody 
