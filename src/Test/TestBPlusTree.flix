@@ -441,53 +441,53 @@ mod TestBPlusTree {
     // ///
     // /// Run concurrencyWithGenerators with random values as inserts.
     // ///
-    // def concurrencyRandomInserts(numThreads: Int32, numInserts: Int64): Bool \ IO + NonDet =
+    // def concurrencyRandomInserts(numThreads: Int32, totalInserts: Int64): Bool \ IO + NonDet =
     //     let generators = Vector.map(_ -> () -> (Random.randomInt64(), Random.randomInt32()), Vector.range(0, numThreads));
     //     let insertions = Vector.map(_ -> () -> (Random.randomInt64(), Random.randomInt32()), Vector.range(0, numThreads));
-    //     concurrencyWithGenerators(generators, numInserts, Some(insertions))
+    //     concurrencyWithGenerators(generators, totalInserts / numThreads, Some(insertions))
 
     // ///
     // /// Run concurrencyWithGenerators with random values between 0 (inclusive) and `rangeSize` (exlusive) as inserts.
     // ///
-    // def concurrencyRandomInsertsClamped(numThreads: Int32, numInserts: Int64, rangeSize: Int64): Bool \ IO + NonDet =
+    // def concurrencyRandomInsertsClamped(numThreads: Int32, totalInserts: Int64, rangeSize: Int64): Bool \ IO + NonDet =
     //     let generators = Vector.map(_ -> () -> (Int64.modulo(Random.randomInt64(), rangeSize), Random.randomInt32()), Vector.range(0, numThreads));
     //     let insertions = Vector.map(_ -> () -> (Int64.modulo(Random.randomInt64(), rangeSize), Random.randomInt32()), Vector.range(0, numThreads));
-    //     concurrencyWithGenerators(generators, numInserts, Some(insertions))
+    //     concurrencyWithGenerators(generators, totalInserts / numThreads, Some(insertions))
 
     // ///
     // /// Run concurrencyWithGenerators with [1, 2, ..., `numInserts`] as inserts for all threads.
     // ///
-    // def concurrencyLockStep(numThreads: Int32, numInserts: Int64): Bool \ IO + NonDet = region rc {
+    // def concurrencyLockStep(numThreads: Int32, totalInserts: Int64): Bool \ IO + NonDet = region rc {
     //     let range = Vector.range(0, numThreads);
     //     let generators = Vector.map(reff -> () -> {let next = Ref.get(reff); Ref.put(next + 1i64, reff); (next, next)}, Vector.map(_ -> Ref.fresh(rc, 0i64), range));
     //     let insertions = Vector.map(reff -> () -> {let next = Ref.get(reff); Ref.put(next + 1i64, reff); (next, next)}, Vector.map(_ -> Ref.fresh(rc, 0i64), range));
-    //     concurrencyWithGenerators(generators, numInserts, Some(insertions))
+    //     concurrencyWithGenerators(generators, totalInserts / numThreads, Some(insertions))
     // }
 
     //     ///
     // /// Run concurrencyWithGeneratorsAndOccasionalTests with random values as inserts.
     // ///
-    // def concurrencyRandomInsertsIntermittentMemberOf(numThreads: Int32, numInserts: Int64, readEvery: Int64): Bool \ IO + NonDet =
+    // def concurrencyRandomInsertsIntermittentMemberOf(numThreads: Int32, totalInserts: Int64, readEvery: Int64): Bool \ IO + NonDet =
     //     let generators = Vector.map(_ -> () -> (Random.randomInt64(), Random.randomInt32()), Vector.range(0, numThreads));
     //     let insertions = Vector.map(_ -> () -> (Random.randomInt64(), Random.randomInt32()), Vector.range(0, numThreads));
-    //     concurrencyWithGeneratorsAndOccasionalTests(generators, numInserts, insertions, readEvery)
+    //     concurrencyWithGeneratorsAndOccasionalTests(generators, totalInserts / numThreads, insertions, readEvery)
 
     // ///
     // /// Run concurrencyWithGeneratorsAndOccasionalTests with random values between 0 (inclusive) and `rangeSize` (exlusive) as inserts.
     // ///
-    // def concurrencyRandomInsertsClampedIntermittentMemberOf(numThreads: Int32, numInserts: Int64, rangeSize: Int64, readEvery: Int64): Bool \ IO + NonDet =
+    // def concurrencyRandomInsertsClampedIntermittentMemberOf(numThreads: Int32, totalInserts: Int64, rangeSize: Int64, readEvery: Int64): Bool \ IO + NonDet =
     //     let generators = Vector.map(_ -> () -> (Int64.modulo(Random.randomInt64(), rangeSize), Random.randomInt32()), Vector.range(0, numThreads));
     //     let insertions = Vector.map(_ -> () -> (Int64.modulo(Random.randomInt64(), rangeSize), Random.randomInt32()), Vector.range(0, numThreads));
-    //     concurrencyWithGeneratorsAndOccasionalTests(generators, numInserts, insertions, readEvery)
+    //     concurrencyWithGeneratorsAndOccasionalTests(generators, totalInserts / numThreads, insertions, readEvery)
 
     // ///
     // /// Run concurrencyWithGeneratorsAndOccasionalTests with [1, 2, ..., `numInserts`] as inserts for all threads.
     // ///
-    // def concurrencyLockStepIntermittentMemberOf(numThreads: Int32, numInserts: Int64, readEvery: Int64): Bool \ IO + NonDet = region rc {
+    // def concurrencyLockStepIntermittentMemberOf(numThreads: Int32, totalInserts: Int64, readEvery: Int64): Bool \ IO + NonDet = region rc {
     //     let range = Vector.range(0, numThreads);
     //     let generators = Vector.map(reff -> () -> {let next = Ref.get(reff); Ref.put(next + 1i64, reff); (next, next)}, Vector.map(_ -> Ref.fresh(rc, 0i64), range));
     //     let insertions = Vector.map(reff -> () -> {let next = Ref.get(reff); Ref.put(next + 1i64, reff); (next, next)}, Vector.map(_ -> Ref.fresh(rc, 0i64), range));
-    //     concurrencyWithGeneratorsAndOccasionalTests(generators, numInserts, insertions, readEvery)
+    //     concurrencyWithGeneratorsAndOccasionalTests(generators, totalInserts / numThreads, insertions, readEvery)
     // }
 
 

@@ -11,7 +11,8 @@ import java.lang.Long
 //     ()
 
 
-def mainBTreeExperiment(): Unit \ IO + NonDet + Sys = 
+def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
+    let _ = FileWrite.runWithIO(() ->{
     insertElementsDifferentOrder();
     insertFewElementsOften();
     insertManyElements();
@@ -19,7 +20,7 @@ def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     flixInsertExperiment();
     flixReadExperiment();
     javaInsertExperiment();
-    javaReadExperiment();
+    javaReadExperiment()});
     ()
 
 
@@ -212,95 +213,156 @@ def runJavaMapRead(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int
     let lookup = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(generatedReads#generatedReads), Vector.range(0, 1)));
     runNTestsGeneral(testNum#testNum, () -> readUntilJavaMap(inserted, lookup, timeLimit))
 
-def javaReadExperiment(): Unit \ IO + NonDet + Sys = {
+def javaReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let reads = 50_000_000;
+    let file = "javaReadExperiment.txt";
+    FileWrite.write(str = "", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
+    FileWrite.append(str = "Java: Read experiment", file);
+    FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("Java: Read experiment");
     Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        println(runJavaMapRead(testNum = 20, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
+        // println(runJavaMapRead(testNum = 10, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit));
+        FileWrite.append(str = Vector.toString(runJavaMapRead(testNum = 10, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
-def javaInsertExperiment(): Unit \ IO + NonDet + Sys = {
+def javaInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "javaWriteExperiment.txt";
+    FileWrite.write(str = "", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
     println("Java: Insert experiment");
+    FileWrite.append(str = "Java: Insert experiment", file);
     Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        println(runJavaMap(testNum = 20, totalInserts = inserts, nanoLimit))
+        FileWrite.append(str = Vector.toString(runJavaMap(testNum = 10, totalInserts = inserts, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
-def flixInsertExperiment(): Unit \ IO + NonDet + Sys = {
+def flixInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "flixWriteExperiment.txt";
+    FileWrite.write(str = "", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
+    FileWrite.append(str = "Flix: Insert experiment", file);
     println("Flix: Insert experiment");
     Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        println(runFlixMap(testNum = 20, totalInserts = inserts, nanoLimit))
+        FileWrite.append(str = Vector.toString(runFlixMap(testNum = 10, totalInserts = inserts, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
-def flixReadExperiment(): Unit \ IO + NonDet + Sys = {
+def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let reads = 50_000_000;
+    let file = "flixReadExperiment.txt";
+    FileWrite.write(str = "", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
+    FileWrite.append(str = "Flix: Read experiment", file);
+    FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("Flix: Read experiment");
     Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        println(runFlixMapRead(testNum = 20, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
+        FileWrite.append(str = Vector.toString(runFlixMapRead(testNum = 10, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
-def readExperiment(): Unit \ IO + NonDet + Sys = {
+def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let reads = 50_000_000;
+    let file = "BPlussTreeReadExperiment.txt";
+    FileWrite.write(str = "", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
+    FileWrite.append(str = "BPlusTree: Read experiment", file);
+    FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("BPlusTree: Read experiment");
     Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        println(runWithThreadsReadRandomUntil(testNum = 20, threadNum = 1, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit))
+        FileWrite.append(str = Vector.toString(runWithThreadsReadRandomUntil(testNum = 10, threadNum = 1, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
-def insertManyElements(): Unit \ IO + NonDet + Sys = {
+def insertManyElements(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "ManyInserts.txt";
+    FileWrite.write(str = "", file);
+    FileWrite.append(str = "Experiment with 10 million inserts", file);
     println("Experiment with 10 million inserts");
     Vector.forEach(threads -> {
+        FileWrite.append(str = "\nThreads", file);
+        FileWrite.append(str = Int32.toString(threads), file);
+        FileWrite.append(str = "\n", file);
         println("Threads");
         println(threads);
-        println(runWithThreadsRandom(20, threads, 10_000_000))
+        FileWrite.append(str = Vector.toString(runWithThreadsRandom(20, threads, 10_000_000)), file)
     }, Vector.range(1, 40))
 }
 
-def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys = {
+def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "OrderExperiment.txt";
+    FileWrite.write(str = "", file);
+    FileWrite.append(str = "Experiment with varying", file);
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
     println("Experiment with different order:");
     Vector.forEach(order -> Vector.forEach(insertNum -> 
         Vector.forEach(threads -> {
+            FileWrite.append(str = "\nOrder:", file);
+            FileWrite.append(str = Int32.toString(order), file);
+            FileWrite.append(str = "\nInsertions:", file);
+            FileWrite.append(str = Int32.toString(insertNum), file);
+            FileWrite.append(str = "\nThreads:", file);
+            FileWrite.append(str = Int32.toString(threads), file);
+            FileWrite.append(str = "\n", file);
             println("Order:");
             println(order);
             println("Insertions:");
             println(insertNum);
             println("Threads:");
             println(threads);
-            println(runWithThreadsRandomUntil(testNum = 20, threadNum = threads, totalInserts = insertNum, nanoLimit, order))
+            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = 10, threadNum = threads, totalInserts = insertNum, nanoLimit, order)), file)
         }, Vector#{1, 2, 5, 10, 20}), Vector#{10_000, 1_000_000}), Vector#{10, 20, 40, 60})
 }
 
-def insertFewElementsOften(): Unit \ IO + NonDet + Sys = {
+def insertFewElementsOften(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "SmallStructures.txt";
+    FileWrite.write(str = "", file);
+    FileWrite.append(str = "Experiment with varying", file);
     println("Experiment with low height:");
     let secondLimit = 60i64;
     let nanoLimit = secondLimit * 1_000_000_000i64;
     Vector.forEach(insertNum -> 
         Vector.forEach(threads -> {
+            FileWrite.append(str = "\nInsertions:", file);
+            FileWrite.append(str = Int32.toString(insertNum), file);
+            FileWrite.append(str = "\nThreads:", file);
+            FileWrite.append(str = Int32.toString(threads), file);
+            FileWrite.append(str = "\n", file);
             println("Insertions:");
             println(insertNum);
             println("Threads:");
             println(threads);
-            println(runWithThreadsRandomUntil(testNum = 20, threadNum = threads, totalInserts=insertNum, nanoLimit, 10))
+            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = 10, threadNum = threads, totalInserts=insertNum, nanoLimit, 10)), file)
         }, Vector.range(1, 41)), 
     Vector#{10_000, 1_000_000})
 }
