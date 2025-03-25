@@ -20,11 +20,11 @@
 
 mod Fixpoint.Phase.VarsToIndices {
 
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, QueryExp, RamProgram}
+    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
 
         @Internal
-    pub def lowerProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(lowerStmt(stmt), facts, meta, index)
+    pub def lowerProgram(program: AugmentedProgram): AugmentedProgram = match program {
+        case AugmentedProgram.Program(stmt, facts, meta, index) => AugmentedProgram.Program(lowerStmt(stmt), facts, meta, index)
     }
 
 
@@ -61,12 +61,12 @@ mod Fixpoint.Phase.VarsToIndices {
             //     let newQuery = Vector.map(match (j, t) -> (j, lowerTerm(rowVars, t)), prefixQuery);
             //     RelOp.Query(newVar, ramSym, newQuery, lowerOp(body, newVars, depth + 1))
             case RelOp.SearchWithIndex(_, _, _, _) => ???
-            case RelOp.Functional(rowVar, f, terms, body) =>
+            case RelOp.Functional(rowVar, f, terms, body, arity, id) =>
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(rowVar, newVar, rowVars);
                 let newTerms = terms |> Vector.map(lowerTerm(rowVars));
                 let newBody = lowerOp(body, newVars, depth + 1);
-                RelOp.Functional(newVar, f, newTerms, newBody)
+                RelOp.Functional(newVar, f, newTerms, newBody, arity, id)
             case RelOp.Project(terms, ramSym) =>
                  RelOp.Project(Vector.map(lowerTerm(rowVars), terms), ramSym)
             case RelOp.If(test, then) =>
@@ -111,40 +111,40 @@ mod Fixpoint.Phase.VarsToIndices {
         }
 
     def lowerTerm(rowVars: Map[TupleVar, TupleVar], term: RamTerm): RamTerm = match term {
-        case RamTerm.Lit(_) => term
-        case RamTerm.RowLoad(rowVar, index) =>
-             RamTerm.RowLoad(Map.getWithDefault(rowVar, rowVar, rowVars), index)
-        case RamTerm.LoadLatVar(rowVar) =>
-             RamTerm.LoadLatVar(Map.getWithDefault(rowVar, rowVar, rowVars))
-        case RamTerm.Meet(f, v1, v2) =>
+        case RamTerm.Lit(_, _) => term
+        case RamTerm.RowLoad(rowVar, index, sym) =>
+             RamTerm.RowLoad(Map.getWithDefault(rowVar, rowVar, rowVars), index, sym)
+        // case RamTerm.LoadLatVar(rowVar, sym, id) =>
+        //      RamTerm.LoadLatVar(Map.getWithDefault(rowVar, rowVar, rowVars), sym, id)
+        case RamTerm.Meet(f, v1, v2, id) =>
             let t1 = lowerTerm(rowVars, v1);
             let t2 = lowerTerm(rowVars, v2);
-            RamTerm.Meet(f, t1, t2)
-        case RamTerm.App0(_) => term
-        case RamTerm.App1(f, v) =>
+            RamTerm.Meet(f, t1, t2, id)
+        case RamTerm.App0(_, _) => term
+        case RamTerm.App1(f, v, id) =>
             let t = lowerTerm(rowVars, v);
-            RamTerm.App1(f, t)
-        case RamTerm.App2(f, v1, v2) =>
+            RamTerm.App1(f, t, id)
+        case RamTerm.App2(f, v1, v2, id) =>
             let t1 = lowerTerm(rowVars, v1);
             let t2 = lowerTerm(rowVars, v2);
-            RamTerm.App2(f, t1, t2)
-        case RamTerm.App3(f, v1, v2, v3) =>
+            RamTerm.App2(f, t1, t2, id)
+        case RamTerm.App3(f, v1, v2, v3, id) =>
             let t1 = lowerTerm(rowVars, v1);
             let t2 = lowerTerm(rowVars, v2);
             let t3 = lowerTerm(rowVars, v3);
-            RamTerm.App3(f, t1, t2, t3)
-        case RamTerm.App4(f, v1, v2, v3, v4) =>
+            RamTerm.App3(f, t1, t2, t3, id)
+        case RamTerm.App4(f, v1, v2, v3, v4, id) =>
             let t1 = lowerTerm(rowVars, v1);
             let t2 = lowerTerm(rowVars, v2);
             let t3 = lowerTerm(rowVars, v3);
             let t4 = lowerTerm(rowVars, v4);
-            RamTerm.App4(f, t1, t2, t3, t4)
-        case RamTerm.App5(f, v1, v2, v3, v4, v5) =>
+            RamTerm.App4(f, t1, t2, t3, t4, id)
+        case RamTerm.App5(f, v1, v2, v3, v4, v5, id) =>
             let t1 = lowerTerm(rowVars, v1);
             let t2 = lowerTerm(rowVars, v2);
             let t3 = lowerTerm(rowVars, v3);
             let t4 = lowerTerm(rowVars, v4);
             let t5 = lowerTerm(rowVars, v5);
-            RamTerm.App5(f, t1, t2, t3, t4, t5)
+            RamTerm.App5(f, t1, t2, t3, t4, t5, id)
     }
 }

@@ -1,9 +1,13 @@
 mod Fixpoint.Phase.AugmentToExec {
-    use Fixpoint.Ast.AugmentedRam.RamID
-    use Fixpoint.Ast.AugmentedRam.{RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp, TupleVar => ATupleVar}
+    use Fixpoint.Interpreter.Database
+    use Fixpoint.Normalization.ObjectMarshallingInfo;
+    use Fixpoint.Interpreter.DatabaseExternal
+    use Fixpoint.Ast.AugmentedRam.getTermRamId
+    use Fixpoint.Ast.AugmentedRam.RamId
+    use Fixpoint.Ast.AugmentedRam.{TupleVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp, TupleVar => ATupleVar}
     use Fixpoint.Ast.AugmentedRam.RelOp.{Search => ASearch, SearchWithIndex => ASearchWithIndex, Functional => AFunctional, Project => AProject, If => AIf}
     use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, Eq => AEq, Leq => ALeq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit => ALit, RowLoad => ARowLoad, LoadLatVar => ALoadLatVar, Meet => AMeet, App0 => AApp0, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
+    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit => ALit, RowLoad => ARowLoad, Meet => AMeet, App0 => AApp0, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
 
 
     use Fixpoint.Ast.ExecutableRam.{RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp, TupleVar => ETupleVar}
@@ -21,10 +25,10 @@ mod Fixpoint.Phase.AugmentToExec {
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
 
-    type alias IdToIndex[r: Eff] = MutMap[RamID, Int32, r]
+    type alias IdToIndex[r: Eff] = MutMap[RamId, Int32, r]
 
     @Internal
-    pub def compileToExec(program: AugmentedProgram, rc: Region[r]): RamProgram \ r = match program { 
+    pub def compileToExec(rc: Region[r], db: DatabaseExternal[r], program: AugmentedProgram): (RamProgram, Database[r], ObjectMarshallingInfo[r]) \ r = match program { 
         case AugmentedProgram.Program(stmt, facts, meta, _) =>
             let counter = Counter.empty(rc);
             let idToIndex = MutMap.empty(rc);
@@ -32,7 +36,7 @@ mod Fixpoint.Phase.AugmentToExec {
             let ramIDToNormalIndex = Equality.computeMapping(program);
             let compiledStmt = compileStmt(stmt, counter, idToIndex);
             // Compile facts.
-            RamProgram.Program(compiledStmt, ???, meta, ???)
+            (RamProgram.Program(compiledStmt, ???, meta, ???), ???, ???)
     }
 
     @Internal
@@ -63,7 +67,7 @@ mod Fixpoint.Phase.AugmentToExec {
             case ASearch(tpv, relSym, rest) =>
                 let arity = AugmentedRam.arityOf(relSym);
                 let ATupleVar.Named(id) = tpv;
-                let _ = Vector.forEach(x -> MutMap.put(RamID.TuplePos(id, x), Counter.getNewID(counter), idToIndex), Vector.range(0, arity));
+                let _ = Vector.forEach(x -> MutMap.put(RamId.TuplePos(id, x), Counter.getNewID(counter), idToIndex), Vector.range(0, arity));
                 ESearch(compileTupleVar(tpv), relSym, recursiveCall(rest))
             case AFunctional(tpv, f, terms, rest, _arity, id) => EFunctional(compileTupleVar(tpv), f, Vector.map(x -> compileTerm(x, counter, idToIndex), terms), recursiveCall(rest), ???) // TODO: Fix intToBox
             case AProject(terms, s) => EProject(Vector.map(x -> compileTerm(x, counter, idToIndex), terms), s, ???)
@@ -80,8 +84,8 @@ mod Fixpoint.Phase.AugmentToExec {
         let getI = x -> getIndex(x, counter, mapToIndex);
         match term {
             case ALit(val, id)                      => ELit(???)
-            case ARowLoad(_, _, _, id)              => ELoadIndex(unwrap(MutMap.get(id, mapToIndex)))
-            case ALoadLatVar(_, _, id)              => ELoadIndex(unwrap(MutMap.get(id, mapToIndex)))
+            case ARowLoad(_, _, _)                  => ELoadIndex(unwrap(MutMap.get(getTermRamId(term), mapToIndex)))
+            // case ALoadLatVar(_, _, id)              => ELoadIndex(unwrap(MutMap.get(id, mapToIndex)))
             case AMeet(f, t1, t2, id)               => EMeet(f, compileT(t1), compileT(t1), ???)
             case AApp0(f, id)                       => EApp0(f, getI(id))
             case AApp1(f, t1, id)                   => EApp1(f, compileT(t1), getI(id), ???)
@@ -118,7 +122,7 @@ mod Fixpoint.Phase.AugmentToExec {
     }
 
     @Internal
-    def getIndex(id: RamID, counter: Counter[r1], map: IdToIndex[r2]): Int32 \ {r1, r2} = match MutMap.get(id, map) {
+    def getIndex(id: RamId, counter: Counter[r1], map: IdToIndex[r2]): Int32 \ {r1, r2} = match MutMap.get(id, map) {
         case Some(position) => position
         case None => 
             let position = Counter.getNewID(counter);

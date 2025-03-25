@@ -17,7 +17,7 @@
 mod Fixpoint.Debugging {
 
     use Fixpoint.Ast.Datalog.Datalog
-    use Fixpoint.Ast.Ram.RamStmt
+    // use Fixpoint.Ast.Ram.RamStmt
     // use Fixpoint.Ast.Ram.RamProgram
     use Fixpoint.Ast.ExecutableRam.RamProgram
     use Fixpoint.Ast.Shared.PredSym

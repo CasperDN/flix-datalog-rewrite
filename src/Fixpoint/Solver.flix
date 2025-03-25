@@ -15,6 +15,8 @@
  */
 
 mod Fixpoint.Solver {
+    use Fixpoint.Normalization.ObjectMarshallingInfo
+    use Fixpoint.Interpreter.Database
 
     import dev.flix.runtime.Global
 
@@ -22,14 +24,15 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Ram.RelSym
+    use Fixpoint.Ast.AugmentedRam.RelSym
+    use Fixpoint.Ast.ExecutableRam.RamProgram
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
-    use Fixpoint.Interpreter.Database
+    use Fixpoint.Interpreter.DatabaseExternal
     use PredTrack.PredSymMapInternal
 
     ///
@@ -49,25 +52,22 @@ mod Fixpoint.Solver {
     /// A stratification of `d` is given by `stf`.
     ///
     @Internal
-    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = {
+    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog) = {
+        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
             Fixpoint.Phase.Compiler.compile(cs, stf)
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.IndexSelection.queryProgram
             |> Fixpoint.Phase.VarsToIndices.lowerProgram
-            |> Fixpoint.Phase.AugmentToExec.compileToExec
+            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
         };
         let model = match d {
-            case Datalog(_, _) => region rc {
-                compiler(d) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
-            }
-            // TODO: Also fix here.
+            case Datalog(_, _) =>
+                compiler(d, MutMap.empty(rc)) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
             case Model(_) => d
-            case Join(Model(m), cs) => region rc {
+            case Join(Model(m), cs) =>
                 let db = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
-                compiler(cs) |> Fixpoint.Interpreter.interpretWithDatabase(rc, db) |> toModelWithRenaming
-            }
+                compiler(cs, db) |> Fixpoint.Interpreter.interpretWithDatabase(rc) |> toModelWithRenaming
             case _ => bug!("Datalog normalization bug")
         };
         let m = Fixpoint.Debugging.notifyPostSolve(model);
@@ -84,7 +84,7 @@ mod Fixpoint.Solver {
         case (Datalog(edb1, idb1), Datalog(edb2, idb2)) =>
             Datalog(Vector.append(edb1, edb2), Vector.append(idb1, idb2))
         case (Model(db1), Model(db2)) =>
-            use Fixpoint.Ast.Ram.toDenotation;
+            use Fixpoint.Ast.AugmentedRam.toDenotation;
             let union = ramSym -> match toDenotation(ramSym) {
                 case Relational => Map.union
                 case Latticenal(_, _, lub, _) => Map.unionWith(lub)
@@ -715,7 +715,7 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Model(db) => region rc {
-            use Fixpoint.Ast.Ram.toDenotation;
+            use Fixpoint.Ast.AugmentedRam.toDenotation;
             let pFacts = MutList.empty(rc);
             let qquery = ramSym -> match ramSym {
                 case RelSym.Symbol(predSym, _, _) => match predSym <=> p {
@@ -758,7 +758,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModelWithRenaming(dbMeta: (Database[r], PredSymMapInternal)): Datalog \ r =
+    def toModelWithRenaming(dbMeta: (DatabaseExternal[r], PredSymMapInternal)): Datalog \ r =
         let (db, meta) = dbMeta;
         MutMap.toMap(db) |>
         Map.map(MutMap.toMap) |>
@@ -773,7 +773,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModel(db: Database[r]): Datalog \ r =
+    def toModel(db: DatabaseExternal[r]): Datalog \ r =
         MutMap.toMap(db) |>
         Map.map(MutMap.toMap) |>
         Model

@@ -2,7 +2,7 @@ mod Fixpoint.Phase.IndexSelection2 {
     use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
     use Fixpoint.Ast.AugmentedRam.RelOp.{Search, SearchWithIndex, Functional, Project, If}
     use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit, RowLoad, LoadLatVar, Meet, App0, App1, App2, App3, App4, App5}
+    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
 
     // Hoist if-constructions as far as possible and merge into SearchWithQuery when possible/relevant.
     // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
@@ -99,8 +99,8 @@ mod Fixpoint.Phase.IndexSelection2 {
     @Internal
     def collectTermVariables(term: RamTerm): Set[Int32] = match term {
         case Lit(_, _)                              => Set#{}
-        case RowLoad(TupleVar.Named(id), _, _, _)   => Set#{id}
-        case LoadLatVar(TupleVar.Named(id), _, _)   => Set#{id}
+        case RowLoad(TupleVar.Named(id), _, _)   => Set#{id}
+        // case LoadLatVar(TupleVar.Named(id), _, _)   => Set#{id}
         case Meet(_, t1, t2, _)                     => Set.union(collectTermVariables(t1), collectTermVariables(t2))
         case App0(_, _)                             => Set#{}
         case App1(_, t1, _)                         => collectTermVariables(t1)
@@ -129,8 +129,8 @@ mod Fixpoint.Phase.IndexSelection2 {
     @Internal
     def isTermGround(term: RamTerm, grounding: Set[Int32]): Bool = match term {
         case Lit(_, _) => true
-        case RowLoad(TupleVar.Named(id), _, _, _)   => Set.memberOf(id, grounding)
-        case LoadLatVar(TupleVar.Named(id), _, _)   => Set.memberOf(id, grounding)
+        case RowLoad(TupleVar.Named(id), _, _)   => Set.memberOf(id, grounding)
+        // case LoadLatVar(TupleVar.Named(id), _, _)   => Set.memberOf(id, grounding)
         case Meet(_, t1, t2, _)                     => isTermGround(t1, grounding) and isTermGround(t2, grounding)
         case App0(_, _)                             => true
         case App1(_, t1, _)                         => isTermGround(t1, grounding)

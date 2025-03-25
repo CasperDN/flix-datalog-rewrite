@@ -96,18 +96,18 @@ mod Fixpoint.Phase.IndexSelection {
             let (varQuery, rest1) =
                 // Make sure `var` is on the lhs of all equalities.
                 Vector.map(exp -> match exp {
-                    case Eq(RowLoad(row1, i, r1, id1), RowLoad(row2, j, r2, id2)) =>
+                    case Eq(RowLoad(row1, i, r1), RowLoad(row2, j, r2)) =>
                         if (row2 == var)
-                            Eq(RowLoad(row2, j, r1, id1), RowLoad(row1, i, r2, id2))
+                            Eq(RowLoad(row2, j, r1), RowLoad(row1, i, r2))
                         else
                             exp
-                    case Eq(Lit(v, id1), RowLoad(row, i, r, id2)) => Eq(RowLoad(row, i, r, id2), Lit(v, id1))
+                    case Eq(Lit(v, id1), RowLoad(row, i, r)) => Eq(RowLoad(row, i, r), Lit(v, id1))
                     case _ => exp
                 }, notGround) |>
                 // Partition into those equalities that have `var` on the lhs and those that don't.
                 Vector.partition(exp -> match exp {
-                    case Eq(RowLoad(row1, _, _, _), RowLoad(row2, _, _, _)) => row1 != row2 and row1 == var
-                    case Eq(RowLoad(row, _, _, _), Lit(_, _)) => row == var
+                    case Eq(RowLoad(row1, _, _), RowLoad(row2, _, _)) => row1 != row2 and row1 == var
+                    case Eq(RowLoad(row, _, _), Lit(_, _)) => row == var
                     case _ => false
                 });
             let (prefixQuery, rest2) = longestPrefixQuery(varQuery);
@@ -152,18 +152,18 @@ mod Fixpoint.Phase.IndexSelection {
         use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, Lit};
         // Sort equalities of the form `var[i] = rhs` ascending on `i`.
         Vector.sortWith(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1, _, _), _), Eq(RowLoad(_, index2, _, _), _)) => Comparison.fromInt32(index1 - index2)
+            case (Eq(RowLoad(_, index1, _), _), Eq(RowLoad(_, index2, _), _)) => Comparison.fromInt32(index1 - index2)
             case _ => ???
         }, varQuery) |>
         // Group `var[i] = rhs` by `i`.
         // TODO: groupBy potentially expensive/wastefull since we already knows they are in order. Probably not real problem since list is likely to be short.
         Vector.groupBy(x -> y -> match (x, y) {
-            case (Eq(RowLoad(_, index1, _, _), _), Eq(RowLoad(_, index2, _, _), _)) => index1 == index2
+            case (Eq(RowLoad(_, index1, _), _), Eq(RowLoad(_, index2, _), _)) => index1 == index2
             case _ => ???
         }) |>
         Vector.foldLeft(match (i, prefix, rest) -> e -> {
                 let (p, r) = Vector.partition(be -> match be {
-                    case BoolExp.Eq(RamTerm.RowLoad(_, j, _, _), _) => i == j
+                    case BoolExp.Eq(RamTerm.RowLoad(_, j, _), _) => i == j
                     case _ => ???
                 }, e);
                 (i + 1, Vector.append(prefix, p), Vector.append(rest, r))
@@ -206,8 +206,8 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     def isTermGround(freeVars: Set[TupleVar], term: RamTerm): Bool = match term {
         case RamTerm.Lit(_, _) => true
-        case RamTerm.RowLoad(var, _, _, _) => Set.memberOf(var, freeVars)
-        case RamTerm.LoadLatVar(var, _, _) => Set.memberOf(var, freeVars)
+        case RamTerm.RowLoad(var, _, _) => Set.memberOf(var, freeVars)
+        // case RamTerm.LoadLatVar(var, _) => Set.memberOf(var, freeVars)
         case RamTerm.Meet(_, t1, t2, _) =>
             isTermGround(freeVars, t1) and
             isTermGround(freeVars, t2)

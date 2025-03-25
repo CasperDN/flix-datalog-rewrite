@@ -16,7 +16,7 @@
 
 mod Fixpoint.Phase.Simplifier {
     use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, AugmentedProgram}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, LoadLatVar, Lit, Meet}
+    use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, Lit, Meet}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.
@@ -93,8 +93,8 @@ mod Fixpoint.Phase.Simplifier {
             let (memberOf, rest) =
                 // Delete checks of the form `x[i] == x[i]` and `x ≤ x` and `x ⊓ y ≤ x`.
                 Vector.filter(e -> match e {
-                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _, _), RowLoad(rhs1, rhs2, _, _)) => (lhs1, lhs2) != (rhs1, rhs2)
-                    case BoolExp.Leq(_, lhs, LoadLatVar(rhsVar, _, _)) =>
+                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
+                    case BoolExp.Leq(_, lhs, RowLoad(rhsVar, _, _)) =>
                         let lhsVars = ramTermVars(lhs);
                         not Set.memberOf(rhsVar, lhsVars)
                     case _ => true
@@ -156,8 +156,8 @@ mod Fixpoint.Phase.Simplifier {
     ///
     def ramTermVars(term: RamTerm): Set[TupleVar] = match term {
         case RamTerm.Lit(_, _) => Set#{}
-        case RamTerm.RowLoad(var, _, _, _) => Set#{var}
-        case RamTerm.LoadLatVar(var, _, _) => Set#{var}
+        case RamTerm.RowLoad(var, _, _) => Set#{var}
+        // case RamTerm.LoadLatVar(var, _, _) => Set#{var}
         case RamTerm.Meet(_, lhs, rhs, _) => Set.union(ramTermVars(lhs), ramTermVars(rhs))
         case RamTerm.App0(_, _) => Set#{}
         case RamTerm.App1(_, t, _) => ramTermVars(t)

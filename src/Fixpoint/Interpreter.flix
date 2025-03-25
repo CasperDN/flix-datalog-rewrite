@@ -34,6 +34,8 @@ mod Fixpoint.Interpreter {
 
     pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Int64], Int64, r], r]
 
+    pub type alias DatabaseExternal[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
+
     pub type alias SearchEnv[r: Region] = (Array[Vector[Int64], r], Array[Int64, r])
 
     // pub type alias MetaData[r: Eff] = (Normalization.ObjectMarshallingInfo[r], Bool)
@@ -61,8 +63,9 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpret(rc: Region[r1], info: ObjectMarshallingInfo[r2], program: RamProgram): (Database[r1], PredSymMapInternal) \ r1 + r2 =
-        let db = MutMap.empty(rc);
+    pub def interpret(rc: Region[r1], input: (RamProgram, Database[r1], ObjectMarshallingInfo[r1])): (DatabaseExternal[r1], PredSymMapInternal) \ r1 =
+        let (program, db, info) = input;
+        // let db = MutMap.empty(rc);
         match program {
             case RamProgram.Program(_, facts, predTrack, _) =>
                 Map.forEach(id -> factSet -> {
@@ -80,19 +83,26 @@ mod Fixpoint.Interpreter {
                             }, factSet)
                     };
                     // MutMap.put(id, mapForCurrent, db)
-                    MutMap.put(PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full), mapForCurrent, db)
+                    MutMap.put(sym, mapForCurrent, db)
                 }, facts)
         };
-        interpretWithDatabase(rc, db, info, program)
+        interpretWithDatabaseInternal(rc, db, info, program)
     
 
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2], program: RamProgram): (Database[r1], PredSymMapInternal) \ r1 + r2 = match Fixpoint.Debugging.notifyPreInterpret(program) {
-        case RamProgram.Program(stmt, _facts, meta, _index) =>
+    pub def interpretWithDatabase(rc: Region[r1], input: (Database[r1], ObjectMarshallingInfo[r2], RamProgram)): (DatabaseExternal[r1], PredSymMapInternal) \ r1 + r2 = 
+    let (db, info, program) = input;
+    interpretWithDatabaseInternal(rc, db, info, program)
+
+    @Internal
+    pub def interpretWithDatabaseInternal(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2], program: RamProgram): (DatabaseExternal[r1], PredSymMapInternal) \ r1 + r2 = match Fixpoint.Debugging.notifyPreInterpret(program) {
+        case RamProgram.Program(stmt, _, meta, _) =>
             evalStmt(rc, db, info, stmt);
-            (db, meta)
+            (marshallDb(rc, db, info), meta)
     }
+
+    def marshallDb(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2]): DatabaseExternal[r] = ???
 
     def evalStmt(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2], stmt: RamStmt): Unit \ r1 + r2 =
         match stmt {
