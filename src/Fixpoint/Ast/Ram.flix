@@ -292,7 +292,7 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[TupleVar] {
         pub def toString(var: TupleVar): String = match var {
-            case TupleVar.Named(id) => "x${id}"
+            case TupleVar.Named(id) => "t${id}"
         //    case TupleVar.Index(i) => "${i}$"
         }
     }

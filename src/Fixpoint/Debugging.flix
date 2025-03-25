@@ -106,7 +106,7 @@ mod Fixpoint.Debugging {
                 concatRev("** Index Information") |>
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>
-                concatRev(String.indent(4, "${index}")) |>
+                concatRev(String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", index))) |>
                 concatRev("");
                 flush(str, false);
                 program
