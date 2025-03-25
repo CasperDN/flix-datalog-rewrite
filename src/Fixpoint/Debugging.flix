@@ -21,6 +21,23 @@ mod Fixpoint.Debugging {
     use Fixpoint.Ast.Ram.RamProgram
     use Fixpoint.Ast.Shared.PredSym
 
+    def flush(s: String, overwrite: Bool): Unit \ IO = 
+        if (Fixpoint.Options.enableDebugToFile()) {
+            let res = 
+                if (overwrite) 
+                    FileWrite.runWithIO(() -> FileWrite.write(str = s, debugFileName()))
+                else 
+                    FileWrite.runWithIO(() -> FileWrite.append(str = s, debugFileName()));
+            match res {
+                case Ok(_) => ()
+                case Err(e) => println(e)
+            } 
+        } else println(s)
+
+    def debugFileName(): String = ".fixpoint_debug.txt" 
+
+    def concatRev(s1: String, s2: String): String = String.concat("${s2}\n", s1)
+
     ///
     /// Invoked before the fixpoint computation.
     ///
@@ -29,12 +46,13 @@ mod Fixpoint.Debugging {
     @Internal
     pub def notifyPreSolve(d: Datalog): Datalog = unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
-            println(String.repeat(80, "*"));
-            println("** Datalog Input");
-            println(String.repeat(80, "*"));
-            println("");
-            println(String.indent(4, "${d}"));
-            println("");
+            let str = String.repeat(80, "*") |>
+                concatRev("** Datalog Input") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>
+                concatRev(String.indent(4, "${d}")) |>
+                concatRev("");
+            flush(str, true);
             d
         } else {
             d
@@ -49,12 +67,13 @@ mod Fixpoint.Debugging {
     @Internal
     pub def notifyPostSolve(d: Datalog): Datalog = unchecked_cast({
         if (Fixpoint.Options.enableDebugging()) {
-            println(String.repeat(80, "*"));
-            println("** Minimal Model");
-            println(String.repeat(80, "*"));
-            println("");
-            println(String.indent(4, "${d}"));
-            println("");
+            let str = String.repeat(80, "*") |>
+                concatRev("** Minimal Model") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>
+                concatRev(String.indent(4, "${d}")) |>
+                concatRev("");
+            flush(str, false);
             d
         } else {
             d
@@ -70,25 +89,26 @@ mod Fixpoint.Debugging {
     pub def notifyPreInterpret(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, _meta, index) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
-                println(String.repeat(80, "*"));
-                println("** Facts");
-                println(String.repeat(80, "*"));
-                println("");
-                println(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}"));
-                println(String.indent(4, "${Debug.stringify(facts)}"));
-                println("");
-                println(String.repeat(80, "*"));
-                println("** Relation Algebra Machine AST");
-                println(String.repeat(80, "*"));
-                println("");                
-                println(String.indent(4, "${stmt}"));
-                println("");
-                println(String.repeat(80, "*"));
-                println("** Index Information");
-                println(String.repeat(80, "*"));
-                println("");
-                println(String.indent(4, "${index}"));
-                println("");
+                let str = String.repeat(80, "*") |>
+                concatRev("** Facts") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>
+                concatRev(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}")) |>
+                concatRev(String.indent(4, "${Debug.stringify(facts)}")) |>
+                concatRev("") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("** Relation Algebra Machine AST") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>                
+                concatRev(String.indent(4, "${stmt}")) |>
+                concatRev("") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("** Index Information") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>
+                concatRev(String.indent(4, "${index}")) |>
+                concatRev("");
+                flush(str, false);
                 program
             } else {
                 program
