@@ -10,12 +10,16 @@ import java.lang.Long
 //     println("ARRRR");
 //     ()
 
+def commonTimeLimitNano(): Int64 = 60i64 * 1_000_000_000i64
+def repeatNum(): Int32 = 10
+
+def readNum(): Int32 = 1_000_000
 
 def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     let _ = FileWrite.runWithIO(() ->{
-    insertElementsDifferentOrder();
-    insertFewElementsOften();
-    insertManyElements();
+    // insertElementsDifferentOrder();
+    // insertFewElementsOften();
+    // insertManyElements();
     readExperiment();
     flixInsertExperiment();
     flixReadExperiment();
@@ -29,7 +33,6 @@ def getRandomListOfPairs(n: Int32): List[(Int64, Int64)] \ Random =
 
 
 type alias InsertLists = Vector[List[(Int64, Int64)]]
-type alias PiecewiseInsertLists = Vector[InsertLists]
 
 def runSingleTest(toInsert: InsertLists): Int64 \ IO = region rc {
     Clock.runWithIO(() -> {
@@ -96,14 +99,13 @@ def runWithThreadsRandomUntil(testNum: {testNum = Int32}, threadNum: {threadNum 
     runNTestsGeneral(testNum#testNum, () -> insertUntil(pairs, timeLimit, order))
 
 def readUntil(toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Int64 \ IO = region rc {
-    let threadNum = Vector.size(toInsert);
-    let insertNum = List.size(Vector.get(0, toInsert));
+    let readNum = List.size(Vector.get(0, lookup));
     let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, 10);
     Vector.forEach(List.forEach(match (x, y) -> BPlusTree.insert(x, y, tree)), toInsert);
-    Int32.toInt64(insertNum) * Int32.toInt64(threadNum) * Clock.runWithIO(() -> {
+    Int32.toInt64(readNum) * Clock.runWithIO(() -> {
         let start = Clock.currentTime(TimeUnit.Nanoseconds);
         let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
-        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+        let readFunc: (Unit -> Unit \ IO) = () -> region rc2 {
                 Vector.forEach(match list -> spawn unchecked_cast(() ->
                     List.forEach(p -> {
                         let (x, _) = p;
@@ -113,13 +115,13 @@ def readUntil(toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Int
                      as Unit -> Unit \ IO)() @ rc2
                 , lookup)
         };
-        repeatUntil(insertFunc, timeFunc)
+        repeatUntil(readFunc, timeFunc)
     })
 }
 
-def runWithThreadsReadRandomUntil(testNum: {testNum = Int32}, threadNum: {threadNum = Int32}, totalInserts: {totalInserts = Int32}, generatedReads: {generatedReads = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
-    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, threadNum#threadNum)));
-    let lookup = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(generatedReads#generatedReads), Vector.range(0, threadNum#threadNum)));
+def runWithThreadsReadRandomUntil(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, generatedReads: {generatedReads = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector#{getRandomListOfPairs(totalInserts#totalInserts)});
+    let lookup = Random.runWithIO(() -> Vector#{getRandomListOfPairs(generatedReads#generatedReads)});
     runNTestsGeneral(testNum#testNum, () -> readUntil(inserted, lookup, timeLimit))
 
 def insertUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], timeLimit: Int64): Int64 \ IO = region rc {
@@ -144,13 +146,13 @@ def runFlixMap(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32},
     runNTestsGeneral(testNum#testNum, () -> insertUntilFlixMap(inserted, timeLimit))
 
 def readUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists, timeLimit: Int64): Int64 \ IO = region rc {
-    let insertNum = List.size(Vector.get(0, toInsert));
+    let readNum = List.size(Vector.get(0, lookup));
     let tree  = MutMap.empty(rc);
     Vector.forEach(List.forEach(match (x, y) -> MutMap.put(x, y, tree)), toInsert);
-    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+    Int32.toInt64(readNum) * Clock.runWithIO(() -> {
         let start = Clock.currentTime(TimeUnit.Nanoseconds);
         let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
-        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+        let readFunc: (Unit -> Unit \ IO) = () -> region rc2 {
                 Vector.forEach(match list -> spawn unchecked_cast(() -> {
             List.forEach(p -> {
                 let (x, _) = p;
@@ -158,7 +160,7 @@ def readUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists
                 ()
             }, list)} as Unit -> Unit \ IO)() @ rc2
         , lookup)};
-        repeatUntil(insertFunc, timeFunc)
+        repeatUntil(readFunc, timeFunc)
     })
 }
 
@@ -190,13 +192,13 @@ def runJavaMap(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32},
     runNTestsGeneral(testNum#testNum, () -> insertUntilJavaMap(inserted, timeLimit))
 
 def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists, timeLimit: Int64): Int64 \ IO = 
-    let insertNum = List.size(Vector.get(0, toInsert));
+    let readNum = List.size(Vector.get(0, lookup));
     let tree  = new TreeMap();
     Vector.forEach(List.forEach(match (x, y) -> {tree.put(Long.valueOf(x), Long.valueOf(y)); ()}), toInsert);
-    Int32.toInt64(insertNum) * Clock.runWithIO(() -> {
+    Int32.toInt64(readNum) * Clock.runWithIO(() -> {
         let start = Clock.currentTime(TimeUnit.Nanoseconds);
         let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
-        let insertFunc: (Unit -> Unit \ IO) = () -> region rc2 {
+        let readFunc: (Unit -> Unit \ IO) = () -> region rc2 {
                 Vector.forEach(match list -> spawn unchecked_cast(() -> {
             List.forEach(p -> {
                 let (x, _) = p;
@@ -204,7 +206,7 @@ def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists
                 ()
             }, list)} as Unit -> Unit \ IO)() @ rc2
         , lookup)};
-        repeatUntil(insertFunc, timeFunc)
+        repeatUntil(readFunc, timeFunc)
     })
 
 
@@ -214,11 +216,10 @@ def runJavaMapRead(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int
     runNTestsGeneral(testNum#testNum, () -> readUntilJavaMap(inserted, lookup, timeLimit))
 
 def javaReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
-    let reads = 50_000_000;
+    let reads = readNum();
     let file = "javaReadExperiment.txt";
     FileWrite.write(str = "", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     FileWrite.append(str = "Java: Read experiment", file);
     FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("Java: Read experiment");
@@ -228,15 +229,13 @@ def javaReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        // println(runJavaMapRead(testNum = 10, totalInserts = inserts, generatedReads = 50_000_000, nanoLimit));
-        FileWrite.append(str = Vector.toString(runJavaMapRead(testNum = 10, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
+        FileWrite.append(str = Vector.toString(runJavaMapRead(testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 def javaInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
     let file = "javaWriteExperiment.txt";
     FileWrite.write(str = "", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     println("Java: Insert experiment");
     FileWrite.append(str = "Java: Insert experiment", file);
     Vector.forEach(inserts -> {
@@ -245,15 +244,14 @@ def javaInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        FileWrite.append(str = Vector.toString(runJavaMap(testNum = 10, totalInserts = inserts, nanoLimit)), file)
+        FileWrite.append(str = Vector.toString(runJavaMap(testNum = repeatNum(), totalInserts = inserts, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
 def flixInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
     let file = "flixWriteExperiment.txt";
     FileWrite.write(str = "", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     FileWrite.append(str = "Flix: Insert experiment", file);
     println("Flix: Insert experiment");
     Vector.forEach(inserts -> {
@@ -262,16 +260,15 @@ def flixInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        FileWrite.append(str = Vector.toString(runFlixMap(testNum = 10, totalInserts = inserts, nanoLimit)), file)
+        FileWrite.append(str = Vector.toString(runFlixMap(testNum = repeatNum(), totalInserts = inserts, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
 def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
-    let reads = 50_000_000;
+    let reads = readNum();
     let file = "flixReadExperiment.txt";
     FileWrite.write(str = "", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     FileWrite.append(str = "Flix: Read experiment", file);
     FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("Flix: Read experiment");
@@ -281,16 +278,15 @@ def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        FileWrite.append(str = Vector.toString(runFlixMapRead(testNum = 10, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
+        FileWrite.append(str = Vector.toString(runFlixMapRead(testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 
 def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
-    let reads = 50_000_000;
+    let reads = readNum();
     let file = "BPlussTreeReadExperiment.txt";
     FileWrite.write(str = "", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     FileWrite.append(str = "BPlusTree: Read experiment", file);
     FileWrite.append(str = "\nTotal reads: ${reads}", file);
     println("BPlusTree: Read experiment");
@@ -300,7 +296,7 @@ def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         FileWrite.append(str = "\n", file);
         println("Inserts");
         println(inserts);
-        FileWrite.append(str = Vector.toString(runWithThreadsReadRandomUntil(testNum = 10, threadNum = 1, totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
+        FileWrite.append(str = Vector.toString(runWithThreadsReadRandomUntil(testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 def insertManyElements(): Unit \ IO + NonDet + Sys + FileWrite = {
@@ -322,8 +318,7 @@ def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys + FileWrite = {
     let file = "OrderExperiment.txt";
     FileWrite.write(str = "", file);
     FileWrite.append(str = "Experiment with varying", file);
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     println("Experiment with different order:");
     Vector.forEach(order -> Vector.forEach(insertNum -> 
         Vector.forEach(threads -> {
@@ -340,7 +335,7 @@ def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys + FileWrite = {
             println(insertNum);
             println("Threads:");
             println(threads);
-            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = 10, threadNum = threads, totalInserts = insertNum, nanoLimit, order)), file)
+            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = repeatNum(), threadNum = threads, totalInserts = insertNum, nanoLimit, order)), file)
         }, Vector#{1, 2, 5, 10, 20}), Vector#{10_000, 1_000_000}), Vector#{10, 20, 40, 60})
 }
 
@@ -349,8 +344,7 @@ def insertFewElementsOften(): Unit \ IO + NonDet + Sys + FileWrite = {
     FileWrite.write(str = "", file);
     FileWrite.append(str = "Experiment with varying", file);
     println("Experiment with low height:");
-    let secondLimit = 60i64;
-    let nanoLimit = secondLimit * 1_000_000_000i64;
+    let nanoLimit = commonTimeLimitNano();
     Vector.forEach(insertNum -> 
         Vector.forEach(threads -> {
             FileWrite.append(str = "\nInsertions:", file);
@@ -362,7 +356,7 @@ def insertFewElementsOften(): Unit \ IO + NonDet + Sys + FileWrite = {
             println(insertNum);
             println("Threads:");
             println(threads);
-            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = 10, threadNum = threads, totalInserts=insertNum, nanoLimit, 10)), file)
+            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = repeatNum(), threadNum = threads, totalInserts=insertNum, nanoLimit, 10)), file)
         }, Vector.range(1, 41)), 
     Vector#{10_000, 1_000_000})
 }
