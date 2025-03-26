@@ -31,6 +31,8 @@ mod Fixpoint.Phase.Compiler {
 
     type alias CompilerInfo[r: Eff] = (PredSymMapInternal, Fixpoint.Normalization.ObjectMarshallingInfo[r])
 
+    // This should be fine. 
+    def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Denotation.Relational)
     ///
     /// Compile the given Datalog program `d` to RAM.
     /// First compile all facts in `d` to project-statements.
@@ -96,7 +98,7 @@ mod Fixpoint.Phase.Compiler {
     /// Note that Eval-Rule is the code emitted by `compileRule`
     /// and Eval-Rule-Incr is the code emitted by `compileRuleIncr`.
     ///
-    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = region rc {
+    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r1]): Unit \ r1 = region rc {
         let idb = List.foldRight(match Constraint(HeadAtom(pred, den, terms), _) -> {
             let arity = Vector.length(terms);
             Map.insert(pred, (arity, den))
@@ -163,11 +165,11 @@ mod Fixpoint.Phase.Compiler {
     ///         end
     ///     end
     ///
-    def compileRule(stmts: MutList[RamStmt, r1], rule: Constraint, predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = region rc{ match rule {
+    def compileRule(stmts: MutList[RamStmt, r1], rule: Constraint, predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(HeadAtom(headSym, _, headTerms), body) =>
             let augBody = augmentBody(body, counter);
             // let env = VarSymToUnique.empty(rc);
-            let env = unifyVars(augBody);
+            let env = unifyVars(predSymMaps, counter, augBody);
             let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
             // let projection = RelOp.Project(ramTerms, RelSym.Full(headSym, arity, headDen));
             let projection = RelOp.Project(ramTerms, PredTrack.oldPredSymToRelSym(predSymMaps, headSym, Full));
@@ -180,7 +182,7 @@ mod Fixpoint.Phase.Compiler {
                         // RelOp.Search(rowVar, RelSym.Full(bodySym, arity1, den), acc)
                     case Functional(_, f, freeVars) =>
                         let terms = Vector.map(v -> unwrap(Map.get(v, env)), freeVars);
-                        RelOp.Functional(rowVar, f, terms, acc)
+                        RelOp.Functional(rowVar, f, terms, acc, ?arity)
                     case _ => acc
                 }, loopBody, augBody) |>
                 RamStmt.Insert;
@@ -191,7 +193,6 @@ mod Fixpoint.Phase.Compiler {
             } else {
                 MutList.push(insert, stmts)
             }
-    }
     }
 
     ///
@@ -226,14 +227,14 @@ mod Fixpoint.Phase.Compiler {
     // Note: This has been modified to only generate using the delta-relations for the current strata.
     // Reasoning: The older delta-relations will all be empty so it is a simple optimization that can also allow optimizations for index selection (of the delta relations).
 
-    def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, idbSet: Set[Int64], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = region rc{ match rule {
+    def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, idbSet: Set[Int64], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(HeadAtom(headSym, _, headTerms), body) =>
             let augBody = augmentBody(body, counter);
-            let env = unifyVars(augBody);
-            let ramTerms = Vector.map(compileHeadTerm(env), headTerms);
+            let env = unifyVars(predSymMaps, counter, augBody);
+            let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
             let projection = RelOp.Project(ramTerms, PredTrack.oldPredSymToRelSym(predSymMaps, headSym, New));
             // let projection = RelOp.Project(ramTerms, RelSym.New(headSym, arity, headDen));
-            let join = compileBody(env, augBody, predSymMaps);
+            let join = compileBody(env, augBody, predSymMaps, counter);
             let relSym = PredTrack.oldPredSymToRelSym(predSymMaps, headSym, Full);
             let loopBody = RelOp.If(
                 Vector.append(Vector#{BoolExp.NotMemberOf(ramTerms, relSym)}, join), 
@@ -254,7 +255,7 @@ mod Fixpoint.Phase.Compiler {
                             RelOp.Search(rowVar, ramSym, acc)
                         case Functional(_, f, freeVars) =>
                             let terms = Vector.map(v -> unwrap(Map.get(v, env)), freeVars);
-                            RelOp.Functional(rowVar, f, terms, acc)
+                            RelOp.Functional(rowVar, f, terms, acc, ???)
                         case _ => acc
                     }, loopBody, augBody) |>
                     RamStmt.Insert;
@@ -272,12 +273,12 @@ mod Fixpoint.Phase.Compiler {
             } else {
                 Vector.forEach(match (_, rowVar) -> compileSomething(rowVar), positiveIDBAtoms)
             }
-    }}
+    }
 
     ///
     /// Substitute Datalog head term `term` for a RAM term according to the given substitution `env`.
     ///
-    def compileHeadTerm(env: Map[VarSym, RamTerm], counter: Counter.Counter[r2], term: HeadTerm): RamTerm \ r1 + r2 = match term {
+    def compileHeadTerm(env: Map[VarSym, RamTerm], counter: Counter.Counter[r], term: HeadTerm): RamTerm \ r = match term {
         case HeadTerm.Var(var) => unwrap(Map.get(var, env))
         case HeadTerm.Lit(v) => RamTerm.Lit(v, RamId.Id(Counter.getNewID(counter)))
         case HeadTerm.App0(f) => RamTerm.App0(f, RamId.Id(Counter.getNewID(counter)))
@@ -331,7 +332,7 @@ mod Fixpoint.Phase.Compiler {
     /// `x` is mapped to B$1[0] because `x` occurs positively in the second atom.
     /// `s` is mapped to the glb of all its positive occurences because it is latticenal.
     ///
-    def unifyVars(predSymMaps: PredSymMapInternal, body: Vector[(BodyPredicate, TupleVar)]): Map[VarSym, RamTerm] =
+    def unifyVars(predSymMaps: PredSymMapInternal, counter: Counter.Counter[r], body: Vector[(BodyPredicate, TupleVar)]): Map[VarSym, RamTerm] \ r =
         let toFullSym = sym -> (PredTrack.oldPredSymToRelSym(predSymMaps, sym, Full));
         Vector.foldLeft(acc -> match (atom, rowVar) -> match atom {
             case BodyAtom(bodySym, denotation, Polarity.Positive, _, terms) =>
@@ -344,16 +345,15 @@ mod Fixpoint.Phase.Compiler {
                             if (i < Vector.length(terms) - 1)
                                 Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
                             else
-                                let f = t1 -> t2 -> RamTerm.Meet(glb, t1, t2);
+                                let f = t1 -> t2 -> RamTerm.Meet(glb, t1, t2, RamId.Id(Counter.getNewID(counter)));
                                 Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
                     }
                     case _ => x -> x
                 }, acc)
             case BodyAtom(_, _, Polarity.Negative, _, _) => acc
-            // TODO: They should all have been inserted? Is boundVars the vars that you now bind?
-            case Functional(boundVars, _, _) =>
+            case Functional(boundVars, _, freeVars) =>
                 Vector.mapWithIndex(i -> var -> (var, i), boundVars) |>
-                Vector.foldRight(match (var, i) -> Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i)), acc)
+                Vector.foldRight(match (var, i) -> Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, functionalRelSym(Vector.length(freeVars)))), acc)
             case Guard0(_)                               => acc
             case Guard1(_, _)                            => acc
             case Guard2(_, _, _)                         => acc
@@ -378,7 +378,7 @@ mod Fixpoint.Phase.Compiler {
     /// (2) comes from the negative atom `not A(x)`.
     /// (3) is a function call that computes the expression `x > 0`.
     ///
-    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, TupleVar)], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Vector[BoolExp] \ r1 + r2 =
+    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, TupleVar)], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r]): Vector[BoolExp] \ r =
         let toFullSym = sym -> (PredTrack.oldPredSymToRelSym(predSymMaps, sym, Full));
         Vector.flatMap(match (atom, rowVar) ->
             let compileBodyTerm = oldSym -> j -> term -> match term {

@@ -61,12 +61,12 @@ mod Fixpoint.Phase.VarsToIndices {
             //     let newQuery = Vector.map(match (j, t) -> (j, lowerTerm(rowVars, t)), prefixQuery);
             //     RelOp.Query(newVar, ramSym, newQuery, lowerOp(body, newVars, depth + 1))
             case RelOp.SearchWithIndex(_, _, _, _) => ???
-            case RelOp.Functional(rowVar, f, terms, body, arity, id) =>
+            case RelOp.Functional(rowVar, f, terms, body, arity) =>
                 let newVar = TupleVar.Named(depth);
                 let newVars = Map.insert(rowVar, newVar, rowVars);
                 let newTerms = terms |> Vector.map(lowerTerm(rowVars));
                 let newBody = lowerOp(body, newVars, depth + 1);
-                RelOp.Functional(newVar, f, newTerms, newBody, arity, id)
+                RelOp.Functional(newVar, f, newTerms, newBody, arity)
             case RelOp.Project(terms, ramSym) =>
                  RelOp.Project(Vector.map(lowerTerm(rowVars), terms), ramSym)
             case RelOp.If(test, then) =>

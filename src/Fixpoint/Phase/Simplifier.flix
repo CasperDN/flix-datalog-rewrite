@@ -144,10 +144,10 @@ mod Fixpoint.Phase.Simplifier {
         //         newBody <- simplifyOp(stratum, body);
         //         res <- f(newBody)
         //     ) yield res
-        case RelOp.Functional(rowVar, f, terms, body, arity, idID) =>
+        case RelOp.Functional(rowVar, f, terms, body, arity) =>
             forM(
                 newBody <- simplifyOp(stratum, body)
-            ) yield RelOp.Functional(rowVar, f, terms, newBody, arity, idID)
+            ) yield RelOp.Functional(rowVar, f, terms, newBody, arity)
         case RelOp.Project(_, _)    => Some(op)
     }
 

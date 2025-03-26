@@ -63,7 +63,7 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpret(rc: Region[r1], input: (RamProgram, Database[r1], ObjectMarshallingInfo[r1])): (DatabaseExternal[r1], PredSymMapInternal) \ r1 =
+    pub def interpret(rc: Region[r], input: (RamProgram, Database[r], ObjectMarshallingInfo[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
         let (program, db, info) = input;
         // let db = MutMap.empty(rc);
         match program {
@@ -91,20 +91,20 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r1], input: (Database[r1], ObjectMarshallingInfo[r2], RamProgram)): (DatabaseExternal[r1], PredSymMapInternal) \ r1 + r2 = 
+    pub def interpretWithDatabase(rc: Region[r], input: (Database[r], ObjectMarshallingInfo[r], RamProgram)): (DatabaseExternal[r], PredSymMapInternal) \ r = 
     let (db, info, program) = input;
     interpretWithDatabaseInternal(rc, db, info, program)
 
     @Internal
-    pub def interpretWithDatabaseInternal(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2], program: RamProgram): (DatabaseExternal[r1], PredSymMapInternal) \ r1 + r2 = match Fixpoint.Debugging.notifyPreInterpret(program) {
+    pub def interpretWithDatabaseInternal(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r], program: RamProgram): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
         case RamProgram.Program(stmt, _, meta, _) =>
             evalStmt(rc, db, info, stmt);
             (marshallDb(rc, db, info), meta)
     }
 
-    def marshallDb(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2]): DatabaseExternal[r] = ???
+    def marshallDb(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r]): DatabaseExternal[r] = ???
 
-    def evalStmt(rc: Region[r1], db: Database[r1], info: ObjectMarshallingInfo[r2], stmt: RamStmt): Unit \ r1 + r2 =
+    def evalStmt(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r], stmt: RamStmt): Unit \ r =
         match stmt {
             case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), info, relOp)
             case RamStmt.Merge(srcSym, dstSym, index) =>
@@ -142,7 +142,7 @@ mod Fixpoint.Interpreter {
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
     }
 
-    def evalOp(rc1: Region[r1], db: Database[r1], env: SearchEnv[r1], info: Normalization.ObjectMarshallingInfo[r2], op: RelOp): Unit \  r1 + r2  =
+    def evalOp(rc1: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], op: RelOp): Unit \  r + r  =
         match op {
             case RelOp.Search(TupleVar.Named(i), ramSym, body) =>
                 let (tupleEnv, latEnv) = env;
@@ -203,7 +203,7 @@ mod Fixpoint.Interpreter {
             case _ => ()
         }
 
-    def evalQuery(env: SearchEnv[r1], info: Normalization.ObjectMarshallingInfo[r2], qry: List[(Int32, RamTerm)], tuple: Vector[Int64]): Comparison \ r1 + r2 =
+    def evalQuery(env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], qry: List[(Int32, RamTerm)], tuple: Vector[Int64]): Comparison \ r + r =
         match qry {
             case Nil => Comparison.EqualTo
             case (j, t) :: tl => match Vector.get(j, tuple) <=> evalTerm(env, info, t) {
@@ -212,7 +212,7 @@ mod Fixpoint.Interpreter {
             }
         }
 
-    def evalBoolExp(rc1: Region[r1], db: Database[r1], env: SearchEnv[r1], info: Normalization.ObjectMarshallingInfo[r2], es: Vector[BoolExp]): Bool \ r1 + r2  =
+    def evalBoolExp(rc1: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], es: Vector[BoolExp]): Bool \ r + r  =
         Vector.forAll(exp -> match exp {
             case BoolExp.IsEmpty(ramSym) =>
                 MutMap.isEmpty(MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
@@ -291,7 +291,7 @@ mod Fixpoint.Interpreter {
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
         }, es)
 
-    def evalTerm(env: SearchEnv[r1], info: Normalization.ObjectMarshallingInfo[r2], term: RamTerm): Int64 \ {r1, r2} = match term {
+    def evalTerm(env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], term: RamTerm): Int64 \ {r, r} = match term {
         case RamTerm.Lit(v) => v
         case RamTerm.LoadIndex(i) =>
             let (tupleEnv, _) = env;
@@ -361,7 +361,7 @@ mod Fixpoint.Interpreter {
 
     // def evalInputFacts(rc: Region[r], term: RamTerm): v \ r = 
     //     let arr0 = Array.empty(rc, 0);
-    //     let arr1 = Array.empty(rc, 0);
-    //     evalTerm((arr0, arr1), term)
+    //     let arr = Array.empty(rc, 0);
+    //     evalTerm((arr0, arr), term)
 
 }

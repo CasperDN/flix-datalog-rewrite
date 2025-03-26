@@ -59,7 +59,7 @@ mod Fixpoint.Phase.IndexSelection2 {
                 newOp
 
             // TODO: Do we want to extend behavior?
-            case Functional(TupleVar.Named(id), func, terms, rest, arity, inId) => Functional(TupleVar.Named(id), func, terms, recursiveCall(rest), arity, inId)
+            case Functional(TupleVar.Named(id), func, terms, rest, arity) => Functional(TupleVar.Named(id), func, terms, recursiveCall(rest), arity)
             case Project(_, _) => op
             case If(boolExps, rest) => 
                 // let insertt = b -> MutList.push(b, independentBool);

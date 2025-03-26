@@ -73,7 +73,7 @@ mod Fixpoint.Ast.AugmentedRam {
         // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32, RamId) // The RamId is with respect to what comes in. The TupleVar is with respect to what comes out. The second to last is the arity
+        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) // The last is the arity
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
     }
@@ -89,7 +89,7 @@ mod Fixpoint.Ast.AugmentedRam {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _, _) => // TODO: Get correct id?
+                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
@@ -291,8 +291,8 @@ mod Fixpoint.Ast.AugmentedRam {
     // Identifiers should be <0 for RamId.Id. Might be avoidable
     pub enum RamId {
         case Id(Int32) // (ID)
-        case InID(Int32, Int32) // (ID, index)
-        case FunctionalOutID(Int32, Int32) // (OutID, index)
+        // case InID(Int32, Int32) // (ID, index)
+        case InID(Int32, Int32) // (OutID, index)
         case TuplePos(Int32, Int32) // (TupleVar, index)
         case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for normalization.
     }
@@ -300,8 +300,8 @@ mod Fixpoint.Ast.AugmentedRam {
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {
             case (RamId.Id(i1), RamId.Id(i2)) => i1 == i2
+            // case (RamId.InID(id1, index1), RamId.InID(id2, index2)) => id1 == id2 and index1 == index2
             case (RamId.InID(id1, index1), RamId.InID(id2, index2)) => id1 == id2 and index1 == index2
-            case (RamId.FunctionalOutID(id1, index1), RamId.FunctionalOutID(id2, index2)) => id1 == id2 and index1 == index2
             case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
             case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) => i0 == j0 and i1 == j1
         //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
@@ -319,18 +319,18 @@ mod Fixpoint.Ast.AugmentedRam {
             case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            case (RamId.FunctionalOutID(i0, i1), RamId.FunctionalOutID(j0, j1)) =>
-                let firstComp = i0 <=> j0;
-                if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.InID(i0, i1), RamId.InID(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
+            // case (RamId.InID(i0, i1), RamId.InID(j0, j1)) =>
+            //     let firstComp = i0 <=> j0;
+            //     if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             // TODO: This is perhaps not transitive. Should add cases for all...
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
             case (RamId.RelPos(_, _), _) => Comparison.LessThan
             case (RamId.Id(_), _) => Comparison.GreaterThan
-            case (RamId.FunctionalOutID(_, _), _) => Comparison.GreaterThan
             case (RamId.InID(_, _), _) => Comparison.GreaterThan
+            // case (RamId.InID(_, _), _) => Comparison.GreaterThan
             // case _ => ???
         }
     }

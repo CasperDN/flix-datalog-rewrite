@@ -69,7 +69,7 @@ mod Fixpoint.Phase.AugmentToExec {
                 let ATupleVar.Named(id) = tpv;
                 let _ = Vector.forEach(x -> MutMap.put(RamId.TuplePos(id, x), Counter.getNewID(counter), idToIndex), Vector.range(0, arity));
                 ESearch(compileTupleVar(tpv), relSym, recursiveCall(rest))
-            case AFunctional(tpv, f, terms, rest, _arity, id) => EFunctional(compileTupleVar(tpv), f, Vector.map(x -> compileTerm(x, counter, idToIndex), terms), recursiveCall(rest), ???) // TODO: Fix intToBox
+            case AFunctional(tpv, f, terms, rest, _arity) => EFunctional(compileTupleVar(tpv), f, Vector.map(x -> compileTerm(x, counter, idToIndex), terms), recursiveCall(rest), ???) // TODO: Fix intToBox
             case AProject(terms, s) => EProject(Vector.map(x -> compileTerm(x, counter, idToIndex), terms), s, ???)
             case AIf(boolExps, rest) =>
                 EIf(Vector.map(x -> compileBool(x, counter, idToIndex), boolExps), recursiveCall(rest))

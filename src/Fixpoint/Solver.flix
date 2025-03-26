@@ -54,19 +54,23 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
-            Fixpoint.Phase.Compiler.compile(cs, stf)
-            |> Fixpoint.Phase.Simplifier.simplifyProgram
-            |> Fixpoint.Phase.IndexSelection.queryProgram
-            |> Fixpoint.Phase.VarsToIndices.lowerProgram
-            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
+        def compiler(cs: Datalog, db: DatabaseExternal[rc]) = {
+            let _ = ();
+            unchecked_cast(() -> ??? as _ \ rc)()
         };
+        // def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
+        //     Fixpoint.Phase.Compiler.compile(cs, stf)
+        //     |> Fixpoint.Phase.Simplifier.simplifyProgram
+        //     |> Fixpoint.Phase.IndexSelection.queryProgram
+        //     |> Fixpoint.Phase.VarsToIndices.lowerProgram
+        //     |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
+        // };
         let model = match d {
             case Datalog(_, _) =>
                 compiler(d, MutMap.empty(rc)) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
             case Model(_) => d
             case Join(Model(m), cs) =>
-                let db = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
+                let db: DatabaseExternal[rc] = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
                 compiler(cs, db) |> Fixpoint.Interpreter.interpretWithDatabase(rc) |> toModelWithRenaming
             case _ => bug!("Datalog normalization bug")
         };
@@ -760,15 +764,15 @@ mod Fixpoint.Solver {
     ///
     def toModelWithRenaming(dbMeta: (DatabaseExternal[r], PredSymMapInternal)): Datalog \ r =
         let (db, meta) = dbMeta;
-        MutMap.toMap(db) |>
-        Map.map(MutMap.toMap) |>
-        Map.filterWithKey(k -> _ -> match k {
+        let fst = MutMap.toMap(db); 
+        let snd = Map.map(MutMap.toMap, fst);
+        let thrd = Map.filterWithKey(k -> _ -> match k {
             case RelSym.Symbol(PredSym(_, id), _, _) => PredTrack.isFullID(meta, id)
-        }) |>
+        }, snd);
         // Map.foldLeftWithKey(map -> k -> v -> match k {
         //     case RelSym.Symbol(PredSym(name, _), arity, den) => Map.insert(RelSym.Symbol(PredSym(name, 0i64), arity, den), v, map)
         // }, Map#{}) |>
-        Model
+        Model(thrd)
 
     ///
     /// Returns the given database `db` as a Datalog value.

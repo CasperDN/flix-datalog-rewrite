@@ -175,15 +175,11 @@ mod Fixpoint.Normalization {
                 unifyPredTypes(predSym, arity, predTrack, set);
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Functional(_, _, inputTerms, rest, _, RamId.Id(inID)) => // equality on the input should be handled elsewhere.
+            case RelOp.Functional(TupleVar.Named(id), _, inputTerms, rest, _) => // equality on the input should be handled elsewhere.
                 Vector.forEachWithIndex(i -> curTerm -> {
                     let termID = AugmentedRam.getTermRamId(curTerm);
-                    MutDisjointSets.union(RamId.InID(inID, i), termID, set); // Possibly not needed as it should be covered by equality
+                    MutDisjointSets.union(RamId.InID(id, i), termID, set);
                     computeDisjointTerm(curTerm, predTrack, set)
-                    // match curTerm {
-                    //     case RamTerm.RowLoad(varr, index, ramID) => MutDisjointSets.makeSet(ramID, set); MutDisjointSets.makeSet((varr, index), set)
-                    //     case _ => ()
-                    // }
                 }, inputTerms);
                 computeDisjointOp(rest, predTrack, set)
             case RelOp.Project(terms, sym) =>
@@ -196,7 +192,6 @@ mod Fixpoint.Normalization {
             case RelOp.If(bools, rest) =>
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Functional(_, _, _, _, _, _) => bug!("Functional should have RamId")
         }
 
         def computeDisjointBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
@@ -252,8 +247,8 @@ mod Fixpoint.Normalization {
                 computeDisjointTerm(t2, predTrack, set);
                 let id1 = AugmentedRam.getTermRamId(t1);
                 let id2 = AugmentedRam.getTermRamId(t2);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set);
-                MutDisjointSets.union(id2, RamId.InID(id, 1), set);
+                MutDisjointSets.union(id1, RamId.TuplePos(id, 0), set);
+                MutDisjointSets.union(id2, RamId.TuplePos(id, 1), set);
                 MutDisjointSets.union(id1, id2, set)
             case RamTerm.App0(_, _) => ()
             case RamTerm.App1(_, t1, RamId.Id(id)) =>
@@ -334,9 +329,9 @@ mod Fixpoint.Normalization {
                 Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
                 recurse(rest)
-            case RelOp.Functional(TupleVar.Named(outID), _, inputTerms, rest, arity, RamId.Id(inID)) => // equality on the input should be handled elsewhere.
-                Vector.forEach(i -> insert(RamId.FunctionalOutID(outID, i)), Vector.range(0, arity));
-                Vector.forEach(i -> insert(RamId.FunctionalOutID(inID, i)), Vector.range(0, Vector.length(inputTerms)));
+            case RelOp.Functional(TupleVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
+                Vector.forEach(i -> insert(RamId.InID(id, i)), Vector.range(0, arity));
+                Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, Vector.length(inputTerms)));
                 Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), inputTerms);
                 recurse(rest)
                 // Vector.forEachWithIndex(i -> curTerm -> {
@@ -356,7 +351,6 @@ mod Fixpoint.Normalization {
             case RelOp.If(bools, rest) =>
                 recurse(rest);
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
-            case RelOp.Functional(TupleVar.Named(_), _, _, _, _, _) => bug!("Functional should have RamId")
         }
 
 
