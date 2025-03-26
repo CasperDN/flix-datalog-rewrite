@@ -2,13 +2,7 @@ import java.lang.System
 import java.util.TreeMap
 import java.lang.Long
 
-
-
-// def mainBTreeExperiment(): Unit \ IO  = 
-//     println("Before");
-//     Thread.sleep(Time.Duration.fromSeconds(30));
-//     println("ARRRR");
-//     ()
+def standardOrder(): Int32 = 10
 
 def commonTimeLimitNano(): Int64 = 60i64 * 1_000_000_000i64
 def repeatNum(): Int32 = 10
@@ -17,9 +11,9 @@ def readNum(): Int32 = 1_000_000
 
 def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     let _ = FileWrite.runWithIO(() ->{
-    // insertElementsDifferentOrder();
-    // insertFewElementsOften();
-    // insertManyElements();
+    insertElementsDifferentOrder();
+    insertFewElementsOften();
+    insertManyElements();
     readExperiment();
     flixInsertExperiment();
     flixReadExperiment();
@@ -37,7 +31,7 @@ type alias InsertLists = Vector[List[(Int64, Int64)]]
 def runSingleTest(toInsert: InsertLists): Int64 \ IO = region rc {
     Clock.runWithIO(() -> {
         let start = Clock.currentTime(TimeUnit.Nanoseconds);
-        let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, 10);
+        let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, standardOrder());
         let _: Unit = region rc2 {
             unchecked_cast(
                 Vector.forEach(list -> spawn unchecked_cast(() ->
@@ -100,7 +94,7 @@ def runWithThreadsRandomUntil(testNum: {testNum = Int32}, threadNum: {threadNum 
 
 def readUntil(toInsert: InsertLists, lookup: InsertLists, timeLimit: Int64): Int64 \ IO = region rc {
     let readNum = List.size(Vector.get(0, lookup));
-    let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, 10);
+    let tree: BPlusTree[Int64, Int64, rc]  = BPlusTree.empty(rc, standardOrder());
     Vector.forEach(List.forEach(match (x, y) -> BPlusTree.insert(x, y, tree)), toInsert);
     Int32.toInt64(readNum) * Clock.runWithIO(() -> {
         let start = Clock.currentTime(TimeUnit.Nanoseconds);
@@ -154,11 +148,11 @@ def readUntilFlixMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists
         let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
         let readFunc: (Unit -> Unit \ IO) = () -> region rc2 {
                 Vector.forEach(match list -> spawn unchecked_cast(() -> {
-            List.forEach(p -> {
-                let (x, _) = p;
-                MutMap.memberOf(x, tree);
-                ()
-            }, list)} as Unit -> Unit \ IO)() @ rc2
+                    List.forEach(p -> {
+                        let (x, _) = p;
+                        MutMap.memberOf(x, tree);
+                        ()
+                    }, list)} as Unit -> Unit \ IO)() @ rc2
         , lookup)};
         repeatUntil(readFunc, timeFunc)
     })
@@ -200,11 +194,11 @@ def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists
         let timeFunc = () -> Clock.runWithIO(() -> Clock.currentTime(TimeUnit.Nanoseconds)) - start > timeLimit;
         let readFunc: (Unit -> Unit \ IO) = () -> region rc2 {
                 Vector.forEach(match list -> spawn unchecked_cast(() -> {
-            List.forEach(p -> {
-                let (x, _) = p;
-                tree.get(Long.valueOf(x));
-                ()
-            }, list)} as Unit -> Unit \ IO)() @ rc2
+                    List.forEach(p -> {
+                        let (x, _) = p;
+                        tree.get(Long.valueOf(x));
+                        ()
+                    }, list)} as Unit -> Unit \ IO)() @ rc2
         , lookup)};
         repeatUntil(readFunc, timeFunc)
     })
@@ -317,7 +311,7 @@ def insertManyElements(): Unit \ IO + NonDet + Sys + FileWrite = {
 def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys + FileWrite = {
     let file = "OrderExperiment.txt";
     FileWrite.write(str = "", file);
-    FileWrite.append(str = "Experiment with varying", file);
+    FileWrite.append(str = "Experiment with varying order", file);
     let nanoLimit = commonTimeLimitNano();
     println("Experiment with different order:");
     Vector.forEach(order -> Vector.forEach(insertNum -> 
@@ -342,7 +336,7 @@ def insertElementsDifferentOrder(): Unit \ IO + NonDet + Sys + FileWrite = {
 def insertFewElementsOften(): Unit \ IO + NonDet + Sys + FileWrite = {
     let file = "SmallStructures.txt";
     FileWrite.write(str = "", file);
-    FileWrite.append(str = "Experiment with varying", file);
+    FileWrite.append(str = "Experiment with small depth", file);
     println("Experiment with low height:");
     let nanoLimit = commonTimeLimitNano();
     Vector.forEach(insertNum -> 
@@ -356,7 +350,7 @@ def insertFewElementsOften(): Unit \ IO + NonDet + Sys + FileWrite = {
             println(insertNum);
             println("Threads:");
             println(threads);
-            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = repeatNum(), threadNum = threads, totalInserts=insertNum, nanoLimit, 10)), file)
+            FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(testNum = repeatNum(), threadNum = threads, totalInserts=insertNum, nanoLimit, standardOrder())), file)
         }, Vector.range(1, 41)), 
     Vector#{10_000, 1_000_000})
 }
