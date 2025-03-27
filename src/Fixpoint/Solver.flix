@@ -54,28 +54,30 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: DatabaseExternal[rc]) = {
-            let _ = ();
-            unchecked_cast(() -> ??? as _ \ rc)()
-        };
-        // def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
-        //     Fixpoint.Phase.Compiler.compile(cs, stf)
-        //     |> Fixpoint.Phase.Simplifier.simplifyProgram
-        //     |> Fixpoint.Phase.IndexSelection.queryProgram
-        //     |> Fixpoint.Phase.VarsToIndices.lowerProgram
-        //     |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
+        // def compiler(cs: Datalog, db: DatabaseExternal[rc]) = {
+        //     let _ = ();
+        //     unchecked_cast(() -> ??? as _ \ rc)()
         // };
+        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
+            Fixpoint.Phase.Compiler.compile(cs, stf)
+            |> Fixpoint.Phase.Simplifier.simplifyProgram
+            |> Fixpoint.Phase.IndexSelection.queryProgram
+            |> Fixpoint.Phase.VarsToIndices.lowerProgram
+            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
+        };
         let model = match d {
             case Datalog(_, _) =>
                 compiler(d, MutMap.empty(rc)) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
+
+
             case Model(_) => d
             case Join(Model(m), cs) =>
-                let db: DatabaseExternal[rc] = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
-                compiler(cs, db) |> Fixpoint.Interpreter.interpretWithDatabase(rc) |> toModelWithRenaming
+                compiler(cs, Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc)) |> Fixpoint.Interpreter.interpretWithDatabase(rc) |> toModelWithRenaming
             case _ => bug!("Datalog normalization bug")
         };
         let m = Fixpoint.Debugging.notifyPostSolve(model);
         m
+        // ???
     }
 
     ///

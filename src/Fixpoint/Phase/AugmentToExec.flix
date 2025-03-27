@@ -19,7 +19,9 @@ mod Fixpoint.Phase.AugmentToExec {
     use Fixpoint.Ast.AugmentedRam
     use Fixpoint.Ast.ExecutableRam.RamProgram
 
-    use Fixpoint.Normalization.Equality
+    use Fixpoint.Ast.Shared.{Denotation, PredSym}
+
+    use Fixpoint.Normalization.{Equality, RamIdToMarshal}
     use Fixpoint.Normalization
 
     use Fixpoint.Counter
@@ -27,41 +29,47 @@ mod Fixpoint.Phase.AugmentToExec {
 
     type alias IdToIndex[r: Eff] = MutMap[RamId, Int32, r]
 
+    def relSymToDenId(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
+                case RelSym.Symbol(_, _, Denotation.Relational) => -1
+                case RelSym.Symbol(PredSym.PredSym(_, id), arity, Denotation.Latticenal(_, _, _, _)) =>
+                    unwrap(Map.get(RamId.RelPos(id, arity), idToMarshall))
+            }
+
     @Internal
     pub def compileToExec(rc: Region[r], db: DatabaseExternal[r], program: AugmentedProgram): (RamProgram, Database[r], ObjectMarshallingInfo[r]) \ r = match program { 
-        case AugmentedProgram.Program(stmt, facts, meta, _) =>
+        case AugmentedProgram.Program(stmt, facts, meta, indexInfo) =>
             let counter = Counter.empty(rc);
             let idToIndex = MutMap.empty(rc);
-            // let f = Normalization.initialize();
+            let (marshall, idToMarshall) = Normalization.initialize(rc, program);
             let ramIDToNormalIndex = Equality.computeMapping(program);
-            let compiledStmt = compileStmt(stmt, counter, idToIndex);
+            let compiledStmt = compileStmt(stmt, counter, idToIndex, idToMarshall);
             // Compile facts.
-            (RamProgram.Program(compiledStmt, ???, meta, ???), ???, ???)
+            (RamProgram.Program(compiledStmt, ???, meta, ???), ???, marshall)
     }
 
     @Internal
-    pub def compileStmt(stmt: ARamStmt, counter: Counter[r1], idToIndex: IdToIndex[r2]): ERamStmt \ {r1, r2} = region rc {
-        let recurse = x -> compileStmt(x, counter, idToIndex);
-        let recurseNewCount = x -> compileStmt(x, Counter.clone(counter, rc), idToIndex);
+    def compileStmt(stmt: ARamStmt, counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERamStmt \ {r1, r2} = region rc {
+        let recurse = x -> compileStmt(x, counter, idToIndex, idToMarshall);
+        let recurseNewCount = x -> compileStmt(x, Counter.clone(counter, rc), idToIndex, idToMarshall);
         match stmt {
         case ARamStmt.Insert(op) =>
-            let newOp = compileOp(op, rc, counter, idToIndex);
+            let newOp = compileOp(op, rc, counter, idToIndex, idToMarshall);
             ERamStmt.Insert(newOp)
             // if(MutList.size(independent) == 0) 
             //     ERamStmt.Insert(newOp) else ERamStmt.Insert(EIf(MutList.toVector(independent), newOp))
-        case ARamStmt.Seq(xs) => Vector.map(x -> compileStmt(x, Counter.clone(counter, rc), idToIndex), xs) |> ERamStmt.Seq
-        case ARamStmt.Par(xs) => Vector.map(x -> compileStmt(x, Counter.clone(counter, rc), idToIndex), xs) |> ERamStmt.Par
-        case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.map(x -> compileBool(x, counter, idToIndex), test), compileStmt(body, counter, idToIndex))
+        case ARamStmt.Seq(xs) => Vector.map(x -> recurseNewCount(x), xs) |> ERamStmt.Seq
+        case ARamStmt.Par(xs) => Vector.map(x -> recurseNewCount(x), xs) |> ERamStmt.Par
+        case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.map(x -> compileBool(x, counter, idToIndex, idToMarshall), test), recurse(body))
 
-        case ARamStmt.Merge(s1, s2) => ERamStmt.Merge(s1, s2, ???)
+        case ARamStmt.Merge(s1, s2) => ERamStmt.Merge(s1, s2, relSymToDenId(s1, idToMarshall))
         case ARamStmt.Swap(s1, s2) => ERamStmt.Swap(s1, s2)
         case ARamStmt.Purge(s) => ERamStmt.Purge(s)
         case ARamStmt.Comment(s) => ERamStmt.Comment(s)
     }}
 
     @Internal
-    def compileOp(op: ARelOp, rc: Region[r], counter: Counter[r1], idToIndex: IdToIndex[r2]): ERelOp \ {r, r1, r2} = 
-        let recursiveCall: ARelOp -> ERelOp \ {r, r1, r2} = x -> compileOp(x, rc, counter, idToIndex);
+    def compileOp(op: ARelOp, rc: Region[r], counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERelOp \ {r, r1, r2} = 
+        let recursiveCall: ARelOp -> ERelOp \ {r, r1, r2} = x -> compileOp(x, rc, counter, idToIndex, idToMarshall);
         match op {
         // We could here keep the BoolExps that we do not want to handle as if, but then we limit later iterations of the query algorithms, or require that this file is changed later
             case ASearch(tpv, relSym, rest) =>
@@ -69,46 +77,55 @@ mod Fixpoint.Phase.AugmentToExec {
                 let ATupleVar.Named(id) = tpv;
                 let _ = Vector.forEach(x -> MutMap.put(RamId.TuplePos(id, x), Counter.getNewID(counter), idToIndex), Vector.range(0, arity));
                 ESearch(compileTupleVar(tpv), relSym, recursiveCall(rest))
-            case AFunctional(tpv, f, terms, rest, _arity) => EFunctional(compileTupleVar(tpv), f, Vector.map(x -> compileTerm(x, counter, idToIndex), terms), recursiveCall(rest), ???) // TODO: Fix intToBox
-            case AProject(terms, s) => EProject(Vector.map(x -> compileTerm(x, counter, idToIndex), terms), s, ???)
+            case AFunctional(tpv, f, terms, rest, arity) =>
+                let TupleVar.Named(id) = tpv;
+                let termToIndex = term -> unwrap(Map.get(getTermRamId(term), idToMarshall));
+                let idToMarhsalled = id_ -> unwrap(Map.get(id_, idToMarshall));
+                let from_ = Vector.map(termToIndex, terms);
+                let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                EFunctional(compileTupleVar(tpv), f, Vector.map(x -> compileTerm(x, counter, idToIndex, idToMarshall), terms), recursiveCall(rest), from_, to)
+            case AProject(terms, s) => EProject(Vector.map(x -> compileTerm(x, counter, idToIndex, idToMarshall), terms), s, relSymToDenId(s, idToMarshall))
             case AIf(boolExps, rest) =>
-                EIf(Vector.map(x -> compileBool(x, counter, idToIndex), boolExps), recursiveCall(rest))
+                EIf(Vector.map(x -> compileBool(x, counter, idToIndex, idToMarshall), boolExps), recursiveCall(rest))
             case ASearchWithIndex(tpv, relSym, tests, rest) => 
-                let compiledTests = Vector.map(x -> compileBool(x, counter, idToIndex), tests);
+                let compiledTests = Vector.map(x -> compileBool(x, counter, idToIndex, idToMarshall), tests);
                 ESearchWithIndex(compileTupleVar(tpv), relSym, compiledTests, recursiveCall(rest))
         }
 
     @Internal
-    def compileTerm(term: ARamTerm, counter: Counter[r1], mapToIndex: IdToIndex[r2]): ERamTerm \ {r1, r2} =
-        let compileT = x -> compileTerm(x, counter, mapToIndex);
-        let getI = x -> getIndex(x, counter, mapToIndex);
+    def compileTerm(term: ARamTerm, counter: Counter[r1], mapToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERamTerm \ {r1, r2} =
+        let compileT = x -> compileTerm(x, counter, mapToIndex, idToMarshall);
+        // let getI = x -> getIndex(x, counter, mapToIndex);
+        let termToIndex = term1 -> unwrap(Map.get(getTermRamId(term1), idToMarshall));
+        let idToMarhsalled = id -> unwrap(Map.get(id, idToMarshall));
         match term {
             case ALit(val, id)                      => ELit(???)
             case ARowLoad(_, _, _)                  => ELoadIndex(unwrap(MutMap.get(getTermRamId(term), mapToIndex)))
             // case ALoadLatVar(_, _, id)              => ELoadIndex(unwrap(MutMap.get(id, mapToIndex)))
-            case AMeet(f, t1, t2, id)               => EMeet(f, compileT(t1), compileT(t1), ???)
-            case AApp0(f, id)                       => EApp0(f, getI(id))
-            case AApp1(f, t1, id)                   => EApp1(f, compileT(t1), getI(id), ???)
-            case AApp2(f, t1, t2, id)               => EApp2(f, compileT(t1), compileT(t2), getI(id), ???, ???)
-            case AApp3(f, t1, t2, t3, id)           => EApp3(f, compileT(t1), compileT(t2), compileT(t3), getI(id), ???, ???, ???)
-            case AApp4(f, t1, t2, t3, t4, id)       => EApp4(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), getI(id), ???, ???, ???, ???)
-            case AApp5(f, t1, t2, t3, t4, t5, id)   => EApp5(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), compileT(t5), getI(id), ???, ???, ???, ???, ???)
+            case AMeet(f, t1, t2, id)               => EMeet(f, compileT(t1), compileT(t1), termToIndex(t1))
+            case AApp0(f, id)                       => EApp0(f, idToMarhsalled(id))
+            case AApp1(f, t1, id)                   => EApp1(f, compileT(t1), termToIndex(t1), idToMarhsalled(id))
+            case AApp2(f, t1, t2, id)               => EApp2(f, compileT(t1), compileT(t2), termToIndex(t1), termToIndex(t2), idToMarhsalled(id))
+            case AApp3(f, t1, t2, t3, id)           => EApp3(f, compileT(t1), compileT(t2), compileT(t3), termToIndex(t1), termToIndex(t2), termToIndex(t3), idToMarhsalled(id))
+            case AApp4(f, t1, t2, t3, t4, id)       => EApp4(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), termToIndex(t1), termToIndex(t2), termToIndex(t3), termToIndex(t4), idToMarhsalled(id))
+            case AApp5(f, t1, t2, t3, t4, t5, id)   => EApp5(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), compileT(t5), termToIndex(t1), termToIndex(t2), termToIndex(t3), termToIndex(t4), termToIndex(t5), idToMarhsalled(id))
     }
 
     @Internal
-    def compileBool(bool: ABoolExp, counter: Counter[r1], map: IdToIndex[r2]): EBoolExp \ {r1, r2} = 
-        let compileT = x -> compileTerm(x, counter, map);
+    def compileBool(bool: ABoolExp, counter: Counter[r1], map: IdToIndex[r2], idToMarshall: RamIdToMarshal): EBoolExp \ {r1, r2} = 
+        let termToIndex = term -> unwrap(Map.get(getTermRamId(term), idToMarshall));
+        let compileT = x -> compileTerm(x, counter, map, idToMarshall);
         match bool {
             case AIsEmpty(s) => EIsEmpty(s)
-            case ANotMemberOf(terms, s) => ENotMemberOf(Vector.map(compileT, terms), s, ???)
+            case ANotMemberOf(terms, s) => ENotMemberOf(Vector.map(compileT, terms), s, relSymToDenId(s, idToMarshall))
             case AEq(term1, term2) => EEq(compileT(term1), compileT(term2))
-            case ALeq(f, term1, term2) => ELeq(f, compileT(term1), compileT(term2), ???) // TODO: Fix intToBox
+            case ALeq(f, term1, term2) => ELeq(f, compileT(term1), compileT(term2), termToIndex(term1))
             case AGuard0(f) => EGuard0(f)
-            case AGuard1(f, term1) => EGuard1(f, compileT(term1), ???)
-            case AGuard2(f, term1, term2) => EGuard2(f, compileT(term1), compileT(term2), ???, ???)
-            case AGuard3(f, term1, term2, term3) => EGuard3(f, compileT(term1), compileT(term2), compileT(term3), ???, ???, ???)
-            case AGuard4(f, term1, term2, term3, term4) => EGuard4(f, compileT(term1), compileT(term2), compileT(term3), compileT(term4), ???, ???, ???, ???)
-            case AGuard5(f, term1, term2, term3, term4, term5) => EGuard5(f, compileT(term1), compileT(term2), compileT(term3), compileT(term4), compileT(term5), ???, ???, ???, ???, ???)
+            case AGuard1(f, term1) => EGuard1(f, compileT(term1), termToIndex(term1))
+            case AGuard2(f, term1, term2) => EGuard2(f, compileT(term1), compileT(term2), termToIndex(term1), termToIndex(term2))
+            case AGuard3(f, term1, term2, term3) => EGuard3(f, compileT(term1), compileT(term2), compileT(term3), termToIndex(term1), termToIndex(term2), termToIndex(term3))
+            case AGuard4(f, term1, term2, term3, term4) => EGuard4(f, compileT(term1), compileT(term2), compileT(term3), compileT(term4), termToIndex(term1), termToIndex(term2), termToIndex(term3), termToIndex(term4))
+            case AGuard5(f, term1, term2, term3, term4, term5) => EGuard5(f, compileT(term1), compileT(term2), compileT(term3), compileT(term4), compileT(term5), termToIndex(term1), termToIndex(term2), termToIndex(term3), termToIndex(term4), termToIndex(term5))
     }
 
     // @Internal
@@ -121,14 +138,14 @@ mod Fixpoint.Phase.AugmentToExec {
         case ATupleVar.Named(id) => ETupleVar.Named(id)
     }
 
-    @Internal
-    def getIndex(id: RamId, counter: Counter[r1], map: IdToIndex[r2]): Int32 \ {r1, r2} = match MutMap.get(id, map) {
-        case Some(position) => position
-        case None => 
-            let position = Counter.getNewID(counter);
-            MutMap.put(id, position, map);
-            position
-    }
+    // @Internal
+    // def getIndex(id: RamId, counter: Counter[r1], map: IdToIndex[r2]): Int32 \ {r1, r2} = match MutMap.get(id, map) {
+    //     case Some(position) => position
+    //     case None => 
+    //         let position = Counter.getNewID(counter);
+    //         MutMap.put(id, position, map);
+    //         position
+    // }
 
     @Internal
     def unwrap(opt: Option[a]): a = match opt {

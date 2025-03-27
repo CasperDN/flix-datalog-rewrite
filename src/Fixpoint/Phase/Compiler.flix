@@ -29,9 +29,7 @@ mod Fixpoint.Phase.Compiler {
     use PredTrack.{PredSymMapInternal}
     use PredTrack.PredType.{Full, Delta, New}
 
-    type alias CompilerInfo[r: Eff] = (PredSymMapInternal, Fixpoint.Normalization.ObjectMarshallingInfo[r])
-
-    // This should be fine. 
+    // This should (hopefully) be fine. The symbol should not be used for anything.
     def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Denotation.Relational)
     ///
     /// Compile the given Datalog program `d` to RAM.
@@ -98,7 +96,7 @@ mod Fixpoint.Phase.Compiler {
     /// Note that Eval-Rule is the code emitted by `compileRule`
     /// and Eval-Rule-Incr is the code emitted by `compileRuleIncr`.
     ///
-    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r1]): Unit \ r1 = region rc {
+    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = region rc {
         let idb = List.foldRight(match Constraint(HeadAtom(pred, den, terms), _) -> {
             let arity = Vector.length(terms);
             Map.insert(pred, (arity, den))
@@ -334,33 +332,72 @@ mod Fixpoint.Phase.Compiler {
     ///
     def unifyVars(predSymMaps: PredSymMapInternal, counter: Counter.Counter[r], body: Vector[(BodyPredicate, TupleVar)]): Map[VarSym, RamTerm] \ r =
         let toFullSym = sym -> (PredTrack.oldPredSymToRelSym(predSymMaps, sym, Full));
-        Vector.foldLeft(acc -> match (atom, rowVar) -> match atom {
+        let innerFunc = {
+            acc -> atomVar -> 
+            let (atom, rowVar) = atomVar;
+            match atom {
             case BodyAtom(bodySym, denotation, Polarity.Positive, _, terms) =>
                 Vector.mapWithIndex(i -> term -> (term, i), terms) |>
-                Vector.foldRight(match (term, i) -> match term {
+                Vector.foldRight(termI -> acc1 ->
+                let (term, i) = termI;
+                match term {
                     case BodyTerm.Var(var) => match denotation {
                         case Denotation.Relational =>
-                            Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+                            Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                         case Denotation.Latticenal(_, _, _, glb) =>
                             if (i < Vector.length(terms) - 1)
-                                Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+                                Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                             else
                                 let f = t1 -> t2 -> RamTerm.Meet(glb, t1, t2, RamId.Id(Counter.getNewID(counter)));
-                                Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+                                Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                     }
-                    case _ => x -> x
+                    case _ => acc1
                 }, acc)
             case BodyAtom(_, _, Polarity.Negative, _, _) => acc
             case Functional(boundVars, _, freeVars) =>
-                Vector.mapWithIndex(i -> var -> (var, i), boundVars) |>
-                Vector.foldRight(match (var, i) -> Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, functionalRelSym(Vector.length(freeVars)))), acc)
+                let fffff = Vector.mapWithIndex(i -> var -> (var, i), boundVars);
+                let res = Vector.foldRight(match (var, i) -> Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, functionalRelSym(Vector.length(freeVars)))), acc, fffff);
+                res
             case Guard0(_)                               => acc
             case Guard1(_, _)                            => acc
             case Guard2(_, _, _)                         => acc
             case Guard3(_, _, _, _)                      => acc
             case Guard4(_, _, _, _, _)                   => acc
             case Guard5(_, _, _, _, _, _)                => acc
-        }, Map#{}, body)
+            case _ => acc
+        }};
+
+        Vector.foldLeft(innerFunc, Map#{}, body)
+
+        // The following does not work:
+        // Vector.foldLeft(acc -> match (atom, rowVar) -> match atom {
+        //     case BodyAtom(bodySym, denotation, Polarity.Positive, _, terms) =>
+        //         Vector.mapWithIndex(i -> term -> (term, i), terms) |>
+        //         Vector.foldRight(match (term, i) -> match term {
+        //             case BodyTerm.Var(var) => match denotation {
+        //                 case Denotation.Relational =>
+        //                     Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+        //                 case Denotation.Latticenal(_, _, _, glb) =>
+        //                     if (i < Vector.length(terms) - 1)
+        //                         Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+        //                     else
+        //                         let f = t1 -> t2 -> RamTerm.Meet(glb, t1, t2, RamId.Id(Counter.getNewID(counter)));
+        //                         Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+        //             }
+        //             case _ => x -> x
+        //         }, acc)
+        //     case BodyAtom(_, _, Polarity.Negative, _, _) => acc
+        //     case Functional(boundVars, _, freeVars) =>
+        //         Vector.mapWithIndex(i -> var -> (var, i), boundVars) |>
+        //         Vector.foldRight(match (var, i) -> Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, functionalRelSym(Vector.length(freeVars)))), acc)
+        //     case Guard0(_)                               => acc
+        //     case Guard1(_, _)                            => acc
+        //     case Guard2(_, _, _)                         => acc
+        //     case Guard3(_, _, _, _)                      => acc
+        //     case Guard4(_, _, _, _, _)                   => acc
+        //     case Guard5(_, _, _, _, _, _)                => acc
+        // }, Map#{}, body)
+    
 
     ///
     /// Equates every term in a positive body atom with a RAM term corresponding to an attribute

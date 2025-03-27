@@ -74,7 +74,7 @@ mod Fixpoint.Ast.ExecutableRam {
         // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Vector[IntToBox])
+        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
         case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
     }
@@ -90,7 +90,7 @@ mod Fixpoint.Ast.ExecutableRam {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
+                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"

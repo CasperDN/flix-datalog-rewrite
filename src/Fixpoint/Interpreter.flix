@@ -91,8 +91,8 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], input: (Database[r], ObjectMarshallingInfo[r], RamProgram)): (DatabaseExternal[r], PredSymMapInternal) \ r = 
-    let (db, info, program) = input;
+    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Database[r], ObjectMarshallingInfo[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
+    let (program, db, info) = input;
     interpretWithDatabaseInternal(rc, db, info, program)
 
     @Internal
@@ -137,7 +137,7 @@ mod Fixpoint.Interpreter {
     def allocEnv(rc: Region[r], depth: Int32, relOp: RelOp): SearchEnv[r] \ r = match relOp {
         case RelOp.Search(_, _, body)           => allocEnv(rc, depth + 1, body)
         case RelOp.SearchWithIndex(_, _, _, body)         => allocEnv(rc, depth + 1, body)
-        case RelOp.Functional(_, _, _, body, _)    => allocEnv(rc, depth + 1, body)
+        case RelOp.Functional(_, _, _, body, _, _)    => allocEnv(rc, depth + 1, body)
         case RelOp.Project(_, _, _)                => (Array.repeat(rc, depth, Vector.empty()), Array.empty(rc, depth))
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
     }
@@ -164,7 +164,7 @@ mod Fixpoint.Interpreter {
                     Array.put(l, i, latEnv);
                     evalOp(rc1, db, env, info, body)
                 }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.Functional(TupleVar.Named(i), f, terms, body, i1) =>
+            case RelOp.Functional(TupleVar.Named(i), f, terms, body, i1, _) =>
                 let args = terms |> Vector.mapWithIndex(i_ -> x -> Normalization.unNormalizeReal(evalTerm(env, info, x), Vector.get(i_, i1), info));
 
                 let result = Vector.map(vec -> Vector.mapWithIndex(i_ -> x -> Normalization.normalizeBox(x, Vector.get(i_, i1), info), vec), f(args));

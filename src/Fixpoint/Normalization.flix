@@ -46,7 +46,13 @@ mod Fixpoint.Normalization {
     // (List of Boxed objects, [RelSym->IndexInTyple->BoxedObject->Int64], mapping fram RelSym and index to RealType)
     pub type alias ObjectMarshallingInfo[r: Eff] = (Vector[MutList[Boxed, r]], Vector[MutMap[Boxed, Int64, r]], RelSymTypeInfo.RelSymTypeInfo[r])
 
-    // pub def initialize(r: AugmentedProgram, rc: Region[r]): ObjectMarshallingInfo[r] = ???
+    pub type alias RamIdToMarshal = Map[RamId, Int32]
+
+    pub def initialize(rc: Region[r], r: AugmentedProgram): (ObjectMarshallingInfo[r], RamIdToMarshal) =
+        let mapping = Equality.computeMapping(r);
+        (initializeInternal(rc, r, mapping), mapping)
+
+    def initializeInternal(rc: Region[r], r: AugmentedProgram, map: RamIdToMarshal): ObjectMarshallingInfo[r] = ???
 
     def deMarshalObject(value: Int64, index: Int32, info: ObjectMarshallingInfo[r]): Boxed \ r = {
         let (objectList, _, _) = info;
