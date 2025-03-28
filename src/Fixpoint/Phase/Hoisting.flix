@@ -1,29 +1,28 @@
-mod Fixpoint.Phase.IndexSelection2 {
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
-    use Fixpoint.Ast.AugmentedRam.RelOp.{Search, SearchWithIndex, Functional, Project, If}
-    use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
+mod Fixpoint.Phase.Hoisting {
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, RamProgram}
+    use Fixpoint.Ast.Ram.RelOp.{Search, SearchWithIndex, Functional, Project, If}
+    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, LoadLatVar, Meet, App0, App1, App2, App3, App4, App5}
 
-    // Hoist if-constructions as far as possible and merge into SearchWithQuery when possible/relevant.
+    // Hoist if-constructions as far as possible and merge into SearchWithIndex when possible/relevant.
     // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
     @Internal
-    pub def queryProgram(program: AugmentedProgram): AugmentedProgram = match program { 
-        case AugmentedProgram.Program(stmt, facts, meta, _) => 
-            
-            AugmentedProgram.Program(queryStmt(stmt), facts, meta, ???)
+    pub def hoistProgram(program: RamProgram): RamProgram = match program { 
+        case RamProgram.Program(stmt, facts, meta, index) => 
+            RamProgram.Program(hoistStmt(stmt), facts, meta, index)
     }
 
     @Internal
-    pub def queryStmt(stmt: RamStmt): RamStmt = match stmt {
+    pub def hoistStmt(stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) => region rc {
             let independent = MutList.empty(rc);
-            let newOp = queryOp(op, rc, MutSet.empty(rc), MutMap.empty(rc), independent);
+            let newOp = hoistOp(op, rc, MutSet.empty(rc), MutMap.empty(rc), independent);
             if(MutList.size(independent) == 0) 
                 RamStmt.Insert(newOp) else RamStmt.Insert(If(MutList.toVector(independent), newOp))
         }
-        case RamStmt.Seq(xs) => Vector.map(x -> queryStmt(x), xs) |> RamStmt.Seq
-        case RamStmt.Par(xs) => Vector.map(x -> queryStmt(x), xs) |> RamStmt.Seq
-        case RamStmt.Until(test, body) => RamStmt.Until(test, queryStmt(body))
+        case RamStmt.Seq(xs) => Vector.map(x -> hoistStmt(x), xs) |> RamStmt.Seq
+        case RamStmt.Par(xs) => Vector.map(x -> hoistStmt(x), xs) |> RamStmt.Seq
+        case RamStmt.Until(test, body) => RamStmt.Until(test, hoistStmt(body))
 
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
@@ -34,24 +33,27 @@ mod Fixpoint.Phase.IndexSelection2 {
     /// Takes the relative operator, op, region rc, and tuple-vars defined so far, seenTupleVars 
     /// Rewrites the relative operator, op, as the first return value, and a map from tuple-vars to 
     @Internal
-    def queryOp(op: RelOp, rc: Region[r], seenTupleVars: MutSet[Int32, r], idToBool: MutMap[Int32, MutList[BoolExp, r], r], independentBool: MutList[BoolExp, r]): RelOp \ r = 
-        let recursiveCall = x -> queryOp(x, rc, seenTupleVars, idToBool, independentBool);
+    def hoistOp(op: RelOp, rc: Region[r], seenTupleVars: MutSet[Int32, r], idToBool: MutMap[Int32, MutList[BoolExp, r], r], independentBool: MutList[BoolExp, r]): RelOp \ r = 
+        let hoistOpRec = x -> hoistOp(x, rc, seenTupleVars, idToBool, independentBool);
         match op {
-        // We could here keep the BoolExps that we do not want to handle as if, but then we limit later iterations of the query algorithms, or require that this file is changed later
-            case Search(TupleVar.Named(id), relSym, rest) => 
+        // We could here keep the BoolExps that we do not want to handle as if, but then we limit 
+        // later iterations of the query algorithms, or require that this file is changed later
+            case Search(tupleVar, relSym, rest) => 
+                let TupleVar.Named(id) = tupleVar;
                 MutSet.add(id, seenTupleVars);
-                let newRest = recursiveCall(rest);
-
+                let newRest = hoistOpRec(rest);
                 let newOp = match MutMap.get(id, idToBool) {
                     case Some(v) => 
-                    let seenAsSet = MutSet.toSet(seenTupleVars);
-                    let relevant = List.filter(x -> isBoolGround(x, seenAsSet), MutList.toList(v));
-                    MutSet.remove(id, seenTupleVars);
-                    let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
-                    let hoistedToHere = List.toVector(List.filter(x -> not isBoolGround(x, seenWithoutCurrent), relevant));
-                    SearchWithIndex(TupleVar.Named(id), relSym, hoistedToHere, newRest)
-
-
+                        let seenAsSet = MutSet.toSet(seenTupleVars);
+                        let relevant = List.filter(x -> isBoolGround(x, seenAsSet), MutList.toList(v));
+                        MutSet.remove(id, seenTupleVars);
+                        let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
+                        let hoistedToHere = 
+                            List.filter(x -> not isBoolGround(x, seenWithoutCurrent), relevant) |> 
+                            List.toVector;
+                        if (Vector.length(hoistedToHere) != 0)
+                            SearchWithIndex(tupleVar, relSym, hoistedToHere, -1, newRest)
+                        else Search(tupleVar, relSym, newRest)
                     case None => Search(TupleVar.Named(id), relSym, newRest)
                 };
                 MutSet.remove(id, seenTupleVars); // Corectness
@@ -76,8 +78,8 @@ mod Fixpoint.Phase.IndexSelection2 {
                             MutList.push(b, boolList)
                         }, vars)
                 }, boolExps);
-                recursiveCall(rest)
-            case SearchWithIndex(_, _, _, _) => bug!("SearchWithIndex should not exists when introducing SearchWithIndex")
+                hoistOpRec(rest)
+            case SearchWithIndex(_, _, _, _, _) => bug!("SearchWithIndex should not exists when introducing SearchWithIndex")
         }
 
 

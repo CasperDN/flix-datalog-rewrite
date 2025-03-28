@@ -123,9 +123,9 @@ mod Fixpoint.Phase.Simplifier {
                 newBody <- simplifyOp(stratum, body);
                 res <- f(newBody)
             ) yield res
-        case RelOp.SearchWithIndex(rowVar, ramSym, qry, body) =>
+        case RelOp.SearchWithIndex(rowVar, ramSym, qry, _, body) =>
             let f = nb -> match ramSym {
-                case _ => Some(RelOp.SearchWithIndex(rowVar, ramSym, qry, nb))
+                case _ => Some(RelOp.SearchWithIndex(rowVar, ramSym, qry, -1, nb))
             };
             forM (
                 newBody <- simplifyOp(stratum, body);

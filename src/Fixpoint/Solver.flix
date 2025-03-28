@@ -61,7 +61,8 @@ mod Fixpoint.Solver {
         def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
             Fixpoint.Phase.Compiler.compile(cs, stf)
             |> Fixpoint.Phase.Simplifier.simplifyProgram
-            |> Fixpoint.Phase.IndexSelection.queryProgram
+            |> Fixpoint.Phase.Hoisting.hoistProgram
+            |> Fixpoint.Phase.IndexSelection.indexProgram
             |> Fixpoint.Phase.VarsToIndices.lowerProgram
             |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
         };

@@ -65,13 +65,15 @@ mod Fixpoint.Ast.Ram {
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
     
+    type alias Index = Int32
+
     @Internal
     pub enum RelOp {
         case Search(TupleVar, RelSym, RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
         // case Query(TupleVar, RelSym, Vector[(Int32, TupleVar)], RelOp) // Loop through RelSym saving values in TupleVar 
 
         // TODO: Add extra field describing which index to use. Could use a simple int32.
-        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
+        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], Index, RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
         case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp)
         case Project(Vector[RamTerm], RelSym)
@@ -84,11 +86,11 @@ mod Fixpoint.Ast.Ram {
             match op {
                 case RelOp.Search(var, ramSym, body) =>
                     "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, body) =>
+                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, _, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
-                    "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "search ${var} ∈ ${ramSym} where (${qry}) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(TupleVar.Named(id), _, terms, body) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym) =>
@@ -261,6 +263,11 @@ mod Fixpoint.Ast.Ram {
         case RelSym.Symbol(_, _, den) => den
     }
 
+    @Internal
+    pub def toId(ramSym: RelSym): Int64 = match ramSym {
+        case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
+    }
+
     /////////////////////////////////////////////////////////////////////////////
     // TupleVar                                                                //
     /////////////////////////////////////////////////////////////////////////////
@@ -284,7 +291,7 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[TupleVar] {
         pub def toString(var: TupleVar): String = match var {
-            case TupleVar.Named(id) => "x${id}$"
+            case TupleVar.Named(id) => "t${id}"
         //    case TupleVar.Index(i) => "${i}$"
         }
     }
@@ -307,5 +314,6 @@ mod Fixpoint.Ast.Ram {
 
     pub type alias FactInformation = Map[Int64, Vector[Vector[Boxed]]]
     // TODO: Implement this
-    pub type alias IndexInformation = Int32
+    pub type alias Search = Vector[Int32]
+    pub type alias IndexInformation = Map[Int64, Vector[Search]]
 }

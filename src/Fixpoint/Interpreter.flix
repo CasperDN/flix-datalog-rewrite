@@ -136,7 +136,7 @@ mod Fixpoint.Interpreter {
 
     def allocEnv(rc: Region[r], depth: Int32, relOp: RelOp): SearchEnv[r] \ r = match relOp {
         case RelOp.Search(_, _, body)           => allocEnv(rc, depth + 1, body)
-        case RelOp.SearchWithIndex(_, _, _, body)         => allocEnv(rc, depth + 1, body)
+        case RelOp.SearchWithIndex(_, _, _, _, body)         => allocEnv(rc, depth + 1, body)
         case RelOp.Functional(_, _, _, body, _, _)    => allocEnv(rc, depth + 1, body)
         case RelOp.Project(_, _, _)                => (Array.repeat(rc, depth, Vector.empty()), Array.empty(rc, depth))
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
@@ -151,13 +151,13 @@ mod Fixpoint.Interpreter {
                     Array.put(l, i, latEnv);
                     evalOp(rc1, db, env, info, body)
                 }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.SearchWithIndex(TupleVar.Named(i), ramSym, qry, body) =>
+            case RelOp.SearchWithIndex(TupleVar.Named(i), ramSym, qry, _, body) =>
                 let (tupleEnv, latEnv) = env;
                 let toSend = Vector.map(x -> match x {
                     // case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
-                    // case BoolExp.Eq(RamTerm.RowLoad(_, index), t2) => (index, t2)
-                    case BoolExp.Eq(RamTerm.LoadIndex(index), t2) => (index, t2)
-                    case _ => ???
+                    case BoolExp.Eq(RamTerm.RowLoad(_, index), t2) => (index, t2)
+                    case BoolExp.Eq(t1, RamTerm.RowLoad(_, index)) => (index, t1)
+                    case _ => unchecked_cast(println("Hello ${Debug.stringify(x)}") as _ \ r1); ???
                 }, qry);
                 MutMap.rangeQueryWith(evalQuery(env, info, Vector.toList(toSend)), t -> l -> {
                     Array.put(t, i, tupleEnv);

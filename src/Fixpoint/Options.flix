@@ -21,5 +21,10 @@ mod Fixpoint.Options {
     ///
     @Internal
     pub def enableDebugging(): Bool = true
+    
+    ///
+    /// Prints the debug output to a file ".debug.txt".
+    ///
+    pub def enableDebugToFile(): Bool = true 
 
 }
