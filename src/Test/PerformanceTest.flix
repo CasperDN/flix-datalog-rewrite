@@ -2,7 +2,7 @@ import java.lang.System
 import java.util.TreeMap
 import java.lang.Long
 
-def standardOrder(): Int32 = 10
+def standardOrder(): Int32 = 64
 
 def commonTimeLimitNano(): Int64 = 60i64 * 1_000_000_000i64
 def repeatNum(): Int32 = 10
@@ -18,7 +18,8 @@ def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     flixInsertExperiment();
     flixReadExperiment();
     javaInsertExperiment();
-    javaReadExperiment()});
+    javaReadExperiment();
+    ()});
     ()
 
 
