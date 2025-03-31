@@ -12,7 +12,7 @@ mod Fixpoint.Normalization {
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.Normalization.ObjectMarshallingInfo
     use Fixpoint.Ast.AugmentedRam.{RelSym, AugmentedProgram}
-    use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use RelSymTypeInfo.{setType, getType, RealType}
     import java.lang.{Float, Double, Object, Character}
 
@@ -48,11 +48,25 @@ mod Fixpoint.Normalization {
 
     pub type alias RamIdToMarshal = Map[RamId, Int32]
 
-    pub def initialize(rc: Region[r], r: AugmentedProgram): (ObjectMarshallingInfo[r], RamIdToMarshal) =
+    pub def initialize(rc: Region[r], r: AugmentedProgram): (ObjectMarshallingInfo[r], RamIdToMarshal) \ r =
         let mapping = Equality.computeMapping(r);
         (initializeInternal(rc, r, mapping), mapping)
 
-    def initializeInternal(rc: Region[r], r: AugmentedProgram, map: RamIdToMarshal): ObjectMarshallingInfo[r] = ???
+    def initializeInternal(rc: Region[r], r: AugmentedProgram, map: RamIdToMarshal): ObjectMarshallingInfo[r] \ r =
+        let max = snd(unwrap(Map.maximumValue(map)));
+        let intToBox = Vector.init(_ -> MutList.empty(rc), max);
+        let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
+        let posToIndex = Array.empty(rc, max);
+        let info = (intToBox, boxToInt, posToIndex);
+        let relSyms = AugmentedRam.collectRelSym(r);
+        // Add bot first to make sure it corresponds to 0.
+        List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
+            List.forEach(x -> match x {
+                case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) => 
+                    normalizeBox(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
+                case _ => bug!("Should have been filtered out")
+        });
+        (intToBox, boxToInt, posToIndex)
 
     def deMarshalObject(value: Int64, index: Int32, info: ObjectMarshallingInfo[r]): Boxed \ r = {
         let (objectList, _, _) = info;
@@ -71,7 +85,7 @@ mod Fixpoint.Normalization {
             case Some(id)   => id
             case None       => 
                 let id = getNextIndex(objectList);
-                MutList.insert(box, id, objectList);
+                MutList.insert(box, id, objectList); // TODO: Not thread safe
                 Int32.toInt64(id)
         }
     }
@@ -173,10 +187,14 @@ mod Fixpoint.Normalization {
 
         def computeDisjointOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RelOp.Search(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, rest) =>
+            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
@@ -188,13 +206,17 @@ mod Fixpoint.Normalization {
                     computeDisjointTerm(curTerm, predTrack, set)
                 }, inputTerms);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Project(terms, sym) =>
-                let fullSym = PredTrack.idToFullPredID(toPredID(sym), predTrack);
+            case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
+                unifyPredTypes(predSym, arity, predTrack, set);
+                // Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(fullSym, i), set), Vector.range(0, Vector.length(terms)));
                 Vector.forEachWithIndex(i -> term ->{
                     computeDisjointTerm(term, predTrack, set);
                     let termID = AugmentedRam.getTermRamId(term);
-                    MutDisjointSets.union(RamId.RelPos(fullSym, i), termID, set)
-                }, terms)
+                    MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set);
+                    MutDisjointSets.makeSet(termID, set);
+                    MutDisjointSets.union(RamId.RelPos(predSym, i), termID, set)
+                }, terms);
+                ()
             case RelOp.If(bools, rest) =>
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
@@ -204,31 +226,53 @@ mod Fixpoint.Normalization {
             case BoolExp.IsEmpty(_) => ()
             case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, id), _, _)) =>
                 Vector.forEach(term -> computeDisjointTerm(term, predTrack, set), terms);
-                Vector.forEachWithIndex(i -> term -> MutDisjointSets.union(AugmentedRam.getTermRamId(term), RamId.RelPos(id, i), set), terms)
+                Vector.forEachWithIndex(i -> term -> {
+                    MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term), set);
+                    MutDisjointSets.makeSet(RamId.RelPos(id, i), set);
+                    MutDisjointSets.union(AugmentedRam.getTermRamId(term), RamId.RelPos(id, i), set)
+                }, terms)
             case BoolExp.Eq(term1, term2) =>
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
                 MutDisjointSets.union(AugmentedRam.getTermRamId(term1), AugmentedRam.getTermRamId(term2), set)
             case BoolExp.Leq(_, term1, term2) =>
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
                 MutDisjointSets.union(AugmentedRam.getTermRamId(term1), AugmentedRam.getTermRamId(term2), set)
             case BoolExp.Guard0(_) => ()
             case BoolExp.Guard1(_, term1) =>
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
                 computeDisjointTerm(term1, predTrack, set)
             case BoolExp.Guard2(_, term1, term2) =>
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set)
             case BoolExp.Guard3(_, term1, term2, term3) =>
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term3), set);
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
                 computeDisjointTerm(term3, predTrack, set)
             case BoolExp.Guard4(_, term1, term2, term3, term4) =>
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term3), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term4), set);
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
                 computeDisjointTerm(term3, predTrack, set);
                 computeDisjointTerm(term4, predTrack, set)
             case BoolExp.Guard5(_, term1, term2, term3, term4, term5) =>
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term1), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term2), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term3), set);
+                MutDisjointSets.makeSet(AugmentedRam.getTermRamId(term5), set);
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
                 computeDisjointTerm(term3, predTrack, set);
@@ -240,8 +284,15 @@ mod Fixpoint.Normalization {
             let fullSymbol = PredTrack.idToFullPredID(predSym, predTrack);
             let deltaSymbol = PredTrack.fullIDtoPredType(fullSymbol, PredTrack.PredType.Delta, predTrack);
             let newSymbol = PredTrack.fullIDtoPredType(fullSymbol, PredTrack.PredType.New, predTrack);
-            Vector.forEach(i -> MutDisjointSets.union(RamId.RelPos(fullSymbol, i), RamId.RelPos(deltaSymbol, i), set), Vector.range(0, arity));
-            Vector.forEach(i -> MutDisjointSets.union(RamId.RelPos(fullSymbol, i), RamId.RelPos(newSymbol, i), set), Vector.range(0, arity));
+            Vector.forEach(i -> {
+                MutDisjointSets.makeSet(RamId.RelPos(fullSymbol, i), set);
+                MutDisjointSets.makeSet(RamId.RelPos(deltaSymbol, i), set);
+                MutDisjointSets.union(RamId.RelPos(fullSymbol, i), RamId.RelPos(deltaSymbol, i), set)
+            }, Vector.range(0, arity));
+            Vector.forEach(i -> {
+                MutDisjointSets.makeSet(RamId.RelPos(newSymbol, i), set);
+                MutDisjointSets.union(RamId.RelPos(fullSymbol, i), RamId.RelPos(newSymbol, i), set)
+            }, Vector.range(0, arity));
             ()
 
         def computeDisjointTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
@@ -253,6 +304,10 @@ mod Fixpoint.Normalization {
                 computeDisjointTerm(t2, predTrack, set);
                 let id1 = AugmentedRam.getTermRamId(t1);
                 let id2 = AugmentedRam.getTermRamId(t2);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(RamId.TuplePos(id, 0), set);
+                MutDisjointSets.makeSet(RamId.TuplePos(id, 1), set);
                 MutDisjointSets.union(id1, RamId.TuplePos(id, 0), set);
                 MutDisjointSets.union(id2, RamId.TuplePos(id, 1), set);
                 MutDisjointSets.union(id1, id2, set)
@@ -260,12 +315,18 @@ mod Fixpoint.Normalization {
             case RamTerm.App1(_, t1, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 let id1 = AugmentedRam.getTermRamId(t1);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
                 MutDisjointSets.union(id1, RamId.InID(id, 0), set)
             case RamTerm.App2(_, t1, t2, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
                 let id1 = AugmentedRam.getTermRamId(t1);
                 let id2 = AugmentedRam.getTermRamId(t2);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(id2, set);
+                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
                 MutDisjointSets.union(id1, RamId.InID(id, 0), set);
                 MutDisjointSets.union(id2, RamId.InID(id, 1), set)
             case RamTerm.App3(_, t1, t2, t3, RamId.Id(id)) =>
@@ -275,6 +336,12 @@ mod Fixpoint.Normalization {
                 let id1 = AugmentedRam.getTermRamId(t1);
                 let id2 = AugmentedRam.getTermRamId(t2);
                 let id3 = AugmentedRam.getTermRamId(t3);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(id2, set);
+                MutDisjointSets.makeSet(id3, set);
+                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
                 MutDisjointSets.union(id1, RamId.InID(id, 0), set);
                 MutDisjointSets.union(id2, RamId.InID(id, 1), set);
                 MutDisjointSets.union(id3, RamId.InID(id, 2), set)
@@ -287,6 +354,14 @@ mod Fixpoint.Normalization {
                 let id2 = AugmentedRam.getTermRamId(t2);
                 let id3 = AugmentedRam.getTermRamId(t3);
                 let id4 = AugmentedRam.getTermRamId(t4);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(id2, set);
+                MutDisjointSets.makeSet(id3, set);
+                MutDisjointSets.makeSet(id4, set);
+                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 3), set);
                 MutDisjointSets.union(id1, RamId.InID(id, 0), set);
                 MutDisjointSets.union(id2, RamId.InID(id, 1), set);
                 MutDisjointSets.union(id3, RamId.InID(id, 2), set);
@@ -302,6 +377,16 @@ mod Fixpoint.Normalization {
                 let id3 = AugmentedRam.getTermRamId(t3);
                 let id4 = AugmentedRam.getTermRamId(t4);
                 let id5 = AugmentedRam.getTermRamId(t5);
+                MutDisjointSets.makeSet(id1, set);
+                MutDisjointSets.makeSet(id2, set);
+                MutDisjointSets.makeSet(id3, set);
+                MutDisjointSets.makeSet(id4, set);
+                MutDisjointSets.makeSet(id5, set);
+                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 3), set);
+                MutDisjointSets.makeSet(RamId.InID(id, 4), set);
                 MutDisjointSets.union(id1, RamId.InID(id, 0), set);
                 MutDisjointSets.union(id2, RamId.InID(id, 1), set);
                 MutDisjointSets.union(id3, RamId.InID(id, 2), set);
@@ -330,7 +415,7 @@ mod Fixpoint.Normalization {
         let insert = x -> insertIndex(x, set, map, counter);
         match s {
             case RelOp.Search(_, _, rest) => recurse(rest)
-            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, rest) =>
+            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
                 Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
                 Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
@@ -508,16 +593,16 @@ mod Fixpoint.Normalization {
         
 
         def insertIndex(id: RamId, disjoint: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = 
+            def unwrap(v: Option[RamId]): RamId = match v {
+                case Some(x) => x
+                case None => bug!("Primitive value somehow exceeded the size it should fit into: ${Debug.stringify(id)}\n")
+            };
             let repID = unwrap(MutDisjointSets.find(id, disjoint)); match MutMap.get(repID, map) {
             case Some(v) => MutMap.put(id, v, map)
             case None => 
                 let newID = Counter.getNewID(counter);
                 MutMap.put(id, newID, map);
                 MutMap.put(repID, newID, map)
-        }
-        def unwrap(v: Option[a]): a = match v {
-            case Some(x) => x
-            case None => bug!("Primitive value somehow exceeded the size it should fit into")
         }
     }
 
@@ -527,6 +612,6 @@ mod Fixpoint.Normalization {
 
     def unwrap(v: Option[a]): a = match v {
         case Some(x) => x
-        case None => bug!("Primitive value somehow exceeded the size it should fit into")
+        case None => bug!("Marshall error")
     }
 }

@@ -23,69 +23,46 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Normalization
     use Fixpoint.Normalization.ObjectMarshallingInfo
     use PredTrack.PredSymMapInternal
-    use Fixpoint.Boxed;
-
+    use Fixpoint.Boxed
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, TupleVar, RamProgram}
     use Fixpoint.Ast.AugmentedRam.{RelSym, toDenotation}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Normalization
-    // use PredTrack
 
+    type alias Tuple = Vector[Int64]
+
+    // pub type alias Database[r: Region] = Array[MutMap[Tuple, MutMap[Tuple, Int64, r], r], r]
 
     pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Int64], Int64, r], r]
 
     pub type alias DatabaseExternal[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
 
-    pub type alias SearchEnv[r: Region] = (Array[Vector[Int64], r], Array[Int64, r])
-
-    // pub type alias MetaData[r: Eff] = (Normalization.ObjectMarshallingInfo[r], Bool)
-
-    // pub type alias Database[v: Type, r: Region] = MutMap[Int64, MutMap[Vector, v, r], r]
-
-    // pub type alias Database[v: Type, r: Region] = MutMap[RelSym, MutMap[Vector, v, r], r]
-
-    // /**
-    // pub type alias Database[r: Region] = (
-    //     MutMap[Int64, MutSet[Vector, r], r], 
-    //     MutMap[Int64, MutMap[Vector, r], r]
-    // )
-    //  */
-
-
-    // /**
-    // pub type alias Database[r: Region] = {
-    //     // (longMaps = MutMap[RelSym, MutMap[Vector[Int64]]],)        
-    //     )
-        
-    // }
-
-    //  */
-
+    pub type alias SearchEnv[r: Region] = (Array[Tuple, r], Array[Int64, r])
 
     @Internal
     pub def interpret(rc: Region[r], input: (RamProgram, Database[r], ObjectMarshallingInfo[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
         let (program, db, info) = input;
         // let db = MutMap.empty(rc);
-        match program {
-            case RamProgram.Program(_, facts, predTrack, _) =>
-                Map.forEach(id -> factSet -> {
-                    let sym = PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full);
-                    // let sym = unwrap(Map.get(id, metaInformation));
-                    let mapForCurrent = MutMap.empty(rc);
-                    match sym {
-                        case RelSym.Symbol(_, _, Denotation.Relational) => 
-                            Vector.forEach(factTuple -> MutMap.put(factTuple, Reflect.default(), mapForCurrent), factSet)
-                        case RelSym.Symbol(_, arity, Denotation.Latticenal(_, _, _, _)) => 
-                            Vector.forEach(factTuple -> {
-                                let nonLatticePart = Vector.slice({start=0}, {end=arity - 1}, factTuple);
-                                let latticePart = Vector.get(arity - 1, factTuple);
-                                MutMap.put(nonLatticePart, latticePart, mapForCurrent)
-                            }, factSet)
-                    };
-                    // MutMap.put(id, mapForCurrent, db)
-                    MutMap.put(sym, mapForCurrent, db)
-                }, facts)
-        };
+        // match program {
+        //     case RamProgram.Program(_, facts, predTrack, _) =>
+        //         Map.forEach(id -> factSet -> {
+        //             let sym = PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full);
+        //             // let sym = unwrap(Map.get(id, metaInformation));
+        //             let mapForCurrent = MutMap.empty(rc);
+        //             match sym {
+        //                 case RelSym.Symbol(_, _, Denotation.Relational) => 
+        //                     Vector.forEach(factTuple -> MutMap.put(factTuple, Reflect.default(), mapForCurrent), factSet)
+        //                 case RelSym.Symbol(_, arity, Denotation.Latticenal(_, _, _, _)) => 
+        //                     Vector.forEach(factTuple -> {
+        //                         let nonLatticePart = Vector.slice({start=0}, {end=arity - 1}, factTuple);
+        //                         let latticePart = Vector.get(arity - 1, factTuple);
+        //                         MutMap.put(nonLatticePart, latticePart, mapForCurrent)
+        //                     }, factSet)
+        //             };
+        //             // MutMap.put(id, mapForCurrent, db)
+        //             MutMap.put(sym, mapForCurrent, db)
+        //         }, facts)
+        // };
         interpretWithDatabaseInternal(rc, db, info, program)
     
 
@@ -108,6 +85,7 @@ mod Fixpoint.Interpreter {
         match stmt {
             case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), info, relOp)
             case RamStmt.Merge(srcSym, dstSym, index) =>
+            // let dst = Array.get(dstSym, db);
                 let dst = MutMap.getOrElsePut(dstSym, MutMap.empty(rc), db);
                 match toDenotation(srcSym) {
                     case Denotation.Relational =>
@@ -155,9 +133,9 @@ mod Fixpoint.Interpreter {
                 let (tupleEnv, latEnv) = env;
                 let toSend = Vector.map(x -> match x {
                     // case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
-                    case BoolExp.Eq(RamTerm.RowLoad(_, index), t2) => (index, t2)
-                    case BoolExp.Eq(t1, RamTerm.RowLoad(_, index)) => (index, t1)
-                    case _ => unchecked_cast(println("Hello ${Debug.stringify(x)}") as _ \ r1); ???
+                    case BoolExp.Eq(RamTerm.LoadIndex(index), t2) => (index, t2)
+                    case BoolExp.Eq(t1, RamTerm.LoadIndex(index)) => (index, t1)
+                    case _ => unchecked_cast(println("Hello ${Debug.stringify(x)}") as _ \ r); ???
                 }, qry);
                 MutMap.rangeQueryWith(evalQuery(env, info, Vector.toList(toSend)), t -> l -> {
                     Array.put(t, i, tupleEnv);

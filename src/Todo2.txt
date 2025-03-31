@@ -1,0 +1,5 @@
+Renaming:
+    SearchWithIndex => Query
+AugmentedRam => Ram
+Change indentation in BPlusTree
+Change TupleVar to Var

@@ -18,8 +18,10 @@ mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
     use PredTrack.PredSymMapInternal
     use Fixpoint.Ast.ExecutableRam.RamStmt
-    use Fixpoint.Ast.ExecutableRam.IndexInformation
     use Fixpoint.Ast.ExecutableRam.FactInformation
+    use Fixpoint.Ast.Ram.Search
+    use Fixpoint.Ast.AugmentedRam.{MetaInformation, RelSym, Search, IndexInformation}
+
 
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
@@ -36,6 +38,9 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
+        // case Merge(Index, Index, IntToBox) // IntToBox here only means something for lattice-tuples.
+        // case Swap(Index, Index)
+        // case Purge(Index)
         case Merge(RelSym, RelSym, IntToBox) // IntToBox here only means something for lattice-tuples.
         case Swap(RelSym, RelSym)
         case Purge(RelSym)
@@ -69,11 +74,7 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RelOp {
         case Search(TupleVar, RelSym, RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
-        // case Query(TupleVar, RelSym, Vector[(Int32, TupleVar)], RelOp) // Loop through RelSym saving values in TupleVar 
-
-        // TODO: Add extra field describing which index to use. Could use a simple int32.
-        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
-        // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
+        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], Int32, RelOp)
         case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
         case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
@@ -85,7 +86,7 @@ mod Fixpoint.Ast.ExecutableRam {
             match op {
                 case RelOp.Search(var, ramSym, body) =>
                     "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, body) =>
+                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, _, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
@@ -287,9 +288,8 @@ mod Fixpoint.Ast.ExecutableRam {
         case Program(RamStmt, FactInformation, MetaInformation, IndexInformation)
     }
 
-    pub type alias MetaInformation = PredTrack.PredSymMapInternal
+
+    type alias Index = Int32
 
     pub type alias FactInformation = Map[Int64, Vector[Vector[Int64]]]
-    // TODO: Implement this
-    pub type alias IndexInformation = Int32
 }

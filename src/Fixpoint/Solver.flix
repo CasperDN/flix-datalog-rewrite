@@ -62,7 +62,7 @@ mod Fixpoint.Solver {
             Fixpoint.Phase.Compiler.compile(cs, stf)
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.Hoisting.hoistProgram
-            |> Fixpoint.Phase.IndexSelection.indexProgram
+            // |> Fixpoint.Phase.IndexSelection.indexProgram
             |> Fixpoint.Phase.VarsToIndices.lowerProgram
             |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
         };

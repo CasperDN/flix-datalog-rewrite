@@ -71,7 +71,7 @@ mod Fixpoint.Ast.AugmentedRam {
         // case Query(TupleVar, RelSym, Vector[(Int32, TupleVar)], RelOp) // Loop through RelSym saving values in TupleVar 
 
         // TODO: Add extra field describing which index to use. Could use a simple int32.
-        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], RelOp)
+        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], Int32, RelOp)
         // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
         case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) // The last is the arity
         case Project(Vector[RamTerm], RelSym)
@@ -84,7 +84,7 @@ mod Fixpoint.Ast.AugmentedRam {
             match op {
                 case RelOp.Search(var, ramSym, body) =>
                     "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, body) =>
+                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, _, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
@@ -251,6 +251,65 @@ mod Fixpoint.Ast.AugmentedRam {
         case RelSym.Symbol(_, _, den) => den
     }
 
+    @Internal
+    pub def toId(ramSym: RelSym): Int64 = match ramSym {
+        case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
+    }
+
+    @Internal
+    pub def collectRelSym(program: AugmentedProgram): List[RelSym] = region rc { match program {
+        case AugmentedProgram.Program(stmt, _, _, _) =>
+            let map = MutSet.empty(rc);
+            collectRelSymStmt(map, stmt);
+            MutSet.toList(map)
+    }}
+
+    @Internal
+    pub def collectRelSymStmt(soFar: MutSet[RelSym, r], stmt: RamStmt): Unit \ r = match stmt {
+        case RamStmt.Insert(op) => collectRelSymOp(soFar, op)
+        case RamStmt.Merge(r1, r2) => MutSet.add(r1, soFar); MutSet.add(r2, soFar)
+        case RamStmt.Swap(r1, r2) => MutSet.add(r1, soFar); MutSet.add(r2, soFar)
+        case RamStmt.Purge(r1) => MutSet.add(r1, soFar)
+        case RamStmt.Seq(stmts) => Vector.forEach(x -> collectRelSymStmt(soFar, x), stmts)
+        case RamStmt.Par(stmts) => Vector.forEach(x -> collectRelSymStmt(soFar, x), stmts)
+        case RamStmt.Until(bools, rest) => collectRelSymStmt(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
+        case RamStmt.Comment(_) => ()
+    }
+
+    def collectRelSymOp(soFar: MutSet[RelSym, r], op: RelOp): Unit \ r = match op {
+        case RelOp.Search(_, r1, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest)
+        case RelOp.SearchWithIndex(_, r1, bools, _, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
+        case RelOp.Functional(_, _, terms, rest, _) => collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymTerm(soFar), terms)
+        case RelOp.Project(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
+        case RelOp.If(bools, rest) => Vector.forEach(collectRelSymBool(soFar), bools); collectRelSymOp(soFar, rest)
+    }
+
+    def collectRelSymBool(soFar: MutSet[RelSym, r], bool: BoolExp): Unit \ r = match bool {
+        case BoolExp.IsEmpty(r1) => MutSet.add(r1, soFar)
+        case BoolExp.NotMemberOf(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
+        case BoolExp.Eq(t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
+        case BoolExp.Leq(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
+        case BoolExp.Guard0(_) => ()
+        case BoolExp.Guard1(_, t1) => collectRelSymTerm(soFar, t1)
+        case BoolExp.Guard2(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
+        case BoolExp.Guard3(_, t1, t2, t3) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3)
+        case BoolExp.Guard4(_, t1, t2, t3, t4) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3); collectRelSymTerm(soFar, t4)
+        case BoolExp.Guard5(_, t1, t2, t3, t4, t5) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3); collectRelSymTerm(soFar, t4); collectRelSymTerm(soFar, t5)
+    }
+
+    def collectRelSymTerm(soFar: MutSet[RelSym, r], term: RamTerm): Unit \ r = match term {
+        case RamTerm.Lit(_, _) => ()
+        case RamTerm.RowLoad(_, _, r1) => MutSet.add(r1, soFar)
+        case RamTerm.Meet(_, _, _, _) => ()
+        case RamTerm.App0(_, _) => ()
+        case RamTerm.App1(_, _, _) => ()
+        case RamTerm.App2(_, _, _, _) => ()
+        case RamTerm.App3(_, _, _, _, _) => ()
+        case RamTerm.App4(_, _, _, _, _, _) => ()
+        case RamTerm.App5(_, _, _, _, _, _, _) => ()
+    }
+
+
     /////////////////////////////////////////////////////////////////////////////
     // TupleVar                                                                //
     /////////////////////////////////////////////////////////////////////////////
@@ -327,9 +386,16 @@ mod Fixpoint.Ast.AugmentedRam {
             //     if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             // TODO: This is perhaps not transitive. Should add cases for all...
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
+            case (_,  RamId.TuplePos(_, _)) => Comparison.GreaterThan
             case (RamId.RelPos(_, _), _) => Comparison.LessThan
-            case (RamId.Id(_), _) => Comparison.GreaterThan
-            case (RamId.InID(_, _), _) => Comparison.GreaterThan
+            case (_, RamId.RelPos(_, _)) => Comparison.GreaterThan
+            case (RamId.Id(_), _) => Comparison.LessThan
+            case (_, RamId.Id(_)) => Comparison.GreaterThan
+            case (RamId.InID(_, _), _) => Comparison.LessThan
+            case (_, RamId.InID(_, _)) => Comparison.GreaterThan
+
+
+            // case (RamId.Id(_), _) => Comparison.LessThan
             // case (RamId.InID(_, _), _) => Comparison.GreaterThan
             // case _ => ???
         }
@@ -345,7 +411,10 @@ mod Fixpoint.Ast.AugmentedRam {
 
     pub type alias MetaInformation = PredTrack.PredSymMapInternal
 
+    type alias Index = Int32
+
     pub type alias FactInformation = Map[Int64, Vector[Vector[Boxed]]]
-    // TODO: Implement this
-    pub type alias IndexInformation = Int32
+
+    pub type alias Search = Vector[Int32]
+    pub type alias IndexInformation = Map[Int64, Vector[Search]]
 }

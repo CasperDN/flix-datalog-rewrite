@@ -2,8 +2,7 @@ mod Fixpoint.Phase.AugmentToExec {
     use Fixpoint.Interpreter.Database
     use Fixpoint.Normalization.ObjectMarshallingInfo;
     use Fixpoint.Interpreter.DatabaseExternal
-    use Fixpoint.Ast.AugmentedRam.getTermRamId
-    use Fixpoint.Ast.AugmentedRam.RamId
+    use Fixpoint.Ast.AugmentedRam.{AugmentedProgram, getTermRamId, RamId}
     use Fixpoint.Ast.AugmentedRam.{TupleVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp, TupleVar => ATupleVar}
     use Fixpoint.Ast.AugmentedRam.RelOp.{Search => ASearch, SearchWithIndex => ASearchWithIndex, Functional => AFunctional, Project => AProject, If => AIf}
     use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, Eq => AEq, Leq => ALeq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
@@ -15,7 +14,6 @@ mod Fixpoint.Phase.AugmentToExec {
     use Fixpoint.Ast.ExecutableRam.BoolExp.{IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Eq => EEq, Leq => ELeq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
     use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, LoadIndex => ELoadIndex, Meet => EMeet, App0 => EApp0, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5}
 
-    use Fixpoint.Ast.AugmentedRam.AugmentedProgram
     use Fixpoint.Ast.AugmentedRam
     use Fixpoint.Ast.ExecutableRam.RamProgram
 
@@ -38,11 +36,16 @@ mod Fixpoint.Phase.AugmentToExec {
     @Internal
     pub def compileToExec(rc: Region[r], db: DatabaseExternal[r], program: AugmentedProgram): (RamProgram, Database[r], ObjectMarshallingInfo[r]) \ r = match program { 
         case AugmentedProgram.Program(stmt, facts, meta, indexInfo) =>
+            unchecked_cast(println("Hej") as _ \ r);
             let counter = Counter.empty(rc);
             let idToIndex = MutMap.empty(rc);
             let (marshall, idToMarshall) = Normalization.initialize(rc, program);
+            unchecked_cast(println("Hej3") as _ \ r);
             let ramIDToNormalIndex = Equality.computeMapping(program);
+            unchecked_cast(println("Hej4") as _ \ r);
             let compiledStmt = compileStmt(stmt, counter, idToIndex, idToMarshall);
+            unchecked_cast(println("Hej5") as _ \ r);
+            
             // Compile facts.
             (RamProgram.Program(compiledStmt, ???, meta, ???), ???, marshall)
     }
@@ -87,9 +90,9 @@ mod Fixpoint.Phase.AugmentToExec {
             case AProject(terms, s) => EProject(Vector.map(x -> compileTerm(x, counter, idToIndex, idToMarshall), terms), s, relSymToDenId(s, idToMarshall))
             case AIf(boolExps, rest) =>
                 EIf(Vector.map(x -> compileBool(x, counter, idToIndex, idToMarshall), boolExps), recursiveCall(rest))
-            case ASearchWithIndex(tpv, relSym, tests, rest) => 
+            case ASearchWithIndex(tpv, relSym, tests, index, rest) => 
                 let compiledTests = Vector.map(x -> compileBool(x, counter, idToIndex, idToMarshall), tests);
-                ESearchWithIndex(compileTupleVar(tpv), relSym, compiledTests, recursiveCall(rest))
+                ESearchWithIndex(compileTupleVar(tpv), relSym, compiledTests, index, recursiveCall(rest))
         }
 
     @Internal
@@ -149,7 +152,7 @@ mod Fixpoint.Phase.AugmentToExec {
 
     @Internal
     def unwrap(opt: Option[a]): a = match opt {
-        case None => ???
+        case None => bug!("Unwrap none in AugmentToExec")
         case Some(v) => v
     }
 
