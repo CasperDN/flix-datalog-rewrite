@@ -1,0 +1,3 @@
+BPlusTree: Read experiment
+Total reads: 1000000
+Inserts: 10000

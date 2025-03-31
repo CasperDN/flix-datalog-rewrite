@@ -5,20 +5,20 @@ import java.lang.Long
 def standardOrder(): Int32 = 64
 
 def commonTimeLimitNano(): Int64 = 60i64 * 1_000_000_000i64
-def repeatNum(): Int32 = 10
+def repeatNum(): Int32 = 20
 
 def readNum(): Int32 = 1_000_000
 
 def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     let _ = FileWrite.runWithIO(() ->{
-    insertElementsDifferentOrder();
-    insertFewElementsOften();
-    insertManyElements();
+    // insertElementsDifferentOrder();
+    // insertFewElementsOften();
+    // insertManyElements();
     readExperiment();
-    flixInsertExperiment();
-    flixReadExperiment();
-    javaInsertExperiment();
-    javaReadExperiment();
+    // flixInsertExperiment();
+    // flixReadExperiment();
+    // javaInsertExperiment();
+    // javaReadExperiment();
     ()});
     ()
 

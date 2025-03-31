@@ -937,16 +937,20 @@ mod BPlusTree {
                 -1
             else
                 def f(l: Int32, r: Int32): Int32 \ r = {
-                    if (l <= r - 1) {
-                        let m = (l + r) / 2;
-                        match Array.get(m, arr) <=> key {
-                            case Comparison.LessThan => f(m + 1, r)
-                            case Comparison.GreaterThan => f(l, m)
-                            case Comparison.EqualTo => m
-                        }
+                    if (l <= r) {
+                        let m = (l + r) `Int32.rightShift` 1;
+                        let elem = Array.get(m, arr);
+                        if (elem < key) f(m+1, r)
+                        else if (elem > key) f(l, m-1)
+                        else m
+                        // match Array.get(m, arr) <=> key {
+                        //     case Comparison.LessThan => f(m + 1, r)
+                        //     case Comparison.GreaterThan => f(l, m - 1)
+                        //     case Comparison.EqualTo => m
+                        // }
                     } else -l-1
                 };
-                f(0, length)
+                f(0, length - 1)
 
         ///
         /// Returns `true` if the pointer of `o1` is equal to the pointer of `o2`.

@@ -1,0 +1,118 @@
+********************************************************************************
+** Datalog Input
+********************************************************************************
+
+    A%0(BoxedInt32(1), BoxedInt32(2), BoxedInt32(3)).
+    B%1(BoxedInt32(1), BoxedInt32(2), BoxedInt32(3)).
+    $Result%2(VarSym(x), VarSym(y), VarSym(z)) :- B%1(VarSym(x), VarSym(y), VarSym(z)).
+    B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, VarSym(z)).
+    B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, _).
+    B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), _).
+    B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), VarSym(z)).
+
+********************************************************************************
+** Facts
+********************************************************************************
+
+    Map#{0 => Vector#{Vector#{1, 2, 3}}, 1 => Vector#{Vector#{1, 2, 3}}}
+
+    Map(Node(Black, Node(Red, Leaf, 0, [[Ljava.lang.Object;@563575eb, Leaf), 1, [[Ljava.lang.Object;@74bbfeae, Leaf))
+
+
+********************************************************************************
+** Relation Algebra Machine AST
+********************************************************************************
+
+    // $Result%2(VarSym(x), VarSym(y), VarSym(z)) :- B%1(VarSym(x), VarSym(y), VarSym(z)).;
+    search t0 ∈ B%1 do
+        project (t0[0], t0[1], t0[2]) into $Result%2
+    end;
+    // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, VarSym(z)).;
+    search t0 ∈ A%0 do
+        search t1 ∈ B%1 where (t1[0] == t0[0] ∧ t1[2] == t0[2]) do
+            project (t0[0], t0[1], t0[2]) into B%1
+        end
+    end;
+    // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, _).;
+    search t0 ∈ A%0 do
+        search t1 ∈ B%1 where (t1[0] == t0[0]) do
+            project (t0[0], t0[1], t0[2]) into B%1
+        end
+    end;
+    // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), _).;
+    search t0 ∈ A%0 do
+        search t1 ∈ B%1 where (t1[0] == t0[0] ∧ t1[1] == t0[1]) do
+            project (t0[0], t0[1], t0[2]) into B%1
+        end
+    end;
+    // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), VarSym(z)).;
+    search t0 ∈ A%0 do
+        search t1 ∈ B%1 where (t1[0] == t0[0] ∧ t1[1] == t0[1] ∧ t1[2] == t0[2]) do
+            project (t0[0], t0[1], t0[2]) into B%1
+        end
+    end;
+    merge $Result%2 into $Result%4;
+    merge B%1 into B%3;
+    until($Result%4 == {} && B%3 == {}) do
+        purge $Result%6;
+        purge B%5;
+        // $Result%2(VarSym(x), VarSym(y), VarSym(z)) :- B%1(VarSym(x), VarSym(y), VarSym(z)).;
+        search t0 ∈ B%3 do
+            if((t0[0], t0[1], t0[2]) not in $Result%2) then
+                project (t0[0], t0[1], t0[2]) into $Result%6
+            end
+        end;
+        // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, VarSym(z)).;
+        search t0 ∈ A%0 do
+            if((t0[0], t0[1], t0[2]) not in B%1) then
+                search t1 ∈ B%3 where (t1[0] == t0[0] ∧ t1[2] == t0[2]) do
+                    project (t0[0], t0[1], t0[2]) into B%5
+                end
+            end
+        end;
+        // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), _, _).;
+        search t0 ∈ A%0 do
+            if((t0[0], t0[1], t0[2]) not in B%1) then
+                search t1 ∈ B%3 where (t1[0] == t0[0]) do
+                    project (t0[0], t0[1], t0[2]) into B%5
+                end
+            end
+        end;
+        // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), _).;
+        search t0 ∈ A%0 do
+            if((t0[0], t0[1], t0[2]) not in B%1) then
+                search t1 ∈ B%3 where (t1[0] == t0[0] ∧ t1[1] == t0[1]) do
+                    project (t0[0], t0[1], t0[2]) into B%5
+                end
+            end
+        end;
+        // B%1(VarSym(x), VarSym(y), VarSym(z)) :- A%0(VarSym(x), VarSym(y), VarSym(z)), B%1(VarSym(x), VarSym(y), VarSym(z)).;
+        search t0 ∈ A%0 do
+            if((t0[0], t0[1], t0[2]) not in B%1) then
+                search t1 ∈ B%3 where (t1[0] == t0[0] ∧ t1[1] == t0[1] ∧ t1[2] == t0[2]) do
+                    project (t0[0], t0[1], t0[2]) into B%5
+                end
+            end
+        end;
+        merge $Result%6 into $Result%2;
+        merge B%5 into B%1;
+        Swap $Result%4 and $Result%6;
+        Swap B%3 and B%5
+    end
+
+
+********************************************************************************
+** Index Information
+********************************************************************************
+
+    1: Vector#{Vector#{0, 2}, Vector#{0, 1, 2}}
+    3: Vector#{Vector#{0, 2}, Vector#{0, 1, 2}}
+
+********************************************************************************
+** Minimal Model
+********************************************************************************
+
+    $Result%2(BoxedInt32(1), BoxedInt32(2), BoxedInt32(3)).
+    A%0(BoxedInt32(1), BoxedInt32(2), BoxedInt32(3)).
+    B%1(BoxedInt32(1), BoxedInt32(2), BoxedInt32(3)).
+
