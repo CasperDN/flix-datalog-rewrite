@@ -27,8 +27,10 @@ mod Fixpoint.Phase.Hoisting {
                     case None => MutMap.put(rep, RamTerm.Lit(val, id), termMap)
                 }
             }, listOfPairs), constEqualities);
-            let hoistedStmt = hoistStmt(rc, termMap, equalitySets, impossible, stmt);
-            AugmentedProgram.Program(hoistedStmt, facts, meta, index)
+            match hoistStmt(rc, termMap, equalitySets, impossible, stmt) {
+                case None => AugmentedProgram.Program(RamStmt.Comment("No rules are satisfiable"), facts, meta, index)
+                case Some(hoistedStmt) => AugmentedProgram.Program(hoistedStmt, facts, meta, index)
+            }
         }
     }
 
@@ -42,7 +44,7 @@ mod Fixpoint.Phase.Hoisting {
     ): Option[RamStmt] \ r = match stmt {
         case RamStmt.Insert(op) =>
             let independent = MutList.empty(rc);
-            let optNewOp = hoistOp(rc, termMap, equalitySets, impossible, independent, MutList.empty(rc), op);
+            let optNewOp = hoistOp(rc, termMap, equalitySets, impossible, MutMap.empty(rc), independent, op);
             match optNewOp {
                 case None => None 
                 case Some(newOp) => 
@@ -53,7 +55,7 @@ mod Fixpoint.Phase.Hoisting {
             }
         case RamStmt.Seq(xs) =>
             let someChildren =
-                Vector.map(hoistStmt(termMap, equalitySets, impossible), xs) |>
+                Vector.map(hoistStmt(rc, termMap, equalitySets, impossible), xs) |>
                 Vector.filter(Option.nonEmpty) |>
                 Vector.map(unwrap);
             if (Vector.isEmpty(someChildren)) None
@@ -62,15 +64,19 @@ mod Fixpoint.Phase.Hoisting {
             else Some(RamStmt.Seq(someChildren))
         case RamStmt.Par(xs) => 
             let someChildren =
-                Vector.map(hoistStmt(termMap, equalitySets, impossible), xs) |>
+                Vector.map(hoistStmt(rc, termMap, equalitySets, impossible), xs) |>
                 Vector.filter(Option.nonEmpty) |>
                 Vector.map(unwrap);
             if (Vector.isEmpty(someChildren)) None
             else if (Vector.length(someChildren) == 1)
                 Vector.head(someChildren)
             else Some(RamStmt.Par(someChildren))
-        case RamStmt.Until(test, body) => 
-            ???
+        case RamStmt.Until(test, body) =>
+            match hoistStmt(rc, termMap, equalitySets, impossible, body) {
+                case None => None
+                case Some(v) => Some(RamStmt.Until(test, v))
+            }
+            // ???
             // RamStmt.Until(test, hoistStmt(termMap, equalitySets, impossible, body))
         case RamStmt.Merge(_, _) => Some(stmt)
         case RamStmt.Swap(_, _) => Some(stmt)
@@ -103,26 +109,33 @@ mod Fixpoint.Phase.Hoisting {
                         case None => ()
                     }
                 }, Vector.range(0, arity));
-                // MutSet.add(id, seenTupleVars);
                 match hoistOpRec(body) {
                     case None => None
-                    case Some(hoistedBody) => 
-                        let newOp = match MutMap.get(id, idToBool) {
+                    case Some(hoistedBody) => match MutMap.get(id, idToBool) { 
                         case Some(v) =>
-                            // let seenAsSet = MutSet.toSet(seenTupleVars);
                             let relevant = List.filter(isBoolGround(termMap, equalitySets), MutList.toList(v));
-                            // MutSet.remove(id, seenTupleVars);
-                            // let seenWithoutCurrent = MutSet.toSet(seenTupleVars);
-                            Vector.forEach(i -> MutMap.remove((tupleVar, i), termMap), Vector.range(0, arity));                            
+                            let range = Vector.range(0, arity);
+                            Vector.forEach(i -> MutMap.remove((tupleVar, i), termMap), range);                            
                             let hoistedToHere = 
                                 List.filter(x -> not isBoolGround(termMap, equalitySets, x), relevant) |>
                                 List.map(simplifyLoadsBool(termMap, equalitySets)) |>
                                 List.toVector;
-                            if (Vector.length(hoistedToHere) != 0)
-                                SearchWithIndex(tupleVar, relSym, hoistedToHere, -1, hoistedBody)
-                            else Search(tupleVar, relSym, hoistedBody)
-                        case None => Search(TupleVar.Named(id), relSym, hoistedBody)
-                    };???
+                            let equalExps = range |>
+                                Vector.filterMap(i -> {
+                                    let load = unwrap(MutDisjointSets.find((tupleVar, i), equalitySets));
+                                    match MutMap.get(load, termMap) {
+                                        case None => None
+                                        case Some(val) => Some(Eq(RowLoad(tupleVar, i, relSym), val))
+                                    }
+                                });
+                            let combined = Vector.append(hoistedToHere, equalExps);
+                            let newOp = 
+                                if (Vector.length(combined) != 0)
+                                    SearchWithIndex(tupleVar, relSym, combined, -1, hoistedBody)
+                                else Search(tupleVar, relSym, hoistedBody);
+                            Some(newOp)
+                        case None => Some(Search(TupleVar.Named(id), relSym, hoistedBody))
+                    }
                 }
                 // MutSet.remove(id, seenTupleVars); // Corectness
                 // MutMap.remove(id, idToBool); // Not needed anymore
@@ -310,28 +323,29 @@ mod Fixpoint.Phase.Hoisting {
         equalitySets: MutDisjointSets[Load, r],
         term: RamTerm
     ): Bool \ r =
-        let recurse = isTermGround(termMap, equalitySets);
-    match term {
-        case Lit(_, _) => true
-        case RowLoad(tv, i, _) => 
-            MutMap.memberOf(unwrap(MutDisjointSets.find((tv, i), equalitySets)), termMap)
-        // case LoadLatVar(TupleVar.Named(id), _, _) => Set.memberOf(id)
-        case Meet(_, t1, t2, _) => recurse(t1) and recurse(t2)
-        case App0(_, _) => true
-        case App1(_, t1, _) => recurse(t1)
-        case App2(_, t1, t2, _) => recurse(t1) and recurse(t2)
-        case App3(_, t1, t2, t3, _) => recurse(t1) and recurse(t2) and recurse(t3)
-        case App4(_, t1, t2, t3, t4, _) => recurse(t1) and recurse(t2) and recurse(t3) and recurse(t4)
-        case App5(_, t1, t2, t3, t4, t5, _) => recurse(t1) and recurse(t2) and recurse(t3) and recurse(t4) and recurse(t5)
-    }
+        let termGround = isTermGround(termMap, equalitySets);
+        match term {
+            case Lit(_, _) => true
+            case RowLoad(tv, i, _) =>
+                MutMap.memberOf(unwrap(MutDisjointSets.find((tv, i), equalitySets)), termMap)
+            // case LoadLatVar(TupleVar.Named(id), _, _) => Set.memberOf(id)
+            case Meet(_, t1, t2, _) => termGround(t1) and termGround(t2)
+            case App0(_, _) => true
+            case App1(_, t1, _) => termGround(t1)
+            case App2(_, t1, t2, _) => termGround(t1) and termGround(t2)
+            case App3(_, t1, t2, t3, _) => termGround(t1) and termGround(t2) and termGround(t3)
+            case App4(_, t1, t2, t3, t4, _) => termGround(t1) and termGround(t2) and termGround(t3) and termGround(t4)
+            case App5(_, t1, t2, t3, t4, t5, _) => termGround(t1) and termGround(t2) and termGround(t3) and termGround(t4) and termGround(t5)
+        }
 
     def collectLoads(tupleVar: TupleVar, arity: Int32, equalitySets: MutDisjointSets[Load, r]): Unit \ r = 
         Vector.forEach(i -> MutDisjointSets.makeSet((tupleVar, i), equalitySets), Vector.range(0, arity))
 
     def unifyEqualitiesStmt(
-            equalitySets: MutDisjointSets[Load, r], 
-            constEqualities: MutMap[Load, List[(Boxed, RamId)], r],
-            stmt: RamStmt): Unit \ r = match stmt {
+        equalitySets: MutDisjointSets[Load, r], 
+        constEqualities: MutMap[Load, List[(Boxed, RamId)], r],
+        stmt: RamStmt
+    ): Unit \ r = match stmt {
         case RamStmt.Seq(xs) => Vector.forEach(unifyEqualitiesStmt(equalitySets, constEqualities), xs)
         case RamStmt.Insert(op) => unifyEqualitiesOp(equalitySets, constEqualities, op)
         case RamStmt.Par(xs) => Vector.forEach(unifyEqualitiesStmt(equalitySets, constEqualities), xs)

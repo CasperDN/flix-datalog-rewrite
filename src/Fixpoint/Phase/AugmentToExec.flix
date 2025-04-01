@@ -43,7 +43,7 @@ mod Fixpoint.Phase.AugmentToExec {
             unchecked_cast(println("Hej3") as _ \ r);
             let ramIDToNormalIndex = Equality.computeMapping(program);
             unchecked_cast(println("Hej4") as _ \ r);
-            let compiledStmt = compileStmt(stmt, counter, idToIndex, idToMarshall);
+            let compiledStmt = compileStmt(stmt, counter, idToIndex, idToMarshall, marshall);
             unchecked_cast(println("Hej5") as _ \ r);
             
             // Compile facts.
@@ -51,12 +51,12 @@ mod Fixpoint.Phase.AugmentToExec {
     }
 
     @Internal
-    def compileStmt(stmt: ARamStmt, counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERamStmt \ {r1, r2} = region rc {
-        let recurse = x -> compileStmt(x, counter, idToIndex, idToMarshall);
-        let recurseNewCount = x -> compileStmt(x, Counter.clone(counter, rc), idToIndex, idToMarshall);
+    def compileStmt(stmt: ARamStmt, counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal, marshall: ObjectMarshallingInfo[r]): ERamStmt \ {r1, r2} = region rc {
+        let recurse = x -> compileStmt(x, counter, idToIndex, idToMarshall, marshall);
+        let recurseNewCount = x -> compileStmt(x, Counter.clone(counter, rc), idToIndex, idToMarshall, marshall);
         match stmt {
         case ARamStmt.Insert(op) =>
-            let newOp = compileOp(op, rc, counter, idToIndex, idToMarshall);
+            let newOp = compileOp(op, rc, counter, idToIndex, idToMarshall, marshall);
             ERamStmt.Insert(newOp)
             // if(MutList.size(independent) == 0) 
             //     ERamStmt.Insert(newOp) else ERamStmt.Insert(EIf(MutList.toVector(independent), newOp))
@@ -71,8 +71,8 @@ mod Fixpoint.Phase.AugmentToExec {
     }}
 
     @Internal
-    def compileOp(op: ARelOp, rc: Region[r], counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERelOp \ {r, r1, r2} = 
-        let recursiveCall: ARelOp -> ERelOp \ {r, r1, r2} = x -> compileOp(x, rc, counter, idToIndex, idToMarshall);
+    def compileOp(op: ARelOp, rc: Region[r], counter: Counter[r1], idToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal, marshall: ObjectMarshallingInfo[r]): ERelOp \ {r, r1, r2} = 
+        let recursiveCall: ARelOp -> ERelOp \ {r, r1, r2} = x -> compileOp(x, rc, counter, idToIndex, idToMarshall, marshall);
         match op {
         // We could here keep the BoolExps that we do not want to handle as if, but then we limit later iterations of the query algorithms, or require that this file is changed later
             case ASearch(tpv, relSym, rest) =>
@@ -96,13 +96,13 @@ mod Fixpoint.Phase.AugmentToExec {
         }
 
     @Internal
-    def compileTerm(term: ARamTerm, counter: Counter[r1], mapToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal): ERamTerm \ {r1, r2} =
+    def compileTerm(term: ARamTerm, counter: Counter[r1], mapToIndex: IdToIndex[r2], idToMarshall: RamIdToMarshal, marshall: ObjectMarshallingInfo[r]): ERamTerm \ {r1, r2} =
         let compileT = x -> compileTerm(x, counter, mapToIndex, idToMarshall);
         // let getI = x -> getIndex(x, counter, mapToIndex);
         let termToIndex = term1 -> unwrap(Map.get(getTermRamId(term1), idToMarshall));
         let idToMarhsalled = id -> unwrap(Map.get(id, idToMarshall));
         match term {
-            case ALit(val, id)                      => ELit(???)
+            case ALit(val, id)                      => ELit(Normalization.marshallObject(val, unwrap(MutMap.get(id, idToMarshall)), marshall))
             case ARowLoad(_, _, _)                  => ELoadIndex(unwrap(MutMap.get(getTermRamId(term), mapToIndex)))
             // case ALoadLatVar(_, _, id)              => ELoadIndex(unwrap(MutMap.get(id, mapToIndex)))
             case AMeet(f, t1, t2, id)               => EMeet(f, compileT(t1), compileT(t1), termToIndex(t1))

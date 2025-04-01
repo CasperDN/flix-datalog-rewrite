@@ -7,11 +7,8 @@ mod Fixpoint.Phase.IndexSelection {
     pub def indexProgram(program: AugmentedProgram): AugmentedProgram = match program {
         case AugmentedProgram.Program(stmt, facts, meta, _) => 
             let (indexes, newStmt) = region rc {
-                let equalitySets = MutDisjointSets.empty(rc);
-                unifyEqualitiesStmt(stmt, equalitySets);
-                let unifiedStmt = ???;
                 let indexes = MutMap.empty(rc);
-                let collectedStmt = collectSearchesStmt(unifiedStmt, indexes, rc);
+                let collectedStmt = collectSearchesStmt(stmt, indexes, rc);
                 let newIndexes = indexes |>
                     MutMap.toMap |> 
                     Map.map(minIndex) |>
@@ -62,14 +59,9 @@ mod Fixpoint.Phase.IndexSelection {
         case RelOp.Project(_, _) => op
     }
 
-    def collectSearchesStmt(
-            stmt: RamStmt, 
-            indexes: Indexes[r], 
-            equalitySets: MutDisjointSets[Load, r], 
-            seenLoads: MutSet[Load, r], 
-            rc: Region[r]): RamStmt \ r = match stmt {
+    def collectSearchesStmt(stmt: RamStmt, indexes: Indexes[r], rc: Region[r]): RamStmt \ r = match stmt {
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> collectSearchesStmt(x, indexes, rc), xs))
-        case RamStmt.Insert(op) => RamStmt.Insert(collectSearchesOp(op, indexes, rc))
+        case RamStmt.Insert(op) => RamStmt.Insert(collectSearchesOp(op, indexes, MutSet.empty(rc), rc))
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
@@ -81,29 +73,43 @@ mod Fixpoint.Phase.IndexSelection {
     def collectSearchesOp(
         op: RelOp,
         indexes: Indexes[r],
-        equalitySets: MutDisjointSets[Load, r],
-        seenLoads: MutSet[Load, r],
+        seenTuples: MutSet[TupleVar, r],
         rc: Region[r]
     ): RelOp \ r = match op {
         case RelOp.Search(tupleVar, relSym, body) => 
-            RelOp.Search(tupleVar, relSym, collectSearchesOp(body, indexes, rc))
+            MutSet.add(tupleVar, seenTuples);
+            let res = RelOp.Search(tupleVar, relSym, collectSearchesOp(body, indexes, seenTuples, rc));
+            MutSet.remove(tupleVar, seenTuples);
+            res
         case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, body) =>
             let otherBoolExpList = MutList.empty(rc);
             let equalExpList = MutList.empty(rc);
-            let search = 
+            let search = boolExps |>
                 Vector.foldLeft(acc -> exp -> match exp {
-                    case BoolExp.Eq(RamTerm.RowLoad(tv1, _, _), t2) if tv1 == tupleVar and isTermGround(t2, equalitySets, seenLoads) => 
-                        MutList.push(exp, otherBoolExpList);
-                        acc
-                    case BoolExp.Eq(t2, RamTerm.RowLoad(tv1, i, _)) if tv1 == tupleVar and isTermGround(t2, equalitySets, seenLoads) => 
-                        MutList.push(exp, equalExpList);
-                        i :: acc
+                    case BoolExp.Eq(RamTerm.RowLoad(tv1, i, _), t2) if tv1 == tupleVar => 
+                        if (isTermGround(t2, seenTuples)) {
+                            MutList.push(exp, equalExpList);
+                            i :: acc
+                        } else {
+                            MutList.push(exp, otherBoolExpList);
+                            acc
+                        }
+                    case BoolExp.Eq(t2, RamTerm.RowLoad(tv1, i, _)) if tv1 == tupleVar =>
+                        if (isTermGround(t2, seenTuples)) {
+                            MutList.push(exp, equalExpList);
+                            i :: acc
+                        } else {
+                            MutList.push(exp, otherBoolExpList);
+                            acc
+                        }
                     case _ =>
                         MutList.push(exp, otherBoolExpList);
                         acc
-                }, List.empty(), boolExps) |> List.reverse |> List.toVector;
+                }, List.empty()) |> List.reverse |> List.toVector;
             let id = toId(relSym);
-            let newBody = collectSearchesOp(body, indexes, rc);
+            MutSet.add(tupleVar, seenTuples);
+            let newBody = collectSearchesOp(body, indexes, seenTuples, rc);
+            MutSet.remove(tupleVar, seenTuples);
             if (Vector.length(search) != 0)
                 let searches = MutMap.getWithDefault(id, List.empty(), indexes);
                 if (not List.memberOf(search, searches))
@@ -119,46 +125,18 @@ mod Fixpoint.Phase.IndexSelection {
                 RelOp.Search(tupleVar, relSym, nestedBody)
             else
                 RelOp.SearchWithIndex(tupleVar, relSym, equalExps, -1, nestedBody)
-        case RelOp.If(boolExps, body) => RelOp.If(boolExps, collectSearchesOp(body, indexes, rc))
+        case RelOp.If(boolExps, body) => RelOp.If(boolExps, collectSearchesOp(body, indexes, seenTuples, rc))
         case RelOp.Functional(tupleVar, func, terms, body, arity) => 
-            RelOp.Functional(tupleVar, func, terms, collectSearchesOp(body, indexes, rc), arity)
+            MutSet.add(tupleVar, seenTuples);
+            let res = RelOp.Functional(tupleVar, func, terms, collectSearchesOp(body, indexes, seenTuples, rc), arity);
+            MutSet.remove(tupleVar, seenTuples);
+            res
         case RelOp.Project(_, _) => op
     }
 
-    def unifyEqualitiesStmt(stmt: RamStmt, equalitySets: MutDisjointSets[Load, r]): Unit \ r = match stmt {
-        case RamStmt.Seq(xs) => Vector.forEach(unifyEqualitiesStmt(equalitySets), xs)
-        case RamStmt.Insert(op) => unifyEqualitiesOp(equalitySets, op)
-        case RamStmt.Par(xs) => Vector.forEach(unifyEqualitiesStmt(equalitySets), xs)
-        case RamStmt.Until(boolExps, body) =>
-            Vector.forEach(boolExp -> unifyBoolExp(equalitySets, boolExp), boolExps);
-            unifyEqualitiesStmt(body, equalitySets)
-        case RamStmt.Merge(_, _) => ()
-        case RamStmt.Swap(_, _) => ()
-        case RamStmt.Purge(_) => ()
-        case RamStmt.Comment(_) => ()
-    }
-
-    def unifyBoolExp(equalitySets: MutDisjointSets[Load, r], boolExp: BoolExp): Unit \ r = match boolExp {
-        case BoolExp.Eq(RamTerm.RowLoad(tv1, i1, _), RamTerm.RowLoad(tv2, i2, _)) => 
-            MutDisjointSets.makeSet((tv1, i1));
-            MutDisjointSets.makeSet((tv2, i2));
-            MutDisjointSets.union((tv1, i1), (tv2, i2))
-    }
-
-    def unifyEqualitiesOp(equalitySets: MutDisjointSets[Load, r], op: RelOp): Unit = match op {   
-        case RelOp.Search(_, _, body) => unifyEqualitiesOp(body, equalitySets) 
-        case RelOp.SearchWithIndex(_, _, boolExps, _, body) => 
-            Vector.forEach(unifyBoolExp(equalitySets), boolExps)
-        case RelOp.Functional(_, _, _, body, _) => unifyEqualitiesOp(equalitySets, body)
-        case RelOp.Project(_, _) => ()
-        case RelOp.If(boolExps, body) =>
-            Vector.forEach(unifyBoolExp(equalitySets), boolExps);
-            unifyEqualitiesOp(body, equalitySets)
-    }
-
-    def isTermGround(term: RamTerm, equalitySets: MutDisjointSets[Load, r], seenLoads: MutSet[Load, r]): Bool = match term {
-        case RamTerm.RowLoad(tupleVar, index, _) =>
-            MutSet.memberOf(MutDisjointSets.find((tupleVar, index), equalitySets), seenLoads)
+    def isTermGround(term: RamTerm, seenTuples: MutSet[TupleVar, r]): Bool \ r = match term {
+        case RamTerm.RowLoad(tupleVar, _, _) =>
+            MutSet.memberOf(tupleVar, seenTuples)
         case RamTerm.Lit(_, _) => true
         case _ => false
     }
