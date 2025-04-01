@@ -14,40 +14,147 @@
  * limitations under the License.
  */
 
+instance Order[Array[a, r]] with Order[a] {
+    pub def compare(x: Array[a, r], y: Array[a, r]): Comparison = 
+        let len = Array.length(x);
+        def loop(i: Int32): Comparison = 
+            if(i >= len)
+                Comparison.EqualTo
+            else {
+                let comp = unchecked_cast(Array.get(i, x) <=> Array.get(i, y) as _ \ {});
+                match comp {
+                    case Comparison.EqualTo => loop(i + 1)
+                    case _ => comp
+                }
+            };
+        loop(0)
+}
 
-// mod Fixpoint.Database2 {
-
-// }
+instance Eq[Array[a, r]] with Eq[a] {
+    pub def eq(x: Array[a, r], y: Array[a, r]): Bool = 
+        let len = Array.length(x);
+        def loop(i: Int32): Bool = 
+            if(i >= len)
+                true
+            else {
+                if (unchecked_cast(Array.get(i, x) == Array.get(i, y) as _ \ {})) loop(i + 1)
+                else false
+            };
+    loop(0)
+}
 
 mod Fixpoint.Interpreter {
+    use Fixpoint.Ast.ExecutableRam.RamProgram.Program
     use Fixpoint.Normalization
-    use Fixpoint.Normalization.ObjectMarshallingInfo
+    use Fixpoint.Normalization.Normalization
     use PredTrack.PredSymMapInternal
     use Fixpoint.Boxed
-    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, TupleVar, RamProgram}
-    use Fixpoint.Ast.AugmentedRam.{RelSym, toDenotation}
+    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
+    use Fixpoint.Ast.Ram.{RelSym, toDenotation}
     use Fixpoint.Ast.Shared.Denotation
-    use Fixpoint.Normalization
 
-    type alias Tuple = Vector[Int64]
+    type alias Tuple[r: Region] = Array[Int64, r]
 
-    // pub type alias Database[r: Region] = Array[MutMap[Tuple, MutMap[Tuple, Int64, r], r], r]
+    type alias SearchTuple[r: Region] = Tuple[r]
+
+    pub type alias Index[r: Region] = MutMap[SearchTuple[r], MutMap[Tuple[r], Int64, r], r]
+
+    // pub type alias IndexNoSearch[r: Region] = MutMap[SearchTuple[r], MutMap[Tuple[r], Int64, r], r]
+
+    pub type alias Indexes[r: Region] = Array[Index[r], r]
 
     pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Int64], Int64, r], r]
 
     pub type alias DatabaseExternal[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
 
-    pub type alias SearchEnv[r: Region] = (Array[Tuple, r], Array[Int64, r])
+    pub type alias SearchEnv[r: Region] = (Array[SearchTuple[r], r], Array[Int64, r])
+
+    def _unwrap(x: Option[a]): a = match x {
+        case Some(v) => v
+        case None => ???
+    }
+
+    pub def lubWith(
+        index: In32, 
+        norm: Normalization[r], 
+        lub: Boxed -> Boxed -> Boxed, 
+        l1: Int64, 
+        l2: Int64
+    ): Int64 = 
+        let box1 = Normalization.unNormalizeReal(l1, index, norm);
+        let box2 = Normalization.unNormalizeReal(l2, index, norm);
+        Normalization.normalizeBox(box1 `lub` box2, index, norm)
+    
+    pub def mkIndex(
+        rc: Region[r], 
+        relSym: RelSym, 
+        search: Vector[Int32], 
+        tuples: Vector[Vector[Int64]],
+        norm: Normalization[r]    
+    ): Index[r] \ r = 
+        let index = MutMap.empty(rc);
+        let searchLen = Vector.length(search);
+        if(Vector.isEmpty(tuples)) {
+            index
+        } else
+            let totalSize = Vector.size(Vector.get(0, tuples));
+            let notSearch = Array.empty(rc, searchLen - totalSize);
+            Vector.foldLeft(counter -> i -> {
+                if (Vector.memberOf(i, search)) {
+                    Array.put(counter, i, notSearch);
+                    counter + 1
+                } else counter
+            }, 0, Vector.range(0, totalSize));
+            Vector.forEach(tuple -> {
+                let (nonLat, lat) = match toDenotation(relSym) {
+                    case Denotation.Relational => (tuple, 0i64)
+                    case Denotation.Latticenal(_, _, lub, _) => 
+                        let (vec1, vec2) = Vector.splitAt(Vector.length(tuple) - 1, tuple);
+                        (vec1, Vector.get(0, vec2))
+                };
+                let searchTuple = Array.empty(rc, searchLen);
+                let restOfTuple = Array.empty(rc, Vector.length(tuple) - searchLen);
+                Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, searchTuple), search);
+                Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, restOfTuple), search);
+                let map = MutMap.getOrElsePut(searchTuple, MutMap.empty(rc), index);
+                MutMap.putWith(lubWith(index, norm, lub), restOfTuple, lat, map)
+            }, tuples);
+            index
+        
 
     @Internal
-    pub def interpret(rc: Region[r], input: (RamProgram, Database[r], ObjectMarshallingInfo[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
+    pub def _interpret(rc: Region[r], input: (RamProgram, Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
+        let (program, norm) = input;
+        let indexes = match program {
+            case Program(_, facts, _, (indexMap, posMap)) => 
+                let indexes = Array.empty(rc, Map.maximumValue(posMap));
+                facts |>
+                Map.forEach(relSym -> tuples -> {
+                    match Map.get(relSym, indexMap) {
+                        case Some(v) => v
+                        case None => bug!("In Interpreter.interpret: ${relSym} has no index!")
+                    } |>
+                    Vector.forEachWithIndex(i -> search -> {
+                        let pos = match Map.get((relSym, i), posMap) {
+                            case Some(v) => v
+                            case None => bug!("In Interpreter.interpret: search ${(relSym, i)} has no position!")
+                        };
+                        Array.put(mkIndex(rc, relSym, search, tuples), pos, indexes)
+                    })
+                });
+                indexes
+        };
+        interpretWithDatabaseInternal(rc, indexes, norm, program)
+
+    @Internal
+    pub def interpret(rc: Region[r], input: (RamProgram, Database[r], Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
         let (program, db, info) = input;
         // let db = MutMap.empty(rc);
         // match program {
         //     case RamProgram.Program(_, facts, predTrack, _) =>
         //         Map.forEach(id -> factSet -> {
         //             let sym = PredTrack.oldIDSymToRelSym(predTrack, id, PredTrack.PredType.Full);
-        //             // let sym = unwrap(Map.get(id, metaInformation));
+        //             // let sym = unwrap(Map.get(id, predicateState));
         //             let mapForCurrent = MutMap.empty(rc);
         //             match sym {
         //                 case RelSym.Symbol(_, _, Denotation.Relational) => 
@@ -68,22 +175,27 @@ mod Fixpoint.Interpreter {
 
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Database[r], ObjectMarshallingInfo[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
-    let (program, db, info) = input;
-    interpretWithDatabaseInternal(rc, db, info, program)
+    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Database[r], Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
+    let (program, db, norm) = input;
+    interpretWithDatabaseInternal(rc, db, norm, program)
 
     @Internal
-    pub def interpretWithDatabaseInternal(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r], program: RamProgram): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
-        case RamProgram.Program(stmt, _, meta, _) =>
-            evalStmt(rc, db, info, stmt);
-            (marshallDb(rc, db, info), meta)
+    pub def interpretWithDatabaseInternal(
+        rc: Region[r], 
+        db: Database[r], 
+        norm: Normalization[r], 
+        program: RamProgram
+    ): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
+        case RamProgram.Program(stmt, _, predState, _) =>
+            evalStmt(rc, db, norm, stmt);
+            (marshallDb(rc, db, norm), predState)
     }
 
-    def marshallDb(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r]): DatabaseExternal[r] = ???
+    def marshallDb(rc: Region[r], db: Database[r], norm: Normalization[r]): DatabaseExternal[r] = ???
 
-    def evalStmt(rc: Region[r], db: Database[r], info: ObjectMarshallingInfo[r], stmt: RamStmt): Unit \ r =
+    def evalStmt(rc: Region[r], db: Database[r], norm: Normalization[r], stmt: RamStmt): Unit \ r =
         match stmt {
-            case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), info, relOp)
+            case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), norm, relOp)
             case RamStmt.Merge(srcSym, dstSym, index) =>
             // let dst = Array.get(dstSym, db);
                 let dst = MutMap.getOrElsePut(dstSym, MutMap.empty(rc), db);
@@ -91,22 +203,20 @@ mod Fixpoint.Interpreter {
                     case Denotation.Relational =>
                         MutMap.merge(MutMap.getWithDefault(srcSym, MutMap.empty(rc), db), dst)
                     case Denotation.Latticenal(_, _, lub, _) =>
-                        // Normalization.;
-                        let lubWrap = l1 -> l2 -> Normalization.normalizeBox(Normalization.unNormalizeReal(l1, index, info) `lub` Normalization.unNormalizeReal(l2, index, info), index, info);
-                        MutMap.mergeWith(lubWrap, MutMap.getWithDefault(srcSym, MutMap.empty(rc), db), dst)
+                        MutMap.mergeWith(lubWith(index, norm, lub), MutMap.getWithDefault(srcSym, MutMap.empty(rc), db), dst)
                 }
             case RamStmt.Swap(lhs, rhs) =>
                 let temp = MutMap.getWithDefault(lhs, MutMap.empty(rc), db);
                 MutMap.put(lhs, MutMap.getWithDefault(rhs, MutMap.empty(rc), db), db);
                 MutMap.put(rhs, temp, db)
             case RamStmt.Purge(ramSym) => MutMap.remove(ramSym, db)
-            case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, db, info), stmts)
+            case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, db, norm), stmts)
             case RamStmt.Until(test, body) =>
-                if (evalBoolExp(rc, db, (Array#{} @ rc, Array#{} @ rc), info, test)) {
+                if (evalBoolExp(rc, db, (Array#{} @ rc, Array#{} @ rc), norm, test)) {
                     ()
                 } else {
-                    evalStmt(rc, db, info, body);
-                    evalStmt(rc, db, info, stmt)
+                    evalStmt(rc, db, norm, body);
+                    evalStmt(rc, db, norm, stmt)
                 }
             case RamStmt.Comment(_) => ()
             case RamStmt.Par(_) => ???
@@ -120,16 +230,16 @@ mod Fixpoint.Interpreter {
         case RelOp.If(_, then)                  => allocEnv(rc, depth, then)
     }
 
-    def evalOp(rc1: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], op: RelOp): Unit \  r + r  =
+    def evalOp(rc: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.Normalization[r], op: RelOp): Unit \  r  =
         match op {
-            case RelOp.Search(TupleVar.Named(i), ramSym, body) =>
+            case RelOp.Search(i, ramSym, body) =>
                 let (tupleEnv, latEnv) = env;
                 MutMap.forEach(t -> l -> {
                     Array.put(t, i, tupleEnv);
                     Array.put(l, i, latEnv);
-                    evalOp(rc1, db, env, info, body)
-                }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.SearchWithIndex(TupleVar.Named(i), ramSym, qry, _, body) =>
+                    evalOp(rc, db, env, info, body)
+                }, MutMap.getWithDefault(ramSym, MutMap.empty(rc), db))
+            case RelOp.SearchWithIndex(i, ramSym, qry, _, body) =>
                 let (tupleEnv, latEnv) = env;
                 let toSend = Vector.map(x -> match x {
                     // case QueryExp.Eq(RamTerm.RowLoad(tupleID, index), t2) => (index, t2)
@@ -140,9 +250,9 @@ mod Fixpoint.Interpreter {
                 MutMap.rangeQueryWith(evalQuery(env, info, Vector.toList(toSend)), t -> l -> {
                     Array.put(t, i, tupleEnv);
                     Array.put(l, i, latEnv);
-                    evalOp(rc1, db, env, info, body)
-                }, MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
-            case RelOp.Functional(TupleVar.Named(i), f, terms, body, i1, _) =>
+                    evalOp(rc, db, env, info, body)
+                }, MutMap.getWithDefault(ramSym, MutMap.empty(rc), db))
+            case RelOp.Functional(i, f, terms, body, i1, _) =>
                 let args = terms |> Vector.mapWithIndex(i_ -> x -> Normalization.unNormalizeReal(evalTerm(env, info, x), Vector.get(i_, i1), info));
 
                 let result = Vector.map(vec -> Vector.mapWithIndex(i_ -> x -> Normalization.normalizeBox(x, Vector.get(i_, i1), info), vec), f(args));
@@ -150,10 +260,10 @@ mod Fixpoint.Interpreter {
                 let (tupleEnv, _latEnv) = env; // TODO: Do we ever need to use latEnv?
                 foreach (t <- result) {
                     Array.put(t, i, tupleEnv);
-                    evalOp(rc1, db, env, info, body)
+                    evalOp(rc, db, env, info, body)
                 }
             case RelOp.Project(terms, ramSym, index) =>
-                let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc1), db);
+                let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
                 match toDenotation(ramSym) {
                     case Denotation.Relational =>
                         let tuple = Vector.map(evalTerm(env, info), terms);
@@ -173,15 +283,15 @@ mod Fixpoint.Interpreter {
                         else MutMap.putWith(lubWrap, key, latVal, rel)
                 }
             case RelOp.If(test, then) =>
-                if (evalBoolExp(rc1, db, env, info, test)) {
-                    evalOp(rc1, db, env, info, then)
+                if (evalBoolExp(rc, db, env, info, test)) {
+                    evalOp(rc, db, env, info, then)
                 } else {
                     ()
                 }
             case _ => ()
         }
 
-    def evalQuery(env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], qry: List[(Int32, RamTerm)], tuple: Vector[Int64]): Comparison \ r + r =
+    def evalQuery(env: SearchEnv[r], info: Normalization.Normalization[r], qry: List[(Int32, RamTerm)], tuple: Vector[Int64]): Comparison \ r + r =
         match qry {
             case Nil => Comparison.EqualTo
             case (j, t) :: tl => match Vector.get(j, tuple) <=> evalTerm(env, info, t) {
@@ -190,7 +300,7 @@ mod Fixpoint.Interpreter {
             }
         }
 
-    def evalBoolExp(rc1: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], es: Vector[BoolExp]): Bool \ r + r  =
+    def evalBoolExp(rc1: Region[r], db: Database[r], env: SearchEnv[r], info: Normalization.Normalization[r], es: Vector[BoolExp]): Bool \ r + r  =
         Vector.forAll(exp -> match exp {
             case BoolExp.IsEmpty(ramSym) =>
                 MutMap.isEmpty(MutMap.getWithDefault(ramSym, MutMap.empty(rc1), db))
@@ -269,7 +379,7 @@ mod Fixpoint.Interpreter {
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
         }, es)
 
-    def evalTerm(env: SearchEnv[r], info: Normalization.ObjectMarshallingInfo[r], term: RamTerm): Int64 \ {r, r} = match term {
+    def evalTerm(env: SearchEnv[r], info: Normalization.Normalization[r], term: RamTerm): Int64 \ {r} = match term {
         case RamTerm.Lit(v) => v
         case RamTerm.LoadIndex(i) =>
             let (tupleEnv, _) = env;

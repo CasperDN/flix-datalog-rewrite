@@ -1,11 +1,13 @@
 mod Fixpoint.Phase.IndexSelection {
     use AutomaticIndexSelection.{minIndex}
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, AugmentedProgram, RelOp, BoolExp, RelSym, RamTerm, toId, Search, IndexInformation, TupleVar};
-    type alias Indexes[r: Eff] = MutMap[Int64, List[Search], r]
+    use Fixpoint.UniqueInts
+    use Fixpoint.UniqueInts.IndexState
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, IndexInformation, TupleVar};
+    type alias Indexes[r: Eff] = MutMap[RelSym, List[Search], r]
     type alias Load = (TupleVar, Int32)
 
-    pub def indexProgram(program: AugmentedProgram): AugmentedProgram = match program {
-        case AugmentedProgram.Program(stmt, facts, meta, _) => 
+    pub def indexProgram(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, meta, _) => 
             let (indexes, newStmt) = region rc {
                 let indexes = MutMap.empty(rc);
                 let collectedStmt = collectSearchesStmt(stmt, indexes, rc);
@@ -15,23 +17,24 @@ mod Fixpoint.Phase.IndexSelection {
                     Map.map(List.toVector);
                 (newIndexes, collectedStmt)
             };
-            AugmentedProgram.Program(indexStmt(newStmt, indexes), facts, meta, indexes)
+            let indexState = UniqueInts.empty(rc);
+            RamProgram.Program(indexStmt(newStmt, indexes, indexState), facts, meta, indexes)
     }
 
-    def indexStmt(stmt: RamStmt, indexInformation: IndexInformation): RamStmt = match stmt {
-        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, indexInformation), xs))
-        case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, indexInformation))
+    def indexStmt(stmt: RamStmt, indexInformation: IndexInformation, indexState: IndexState[(RelSym, Int32), r]): RamStmt = match stmt {
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, indexInformation, indexState), xs))
+        case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, indexInformation, indexState))
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
-        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, indexInformation), xs))
-        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, indexInformation))
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, indexInformation, indexState), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, indexInformation, indexState))
         case RamStmt.Comment(_) => stmt 
     }
 
-    def indexOp(op: RelOp, indexInformation: IndexInformation): RelOp = match op {
+    def indexOp(op: RelOp, indexInformation: IndexInformation, indexState: IndexState[(RelSym, Int32), r]): RelOp = match op {
         case RelOp.Search(tupleVar, relSym, body) => 
-            RelOp.Search(tupleVar, relSym, indexOp(body, indexInformation))
+            RelOp.Search(tupleVar, relSym, indexOp(body, indexInformation, indexState))
         case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, body) =>
             let search = 
                 Vector.foldLeft(acc -> exp -> match exp {
@@ -39,7 +42,7 @@ mod Fixpoint.Phase.IndexSelection {
                     case BoolExp.Eq(_, RamTerm.RowLoad(_, i, _)) => i :: acc
                     case _ => bug!("In IndexSelection.indexOp: Found non-equality BoolExp in indexOp!")
                 }, List.empty(), boolExps) |> List.toVector;
-            let index = match Map.get(toId(relSym), indexInformation) {
+            let index = match Map.get(relSym, indexInformation) {
                 case Some(indexes) => 
                     match Vector.findIndexOf(index ->
                         Vector.slice(start = 0, end = Vector.length(search), index) |> 
@@ -52,10 +55,11 @@ mod Fixpoint.Phase.IndexSelection {
                 case None => 
                     bug!("In IndexSelection.indexOp: ${relSym} has no index!")
             };
-            RelOp.SearchWithIndex(tupleVar, relSym, boolExps, index, body)
-        case RelOp.If(boolExps, body) => RelOp.If(boolExps, indexOp(body, indexInformation))
-        case RelOp.Functional(tupleVar, func, terms, body, arity) => 
-            RelOp.Functional(tupleVar, func, terms, indexOp(body, indexInformation), arity)
+            let absoluteIndex = UniqueInts.getIndex((relSym, index), indexState);
+            RelOp.SearchWithIndex(tupleVar, relSym, boolExps, absoluteIndex, body)
+        case RelOp.If(boolExps, body) => RelOp.If(boolExps, indexOp(body, indexInformation, indexState))
+        case RelOp.Functional(tupleVar, func, terms, body, arity) =>
+            RelOp.Functional(tupleVar, func, terms, indexOp(body, indexInformation, indexState), arity)
         case RelOp.Project(_, _) => op
     }
 
@@ -94,29 +98,21 @@ mod Fixpoint.Phase.IndexSelection {
                             MutList.push(exp, otherBoolExpList);
                             acc
                         }
-                    case BoolExp.Eq(t2, RamTerm.RowLoad(tv1, i, _)) if tv1 == tupleVar =>
-                        if (isTermGround(t2, seenTuples)) {
-                            MutList.push(exp, equalExpList);
-                            i :: acc
-                        } else {
-                            MutList.push(exp, otherBoolExpList);
-                            acc
-                        }
                     case _ =>
                         MutList.push(exp, otherBoolExpList);
                         acc
                 }, List.empty()) |> List.reverse |> List.toVector;
-            let id = toId(relSym);
             MutSet.add(tupleVar, seenTuples);
             let newBody = collectSearchesOp(body, indexes, seenTuples, rc);
             MutSet.remove(tupleVar, seenTuples);
             if (Vector.length(search) != 0)
-                let searches = MutMap.getWithDefault(id, List.empty(), indexes);
+                let searches = MutMap.getWithDefault(relSym, List.empty(), indexes);
                 if (not List.memberOf(search, searches))
-                    MutMap.put(id, search :: searches, indexes)
+                    MutMap.put(relSym, search :: searches, indexes)
                 else ()
             else ();
             let otherBoolExps = MutList.toVector(otherBoolExpList);
+            Vector.forEach(collectSearchesBool(indexes), otherBoolExps);
             let nestedBody = 
                 if (Vector.length(otherBoolExps) == 0) newBody 
                 else RelOp.If(otherBoolExps, newBody);
@@ -125,7 +121,9 @@ mod Fixpoint.Phase.IndexSelection {
                 RelOp.Search(tupleVar, relSym, nestedBody)
             else
                 RelOp.SearchWithIndex(tupleVar, relSym, equalExps, -1, nestedBody)
-        case RelOp.If(boolExps, body) => RelOp.If(boolExps, collectSearchesOp(body, indexes, seenTuples, rc))
+        case RelOp.If(boolExps, body) => 
+            Vector.forEach(collectSearchesBool(indexes), boolExps);
+            RelOp.If(boolExps, collectSearchesOp(body, indexes, seenTuples, rc))
         case RelOp.Functional(tupleVar, func, terms, body, arity) => 
             MutSet.add(tupleVar, seenTuples);
             let res = RelOp.Functional(tupleVar, func, terms, collectSearchesOp(body, indexes, seenTuples, rc), arity);
@@ -133,6 +131,28 @@ mod Fixpoint.Phase.IndexSelection {
             res
         case RelOp.Project(_, _) => op
     }
+
+        def collectSearchesBool(indexes: Indexes[r], bool: BoolExp): Unit \ r = match bool {
+        case BoolExp.IsEmpty(_) => ()
+        case BoolExp.NotMemberOf(_, relSym) =>
+            let RelSym.Symbol(_, arity, _) = relSym;
+            let search = Vector.range(0, arity);
+            let searches = MutMap.getWithDefault(relSym, List.empty(), indexes);
+            if (not List.memberOf(search, searches)) {
+                MutMap.put(relSym, search :: searches, indexes)
+            } else ();
+            ()
+        case BoolExp.Eq(_, _) => ()
+        case BoolExp.Leq(_, _) => ()
+        case BoolExp.Guard0(_) => ()
+        case BoolExp.Guard1(_, _) => ()
+        case BoolExp.Guard2(_, _, _) => ()
+        case BoolExp.Guard3(_, _, _, _) => ()
+        case BoolExp.Guard4(_, _, _, _, _) => ()
+        case BoolExp.Guard5(_, _, _, _, _, _) => ()
+
+    }
+
 
     def isTermGround(term: RamTerm, seenTuples: MutSet[TupleVar, r]): Bool \ r = match term {
         case RamTerm.RowLoad(tupleVar, _, _) =>

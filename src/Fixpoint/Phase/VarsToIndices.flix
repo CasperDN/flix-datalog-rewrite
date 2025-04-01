@@ -20,11 +20,11 @@
 
 mod Fixpoint.Phase.VarsToIndices {
 
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, RamProgram}
 
         @Internal
-    pub def lowerProgram(program: AugmentedProgram): AugmentedProgram = match program {
-        case AugmentedProgram.Program(stmt, facts, meta, index) => AugmentedProgram.Program(lowerStmt(stmt), facts, meta, index)
+    pub def lowerProgram(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(lowerStmt(stmt), facts, meta, index)
     }
 
 

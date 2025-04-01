@@ -1,8 +1,8 @@
 mod Fixpoint.Phase.Hoisting {
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, AugmentedProgram, RamId}
-    use Fixpoint.Ast.AugmentedRam.RelOp.{Search, SearchWithIndex, Functional, Project, If}
-    use Fixpoint.Ast.AugmentedRam.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, RamProgram, RamId}
+    use Fixpoint.Ast.Ram.RelOp.{Search, SearchWithIndex, Functional, Project, If}
+    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Leq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
 
     type alias Load = (TupleVar, Int32)
@@ -10,8 +10,8 @@ mod Fixpoint.Phase.Hoisting {
     // Hoist if-constructions as far as possible and merge into SearchWithIndex when possible/relevant.
     // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
     @Internal
-    pub def hoistProgram(program: AugmentedProgram): AugmentedProgram = match program { 
-        case AugmentedProgram.Program(stmt, facts, meta, index) => region rc {
+    pub def hoistProgram(program: RamProgram): RamProgram = match program { 
+        case RamProgram.Program(stmt, facts, meta, index) => region rc {
             let equalitySets = MutDisjointSets.empty(rc);
             let constEqualities = MutMap.empty(rc);
             unifyEqualitiesStmt(equalitySets, constEqualities, stmt);
@@ -28,8 +28,8 @@ mod Fixpoint.Phase.Hoisting {
                 }
             }, listOfPairs), constEqualities);
             match hoistStmt(rc, termMap, equalitySets, impossible, stmt) {
-                case None => AugmentedProgram.Program(RamStmt.Comment("No rules are satisfiable"), facts, meta, index)
-                case Some(hoistedStmt) => AugmentedProgram.Program(hoistedStmt, facts, meta, index)
+                case None => RamProgram.Program(RamStmt.Comment("No rules are satisfiable"), facts, meta, index)
+                case Some(hoistedStmt) => RamProgram.Program(hoistedStmt, facts, meta, index)
             }
         }
     }

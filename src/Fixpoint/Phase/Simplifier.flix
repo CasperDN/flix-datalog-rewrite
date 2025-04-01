@@ -15,8 +15,8 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, AugmentedProgram}
-    use Fixpoint.Ast.AugmentedRam.RamTerm.{RowLoad, Lit, Meet}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, Facts, RamProgram}
+    use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit, Meet}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.
@@ -33,8 +33,8 @@ mod Fixpoint.Phase.Simplifier {
     ///     end
     ///
     @Internal
-    pub def simplifyProgram(program: AugmentedProgram): AugmentedProgram = match program {
-        case AugmentedProgram.Program(stmt, facts, meta, index) => AugmentedProgram.Program(simplifyStmt(stmt), facts, meta, index)
+    pub def simplifyProgram(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(simplifyStmt(stmt), facts, meta, index)
     }
     @Internal
     pub def simplifyStmt(stmt: RamStmt): RamStmt =

@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Solver {
-    use Fixpoint.Normalization.ObjectMarshallingInfo
+    use Fixpoint.Normalization.Normalization
     use Fixpoint.Interpreter.Database
 
     import dev.flix.runtime.Global
@@ -24,7 +24,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.AugmentedRam.RelSym
+    use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.ExecutableRam.RamProgram
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
@@ -58,7 +58,7 @@ mod Fixpoint.Solver {
         //     let _ = ();
         //     unchecked_cast(() -> ??? as _ \ rc)()
         // };
-        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Database[rc], ObjectMarshallingInfo[rc]) \ rc= {
+        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Normalization[rc]) \ rc= {
             Fixpoint.Phase.Compiler.compile(cs, stf)
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.Hoisting.hoistProgram
@@ -91,7 +91,7 @@ mod Fixpoint.Solver {
         case (Datalog(edb1, idb1), Datalog(edb2, idb2)) =>
             Datalog(Vector.append(edb1, edb2), Vector.append(idb1, idb2))
         case (Model(db1), Model(db2)) =>
-            use Fixpoint.Ast.AugmentedRam.toDenotation;
+            use Fixpoint.Ast.Ram.toDenotation;
             let union = ramSym -> match toDenotation(ramSym) {
                 case Relational => Map.union
                 case Latticenal(_, _, lub, _) => Map.unionWith(lub)
@@ -722,7 +722,7 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Model(db) => region rc {
-            use Fixpoint.Ast.AugmentedRam.toDenotation;
+            use Fixpoint.Ast.Ram.toDenotation;
             let pFacts = MutList.empty(rc);
             let qquery = ramSym -> match ramSym {
                 case RelSym.Symbol(predSym, _, _) => match predSym <=> p {

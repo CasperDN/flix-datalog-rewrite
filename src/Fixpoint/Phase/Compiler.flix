@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-    use Fixpoint.Ast.AugmentedRam.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, FactInformation, MetaInformation, AugmentedProgram, RamId}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, Facts, PredicateState, RamProgram, RamId}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -40,12 +40,12 @@ mod Fixpoint.Phase.Compiler {
     /// A rule belongs to the same stratum as its head predicate.
     ///
     @Internal
-    pub def compile(d: Datalog, strat: Map[PredSym, Int32]): AugmentedProgram = match d {
+    pub def compile(d: Datalog, strat: Map[PredSym, Int32]): RamProgram = match d {
         case Datalog(facts, rules) => region rc {
             let predSymMaps = PredTrack.initialize(d);
             let stmts = MutList.empty(rc);
             let compiledFacts = compileFacts(facts, predSymMaps);
-            // let metaInformation = collectMetaInformation(d, predSymMaps);
+            // let predicateState = collectMetaInformation(d, predSymMaps);
             // Vector.forEach(x -> compileRule(stmts, x, predSymMaps), facts);
             // Create map of stratum to list of rules in stratum
             let counter = Counter.empty(rc);
@@ -56,7 +56,7 @@ mod Fixpoint.Phase.Compiler {
             }, Map#{}, rules) |>
             Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps, counter));
             // TODO: Fix
-            AugmentedProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, Map.empty())
+            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, Map.empty())
         }
         case _ => bug!("Datalog normalization bug")
     }
@@ -65,7 +65,7 @@ mod Fixpoint.Phase.Compiler {
     /// Collect all facts by their predicate
     ///
     // TODO: Can we at this point compute the facts directly/reduce to literals by calling the functions?
-    def compileFacts(facts: Vector[Constraint], predSymMaps: PredSymMapInternal): FactInformation = 
+    def compileFacts(facts: Vector[Constraint], predSymMaps: PredSymMapInternal): Facts = 
         let test = 
         Vector.foldRight(a -> b -> {
             match a {

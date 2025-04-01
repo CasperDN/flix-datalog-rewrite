@@ -88,7 +88,7 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreInterpret(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, _meta, index) => unchecked_cast({
+        case RamProgram.Program(stmt, facts, _meta, (index, _)) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
                 let str = String.repeat(80, "*") |>
                 concatRev("** Facts") |>
