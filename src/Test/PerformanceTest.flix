@@ -11,14 +11,15 @@ def readNum(): Int32 = 1_000_000
 
 def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     let _ = FileWrite.runWithIO(() ->{
-    insertElementsDifferentOrder();
-    insertFewElementsOften();
-    insertManyElements();
-    readExperiment();
-    flixInsertExperiment();
-    flixReadExperiment();
-    javaInsertExperiment();
-    javaReadExperiment();
+    // insertElementsDifferentOrder();
+    // insertFewElementsOften();
+    // insertManyElements();
+    insertExperiment();
+    // readExperiment();
+    // flixInsertExperiment();
+    // flixReadExperiment();
+    // javaInsertExperiment();
+    // javaReadExperiment();
     ()});
     ()
 
@@ -186,6 +187,10 @@ def runJavaMap(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32},
     let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
     runNTestsGeneral(testNum#testNum, () -> insertUntilJavaMap(inserted, timeLimit))
 
+def runBPlusTree(testNum: {testNum = Int32}, totalInserts: {totalInserts = Int32}, timeLimit: Int64): Vector[Int64] \ IO + NonDet + Sys =
+    let inserted = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts), Vector.range(0, 1)));
+    runNTestsGeneral(testNum#testNum, () -> insertUntil(inserted, timeLimit, standardOrder()))
+
 def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists, timeLimit: Int64): Int64 \ IO = 
     let readNum = List.size(Vector.get(0, lookup));
     let tree  = new TreeMap();
@@ -279,7 +284,7 @@ def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
 
 def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
     let reads = readNum();
-    let file = "BPlussTreeReadExperiment.txt";
+    let file = "BPlusTreeReadExperiment.txt";
     FileWrite.write(str = "", file);
     let nanoLimit = commonTimeLimitNano();
     FileWrite.append(str = "BPlusTree: Read experiment", file);
@@ -292,6 +297,22 @@ def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
         println("Inserts");
         println(inserts);
         FileWrite.append(str = Vector.toString(runWithThreadsReadRandomUntil(testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
+
+def insertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = {
+    let file = "BPlusTreeWriteExperiment.txt";
+    FileWrite.write(str = "", file);
+    let nanoLimit = commonTimeLimitNano();
+    println("BPlusTree: Insert experiment");
+    FileWrite.append(str = "BPlusTree: Insert experiment", file);
+    Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
+        println("Inserts");
+        println(inserts);
+        FileWrite.append(str = Vector.toString(runBPlusTree(testNum = repeatNum(), totalInserts = inserts, nanoLimit)), file)
     }, Vector#{10_000, 100_000, 1_000_000})
 }
 def insertManyElements(): Unit \ IO + NonDet + Sys + FileWrite = {
