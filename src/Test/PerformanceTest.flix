@@ -18,9 +18,9 @@ def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
     // insertFewElementsOften();
     // insertManyElements();
     insertExperiment();
-    // readExperiment();
-    // flixInsertExperiment();
-    // flixReadExperiment();
+    readExperiment();
+    flixInsertExperiment();
+    flixReadExperiment();
     // javaInsertExperiment();
     // javaReadExperiment();
     ()})));
@@ -251,39 +251,39 @@ def runBPlusTree(rc: Region[r], testNum: {testNum = Int32}, totalInserts: {total
 //     }, Vector#{10_000, 100_000, 1_000_000})
 // }
 
-// def flixInsertExperiment(): Unit \ IO + NonDet + Sys + FileWrite = region rc {
-//     let file = "flixWriteExperiment.txt";
-//     FileWrite.write(str = "", file);
-//     let nanoLimit = commonTimeLimitNano();
-//     FileWrite.append(str = "Flix: Insert experiment", file);
-//     println("Flix: Insert experiment");
-//     Vector.forEach(inserts -> {
-//         FileWrite.append(str = "\nInserts: ", file);
-//         FileWrite.append(str = Int32.toString(inserts), file);
-//         FileWrite.append(str = "\n", file);
-//         println("Inserts");
-//         println(inserts);
-//         FileWrite.append(str = Vector.toString(runFlixMap(rc, testNum = repeatNum(), totalInserts = inserts, nanoLimit)), file)
-//     }, Vector#{10_000, 100_000, 1_000_000})
-// }
+def flixInsertExperiment(): Unit \ IO + Random + Sys + FileWrite = region rc {
+    let file = "flixWriteExperiment.txt";
+    FileWrite.write(str = "", file);
+    let nanoLimit = commonTimeLimitNano();
+    FileWrite.append(str = "Flix: Insert experiment", file);
+    println("Flix: Insert experiment");
+    Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
+        println("Inserts");
+        println(inserts);
+        FileWrite.append(str = Vector.toString(runFlixMap(rc, testNum = repeatNum(), totalInserts = inserts, nanoLimit)), file)
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
 
-// def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = region rc {
-//     let reads = readNum();
-//     let file = "flixReadExperiment.txt";
-//     FileWrite.write(str = "", file);
-//     let nanoLimit = commonTimeLimitNano();
-//     FileWrite.append(str = "Flix: Read experiment", file);
-//     FileWrite.append(str = "\nTotal reads: ${reads}", file);
-//     println("Flix: Read experiment");
-//     Vector.forEach(inserts -> {
-//         FileWrite.append(str = "\nInserts: ", file);
-//         FileWrite.append(str = Int32.toString(inserts), file);
-//         FileWrite.append(str = "\n", file);
-//         println("Inserts");
-//         println(inserts);
-//         FileWrite.append(str = Vector.toString(runFlixMapRead(rc, testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
-//     }, Vector#{10_000, 100_000, 1_000_000})
-// }
+def flixReadExperiment(): Unit \ IO + NonDet + Sys + FileWrite = region rc {
+    let reads = readNum();
+    let file = "flixReadExperiment.txt";
+    FileWrite.write(str = "", file);
+    let nanoLimit = commonTimeLimitNano();
+    FileWrite.append(str = "Flix: Read experiment", file);
+    FileWrite.append(str = "\nTotal reads: ${reads}", file);
+    println("Flix: Read experiment");
+    Vector.forEach(inserts -> {
+        FileWrite.append(str = "\nInserts: ", file);
+        FileWrite.append(str = Int32.toString(inserts), file);
+        FileWrite.append(str = "\n", file);
+        println("Inserts");
+        println(inserts);
+        FileWrite.append(str = Vector.toString(runFlixMapRead(rc, testNum = repeatNum(), totalInserts = inserts, generatedReads = reads, nanoLimit)), file)
+    }, Vector#{10_000, 100_000, 1_000_000})
+}
 
 def readExperiment(): Unit \ IO + NonDet + Sys + FileWrite = region rc {
     let reads = readNum();
