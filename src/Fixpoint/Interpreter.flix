@@ -101,31 +101,31 @@ mod Fixpoint.Interpreter {
         tuples: Vector[Vector[Int64]],
         norm: Normalization[r]    
     ): Index[r] \ r = 
-        let index = MutMap.empty(rc);
+        let index = BPlusTree.empty(rc, 64, search);
         if(Vector.isEmpty(tuples)) {
             index
         } else
-            let totalSize = Vector.size(Vector.get(0, tuples));
-            let notSearch = Array.empty(rc, searchLen - totalSize);
-            Vector.foldLeft(counter -> i -> {
-    // TODO: Should be not Vector.memberOf(i, search), right? 
-                if (Vector.memberOf(i, search)) {
-                    Array.put(counter, i, notSearch);
-                    counter + 1
-                } else counter
-            }, 0, Vector.range(0, totalSize));
+    //         let totalSize = Vector.size(Vector.get(0, tuples));
+    //         let notSearch = Array.empty(rc, searchLen - totalSize);
+    //         Vector.foldLeft(counter -> i -> {
+    // // TODO: Should be not Vector.memberOf(i, search), right? 
+    //             if (Vector.memberOf(i, search)) {
+    //                 Array.put(counter, i, notSearch);
+    //                 counter + 1
+    //             } else counter
+    //         }, 0, Vector.range(0, totalSize));
             Vector.forEach(tuple -> {
-                let (nonLat, lat) = match toDenotation(relSym) {
-                    case Denotation.Relational => (tuple, 0i64)
-                    case Denotation.Latticenal(_, _, lub, _) => 
+                let (nonLat, lat, lub) = match toDenotation(relSym) {
+                    case Denotation.Relational => (tuple, 0i64, a -> b -> 0i64)
+                    case Denotation.Latticenal(_, _, lub, _) =>
                         let (vec1, vec2) = Vector.splitAt(Vector.length(tuple) - 1, tuple);
                         (vec1, Vector.get(0, vec2))
                 };
-                let restOfTuple = Array.empty(rc, Vector.length(tuple) - searchLen);
-                Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, searchTuple), search);
-                Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, restOfTuple), search);
-                let map = MutMap.getOrElsePut(searchTuple, MutMap.empty(rc), index);
-                MutMap.putWith(lubWith(index, norm, lub), restOfTuple, lat, map)
+                // let restOfTuple = Array.empty(rc, Vector.length(tuple) - searchLen);
+                // Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, searchTuple), search);
+                // Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, restOfTuple), search);
+                // let map = MutMap.getOrElsePut(searchTuple, MutMap.empty(rc), index);
+                BPlusTree.putWith(lubWith(index, norm, lub), nonLat, lat, index)
             }, tuples);
             index
         
@@ -184,13 +184,14 @@ mod Fixpoint.Interpreter {
 
     @Internal
     pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Database[r], Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
-    let (program, db, norm) = input;
-    interpretWithDatabaseInternal(rc, db, norm, program)
+    ???
+    // let (program, db, norm) = input;
+    // interpretWithDatabaseInternal(rc, db, norm, program)
 
     @Internal
     pub def interpretWithDatabaseInternal(
         rc: Region[r], 
-        db: Database[r], 
+        db: Indexes[r], 
         norm: Normalization[r], 
         program: RamProgram
     ): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
@@ -199,9 +200,10 @@ mod Fixpoint.Interpreter {
             (marshallDb(rc, db, norm), predState)
     }
 
+
     def marshallDb(rc: Region[r], db: Database[r], norm: Normalization[r]): DatabaseExternal[r] = ???
 
-    def evalStmt(rc: Region[r], db: Database[r], norm: Normalization[r], stmt: RamStmt): Unit \ r =
+    def evalStmt(rc: Region[r], db: Indexes[r], norm: Normalization[r], stmt: RamStmt): Unit \ r =
         match stmt {
             case RamStmt.Insert(relOp) => evalOp(rc, db, allocEnv(rc, 0, relOp), norm, relOp)
             case RamStmt.Merge(srcSym, dstSym, index) =>

@@ -102,6 +102,21 @@ mod BPlusTree {
                 ()
             case None => ()
         }
+    
+    def fixRoot(newRoot: Node[r], tree: BPlusTree[r]): Unit \ r = match newRoot {
+        case Some(root) =>
+            // While this may seem unsafe the splits so far should have ensured that
+            // at this point we have a lock on the old root which is still the root
+            Lock.lock(tree->rootLock);
+            let oldRoot = tree->root;
+            tree->root = root;
+            Lock.unlock(tree->rootLock);
+            Lock.unlock(Node.getLock(oldRoot));
+            Lock.unlock(Node.getLock(root));
+            ()
+        case None => ()
+    }
+
 
     pub def isEmpty(tree: BPlusTree[r]): Bool \ r =
         let root = BPlusTree.getLockedRoot(tree);
@@ -123,6 +138,11 @@ mod BPlusTree {
 
     pub def rangeQueryWith(f: Array[Int64, r] -> Int64 -> Unit \ ef, min: Array[Int64, r], max: Array[Int64, r], tree: BPlusTree[r]): Unit \ {r, ef} =
         Node.rangeQueryWith(f, min, max, tree->search, tree->root)
+
+    pub def putWith(f: Int64 -> Int64 -> Int64 \ ef, k: Array[Int64, r], v: Int64, tree: BPlusTree[r]): Unit \ ef + r =
+        let leaf = findLeaf(k, tree);
+        let optNewRoot = Node.putWith(f, k, v, tree->search, tree->order, tree->rc, leaf);
+        fixRoot(optNewRoot, tree)
 
     @Internal
     pub def assertTreeInvariant(tree: BPlusTree[r]): Bool \ r =
@@ -149,6 +169,15 @@ mod BPlusTree {
         import java.lang.Object
         import java.util.Objects
         use BPlusTree.Lock
+
+        pub def putWith(f: Int64 -> Int64 -> Int64 \ ef, key: Array[Int64, r], val: Int64, search: Search, order: Int32, rc: Region[r], node: Node[r]): Option[Node[r]] \ r + ef =
+            let index = binarySearch(ke, node->size, search, node->keys);
+            if (index < 0) {
+                insertIntoLeafPropagate(key, val, order, rc, search, index, node)
+            } else
+                let v1 = Array.get(index, node->values);
+                Array.put(f(val, v1), index, node->values);
+                None
 
         def actualInsertLeaf(
             key: Array[Int64, r],
@@ -243,6 +272,19 @@ mod BPlusTree {
         ): Option[Node[r]] \ r = {
             let size = node->size;
             let index = binarySearch(key, size, search, node->keys);
+            insertIntoLeafPropagate(key, val, order, rc, search, index, node)
+        }
+
+        def insertIntoLeafPropagate(
+                key: Array[Int64, r],
+                val: Int64,
+                order: Int32,
+                rc: Region[r],
+                search: Search,
+                index: Int32,
+                node: Node[r]
+        ): Option[Node[r]] \ r = {
+            let size = node->size;
             if (index >= 0) {
                 Array.put(val, index, node->values);
                 Lock.unlock(node->lock);
