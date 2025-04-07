@@ -65,7 +65,7 @@ mod Fixpoint.Phase.AugmentToExec {
                 , values)
             , facts);
             // Compile facts.
-            (EProgram.Program(compiledStmt, newFacts, meta, indexInfo), marshall)
+            (EProgram.Program(compiledStmt, newFacts, meta, indexInfo), marshall, ???, ???)
     }
 
     @Internal

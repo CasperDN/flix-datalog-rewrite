@@ -2,7 +2,7 @@ mod Fixpoint.Phase.IndexSelection {
     use AutomaticIndexSelection.{minIndex}
     use Fixpoint.UniqueInts
     use Fixpoint.UniqueInts.IndexState
-    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, TupleVar};
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, TupleVar, collectRelSym, arityOf};
     type alias Indexes[r: Eff] = MutMap[RelSym, List[Search], r]
     type alias Load = (TupleVar, Int32)
 
@@ -12,7 +12,8 @@ mod Fixpoint.Phase.IndexSelection {
             let (indexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = region rc {
                 let indexes = MutMap.empty(rc);
                 let collectedStmt = collectSearchesStmt(indexes, rc, stmt);
-                let newIndexes = indexes |>
+                let newIndexes = 
+                    indexes |>
                     MutMap.toMap |> 
                     Map.map(minIndex) |>
                     Map.map(List.toVector);
@@ -24,7 +25,24 @@ mod Fixpoint.Phase.IndexSelection {
                 let (finalState, _) = indexState;
                 (indexedStmt, MutMap.toMap(finalState))
             };
-            RamProgram.Program(indexedStmt, facts, meta, (indexes, indexPlacement))
+            let indexesMissing = 
+                collectRelSym(program) |>
+                List.foldLeft(acc -> relSym -> 
+                    let search = Vector.range(0, arityOf(relSym));
+                    Map.insert(relSym, Vector#{search}, acc),
+                    Map#{}
+                );
+            let indexesFull  
+                indexes |>
+                Map.map(relSym ->
+                    Vector.map(search -> 
+                        Vector.range(0, arityOf(relSym)) |>
+                        Vector.filter(x -> not Vector.memberOf(x, search)) |>
+                        Vector.append(search)
+                    )
+                ) |> 
+                Map.union(indexesMissing);
+            RamProgram.Program(indexedStmt, facts, meta, (indexesFull, indexPlacement))
     }
 
     def indexStmt(stmt: RamStmt, indexInformation: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {

@@ -39,6 +39,10 @@ mod BPlusTree {
             unchecked_cast((l.isLocked(): _ \ IO) as _ \ r)
     }
 
+    pub def forEach(f: Array[Int64, r] -> Int64 -> Unit \ ef, search: Search, node: Node[r] ): Unit \ ef + r =
+        let minLeaf = Node.leftMostChild(search, node);
+        Node.traverseRightUnconditional(f, 0, search, minLeaf)
+
     pub def containsPair(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
         let res = Node.leafContainsPair(key, val, tree->search, leaf);
@@ -49,7 +53,34 @@ mod BPlusTree {
         let leaf = BPlusTree.findLeafThreadUnsafe(key, tree);
         Node.leafContainsPair(key, val, tree->search, leaf)
 
-    pub def empty(rc: Region[r], order: Int32, search: Search): BPlusTree[r] \ r =
+    pub def getSearch(tree: BPlusTree[r]): Search = tree->search
+
+    pub def merge(src: BPlusTree[r], dst: BPlusTree[r]): Unit \ r = {
+        let len = Vector.length(src->search);
+        let min = Array.repeat(src->rc, len, Int64.minValue());
+        let max = Array.repeat(src->rc, len, Int64.maxValue());
+        BPlusTree.rangeQueryWith(k -> v -> BPlusTree.insert(k, v, dst), min, max, src)
+    }
+
+    pub def mergeWith(f: Int64 -> Int64 -> Int64 \ ef, src: BPlusTree[r], dst: BPlusTree[r]): Unit \ r + ef = {
+        let len = Vector.length(src->search);
+        let min = Array.repeat(src->rc, len, Int64.minValue());
+        let max = Array.repeat(src->rc, len, Int64.maxValue());
+        BPlusTree.rangeQueryWith(k -> v -> BPlusTree.putWith(f, k, v, dst), min, max, src)
+    }
+
+    pub def empty(rc: Region[r], search: Search): BPlusTree[r] \ r = 
+        let order = 64;
+        let node = Node.mkLeaf(rc, Array.empty(rc, order), Array.empty(rc, order), 0, None, None);
+        new BPlusTree @ rc {
+            root = node,
+            order = order,
+            rootLock = Lock.mkLock(rc),
+            rc = rc,
+            search = search
+        }
+
+    pub def emptyWithOder(rc: Region[r], order: Int32, search: Search): BPlusTree[r] \ r =
         if (order < 3)
             bug!("BPlusTree.empty requires an order more than 2, found '${order}'.")
         else {
@@ -103,7 +134,7 @@ mod BPlusTree {
             case None => ()
         }
     
-    def fixRoot(newRoot: Node[r], tree: BPlusTree[r]): Unit \ r = match newRoot {
+    def fixRoot(newRoot: Option[Node[r]], tree: BPlusTree[r]): Unit \ r = match newRoot {
         case Some(root) =>
             // While this may seem unsafe the splits so far should have ensured that
             // at this point we have a lock on the old root which is still the root
@@ -117,6 +148,10 @@ mod BPlusTree {
         case None => ()
     }
 
+    pub def getWithDefault(key: Array[Int64, r], default_: Int64, tree: BPlusTree[r]): Int64 \ r =
+        let leaf = BPlusTree.findLeafThreadUnsafe(key, tree);
+        let res = Node.getWithDefault(key, tree->search, default_, leaf);
+        res
 
     pub def isEmpty(tree: BPlusTree[r]): Bool \ r =
         let root = BPlusTree.getLockedRoot(tree);
@@ -171,13 +206,42 @@ mod BPlusTree {
         use BPlusTree.Lock
 
         pub def putWith(f: Int64 -> Int64 -> Int64 \ ef, key: Array[Int64, r], val: Int64, search: Search, order: Int32, rc: Region[r], node: Node[r]): Option[Node[r]] \ r + ef =
-            let index = binarySearch(ke, node->size, search, node->keys);
+            let index = binarySearch(key, node->size, search, node->keys);
             if (index < 0) {
                 insertIntoLeafPropagate(key, val, order, rc, search, index, node)
             } else
                 let v1 = Array.get(index, node->values);
                 Array.put(f(val, v1), index, node->values);
                 None
+
+        pub def leftMostChild(search: Search, node: Node[r]): Node[r] \ r =
+            match node->isLeaf {
+                case false =>
+                    leftMostChild(search, Array.get(0, node->children))
+                case true => node
+            }
+
+        pub def traverseRightUnconditional(
+            f: Array[Int64, r] -> Int64 -> Unit \ ef,
+            index: Int32,
+            search: Search,
+            node: Node[r]
+        ): Unit \ ef + r =
+            if(index < node->size) {
+                let k = Array.get(index, node->keys);
+                f(k, Array.get(index, node->values));
+                traverseRightUnconditional(f, index + 1, search, node)
+            } else match node->next {
+                case Some(next) => traverseRightUnconditional(f, 0, search, next)
+                case None => ()
+            }
+
+        pub def getWithDefault(key: Array[Int64, r], search: Search, default_: Int64, node: Node[r]): Int64 \ r =
+            let index = binarySearch(key, node->size, search, node->keys);
+            if (index < 0)
+                default_
+            else
+                Array.get(index, node->values)
 
         def actualInsertLeaf(
             key: Array[Int64, r],

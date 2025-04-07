@@ -154,10 +154,10 @@ mod Fixpoint.Ast.Ram {
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamId)
         case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
-        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamId)
-        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamId)
-        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
-        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
+        case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
+        case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamId)
+        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
+        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
     }
 
     pub def getTermRamId(t: RamTerm): RamId = match t {
