@@ -41,9 +41,9 @@ mod Fixpoint.Ast.ExecutableRam {
         // case Merge(Index, Index, IntToBox) // IntToBox here only means something for lattice-tuples.
         // case Swap(Index, Index)
         // case Purge(Index)
-        case Merge(RelSym, RelSym, IntToBox) // IntToBox here only means something for lattice-tuples.
-        case Swap(RelSym, RelSym)
-        case Purge(RelSym)
+        case Merge(Int32, Int32, IntToBox) // IntToBox here only means something for lattice-tuples.
+        case Swap(Int32, Int32)
+        case Purge(Int32)
         case Seq(Vector[RamStmt])
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
@@ -73,8 +73,8 @@ mod Fixpoint.Ast.ExecutableRam {
     
     @Internal
     pub enum RelOp {
-        case Search(Int32, RelSym, (Vector[WriteTuple], Vector[WriteTuple]), RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
-        case SearchWithIndex(Int32, RelSym, Vector[BoolExp], Int32, RelOp)
+        case Search(Int32, Int32, Vector[WriteTuple], RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
+        case SearchWithIndex(Int32, Int32, Vector[BoolExp], Int32, RelOp)
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
         case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
@@ -194,8 +194,10 @@ mod Fixpoint.Ast.ExecutableRam {
 
     // RamProgram consisting of the the ExecutableRam program/statements, the starting database/facts and information about which indices should be used.
     pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation)
+        case Program(RamStmt, Facts, PredicateState, IndexInformation, ArityInformation)
     }
+
+    type alias ArityInformation = Vector[Int32]
 
     type alias Tuple[r: Eff] = Array[Int64, r]
 
