@@ -113,12 +113,15 @@ mod Fixpoint.Phase.Compiler {
         let loopBody = MutList.empty(rc);
         List.forEach(x -> compileRule(stmts, x, predSymMaps, counter), stratum);
         Map.forEach(predSym -> match (_arity, _den) -> {
-            let full = PredTrack.getNewRel(predSymMaps, predSym, Full);
-            let delta = PredTrack.getNewRel(predSymMaps, predSym, Delta);
+            let newRel = PredTrack.getNewRel(predSymMaps, predSym, New);
+            let deltaRel = PredTrack.getNewRel(predSymMaps, predSym, Delta);
+            let fullRel = PredTrack.getNewRel(predSymMaps, predSym, Full);
             // let full = RelSym.Full(predSym, arity, den);
             // let delta = RelSym.Delta(predSym, arity, den);
-            let mergeDelta = RamStmt.Merge(full, delta);
-            MutList.push(mergeDelta, stmts)
+            let mergeDelta = RamStmt.Merge(newRel, fullRel);
+            let mergeFull = RamStmt.Merge(newRel, deltaRel);
+            MutList.push(mergeDelta, stmts);
+            MutList.push(mergeFull, stmts)
         }, idb);
         Map.forEach(predSym -> match (_arity, _den) -> {
             // let purge = RamStmt.Purge(RelSym.New(predSym, arity, den));
@@ -140,7 +143,7 @@ mod Fixpoint.Phase.Compiler {
             // let newr = RelSym.New(predSym, arity, den);
             let newr = PredTrack.getNewRel(predSymMaps, predSym, New);
             // let assign = RamStmt.Assign(delta, newr);
-            let assign = RamStmt.Swap(delta, newr);
+            let assign = RamStmt.Swap(newr, delta);
             MutList.push(assign, loopBody)
         }, idb);
         let loopTest =
@@ -176,7 +179,7 @@ mod Fixpoint.Phase.Compiler {
             let env = unifyVars(predSymMaps, counter, augBody);
             let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
             // let projection = RelOp.Project(ramTerms, RelSym.Full(headSym, arity, headDen));
-            let projection = RelOp.Project(ramTerms, PredTrack.getNewRel(predSymMaps, headSym, Full));
+            let projection = RelOp.Project(ramTerms, PredTrack.getNewRel(predSymMaps, headSym, New));
             let join = compileBody(env, augBody, predSymMaps, counter);
             let loopBody = RelOp.If(join, projection);
             let insert =

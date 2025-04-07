@@ -98,9 +98,10 @@ mod Fixpoint.Interpreter {
         l1: Int64, 
         l2: Int64
     ): Int64 =
-        let box1 = Normalization.unNormalizeReal(l1, index, norm);
-        let box2 = Normalization.unNormalizeReal(l2, index, norm);
-        Normalization.normalizeBox(box1 `lub` box2, index, norm)
+    ???
+        // let box1 = Normalization.unNormalizeReal(l1, index, norm);
+        // let box2 = Normalization.unNormalizeReal(l2, index, norm);
+        // Normalization.normalizeBox(box1 `lub` box2, index, norm)
     
     pub def mkIndex(
         rc: Region[r], 

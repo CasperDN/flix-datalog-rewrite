@@ -120,19 +120,7 @@ mod BPlusTree {
     pub def insert(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Unit \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
         let newRoot = Node.insertIntoLeaf(key, val, tree->order, tree->rc, tree->search, leaf);
-        match newRoot {
-            case Some(root) =>
-                // While this may seem unsafe the splits so far should have ensured that
-                // at this point we have a lock on the old root which is still the root
-                Lock.lock(tree->rootLock);
-                let oldRoot = tree->root;
-                tree->root = root;
-                Lock.unlock(tree->rootLock);
-                Lock.unlock(Node.getLock(oldRoot));
-                Lock.unlock(Node.getLock(root));
-                ()
-            case None => ()
-        }
+        fixRoot(newRoot, tree)
     
     def fixRoot(newRoot: Option[Node[r]], tree: BPlusTree[r]): Unit \ r = match newRoot {
         case Some(root) =>
@@ -213,13 +201,6 @@ mod BPlusTree {
                 let v1 = Array.get(index, node->values);
                 Array.put(f(val, v1), index, node->values);
                 None
-
-        pub def leftMostChild(search: Search, node: Node[r]): Node[r] \ r =
-            match node->isLeaf {
-                case false =>
-                    leftMostChild(search, Array.get(0, node->children))
-                case true => node
-            }
 
         pub def traverseRightUnconditional(
             f: Array[Int64, r] -> Int64 -> Unit \ ef,
@@ -491,6 +472,14 @@ mod BPlusTree {
             } else
                 traverseRight(f, index, max, search, minLeaf)
 
+        pub def forEach(
+            f: Array[Int64, r] -> Int64 -> Unit \ r0,
+            search: Search,
+            node: Node[r]
+        ): Unit \ r0 + r =
+            let minLeaf = leftMostChild(search, node);
+            traverseRightUnconditional(f, 0, search, minLeaf)
+
         def splitLeaf(
             leftLeaf: Node[r],
             key: Array[Int64, r],
@@ -669,6 +658,13 @@ mod BPlusTree {
             } else match node->next {
                 case Some(next) => traverseRight(f, 0, max, search, next)
                 case None => ()
+            }
+
+        pub def leftMostChild(search: Search, node: Node[r]): Node[r] \ r =
+            match node->isLeaf {
+                case false =>
+                    leftMostChild(search, Array.get(0, node->children))
+                case true => node
             }
 
         def arrayInsert(x: a, i: Int32, len: Int32, arr: Array[a, r]): Unit \ r =

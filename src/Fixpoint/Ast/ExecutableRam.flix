@@ -73,9 +73,8 @@ mod Fixpoint.Ast.ExecutableRam {
     
     @Internal
     pub enum RelOp {
-        // TupleVar, Index, ...
-        case Search(Int32, Int32, (Vector[WriteTuple], Vector[WriteTuple]), RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
-        case SearchWithIndex(Int32, RelSym, Vector[BoolExp], Int32, RelOp)
+        case Search(Int32, Int32, Vector[WriteTuple], RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
+        case SearchWithIndex(Int32, Int32, Vector[BoolExp], Int32, RelOp)
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
         case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
