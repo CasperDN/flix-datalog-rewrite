@@ -57,9 +57,7 @@ mod Fixpoint.Interpreter {
 
     type alias SearchTuple[r: Region] = Tuple[r]
 
-    pub type alias Index[r: Region] = MutMap[SearchTuple[r], MutMap[Tuple[r], Int64, r], r]
-
-    // pub type alias IndexNoSearch[r: Region] = MutMap[SearchTuple[r], MutMap[Tuple[r], Int64, r], r]
+    pub type alias Index[r: Region] = MutMap[Tuple[r], Int64, r]
 
     pub type alias Indexes[r: Region] = Array[Index[r], r]
 
@@ -69,18 +67,29 @@ mod Fixpoint.Interpreter {
 
     pub type alias SearchEnv[r: Region] = (Array[SearchTuple[r], r], Array[Int64, r])
 
+
+    // @Internal
+    // pub def interpret(rc: Region[r], input: (RamProgram, Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
+    //     ???
+
+
+    // @Internal
+    // pub def interpretWithDatabase(rc: Region[r], db: DatabaseExternal[r], input: (RamProgram, Normalization[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
+    //     ???
+
+
     def _unwrap(x: Option[a]): a = match x {
         case Some(v) => v
         case None => ???
     }
 
     pub def lubWith(
-        index: In32, 
+        index: Int32, 
         norm: Normalization[r], 
         lub: Boxed -> Boxed -> Boxed, 
         l1: Int64, 
         l2: Int64
-    ): Int64 = 
+    ): Int64 =
         let box1 = Normalization.unNormalizeReal(l1, index, norm);
         let box2 = Normalization.unNormalizeReal(l2, index, norm);
         Normalization.normalizeBox(box1 `lub` box2, index, norm)
@@ -93,13 +102,13 @@ mod Fixpoint.Interpreter {
         norm: Normalization[r]    
     ): Index[r] \ r = 
         let index = MutMap.empty(rc);
-        let searchLen = Vector.length(search);
         if(Vector.isEmpty(tuples)) {
             index
         } else
             let totalSize = Vector.size(Vector.get(0, tuples));
             let notSearch = Array.empty(rc, searchLen - totalSize);
             Vector.foldLeft(counter -> i -> {
+    // TODO: Should be not Vector.memberOf(i, search), right? 
                 if (Vector.memberOf(i, search)) {
                     Array.put(counter, i, notSearch);
                     counter + 1
@@ -112,7 +121,6 @@ mod Fixpoint.Interpreter {
                         let (vec1, vec2) = Vector.splitAt(Vector.length(tuple) - 1, tuple);
                         (vec1, Vector.get(0, vec2))
                 };
-                let searchTuple = Array.empty(rc, searchLen);
                 let restOfTuple = Array.empty(rc, Vector.length(tuple) - searchLen);
                 Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, searchTuple), search);
                 Vector.forEach(i -> Array.put(Vector.get(i, nonLat), i, restOfTuple), search);
@@ -441,15 +449,4 @@ mod Fixpoint.Interpreter {
         // case RamTerm.RowLoad(rowVar, index) => bug!("Illegal RowLoad with ${rowVar} ${index}")
         case _ => bug!("Illegal term ${term}")
     }
-
-    // def unwrap(o: Option[a]): a = match o {
-    //     case Some(a) => a
-    //     case None => bug!("Unexpected None in Interpreter")
-    // }
-
-    // def evalInputFacts(rc: Region[r], term: RamTerm): v \ r = 
-    //     let arr0 = Array.empty(rc, 0);
-    //     let arr = Array.empty(rc, 0);
-    //     evalTerm((arr0, arr), term)
-
 }

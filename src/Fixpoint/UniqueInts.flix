@@ -6,8 +6,19 @@ mod Fixpoint.UniqueInts {
 
     pub def empty(rc: Region[r]): IndexState[k, r] \ r = (MutMap.empty(rc), Counter.empty(rc))
 
-    pub def getIndex(val: k, info: IndexState[k, r]): Int32 \ r with Order[k] = 
-        let (map, counter) = info;
+    pub def resetCounterTo(newState: Int32, state: IndexState[k, r]): Unit \ r = {
+        let (_, counter) = state;
+        Counter.resetTo(newState, counter)
+    }
+
+    pub def getCurrentId(state: IndexState[k, r]): Int32 \ r = {
+        let (_, counter) = state;
+        Counter.getCurrentId(counter)
+    }
+
+
+    pub def getIndex(val: k, state: IndexState[k, r]): Int32 \ r with Order[k] = 
+        let (map, counter) = state;
         match MutMap.get(val, map) {
             case None =>
                 let id = Counter.getNewID(counter);

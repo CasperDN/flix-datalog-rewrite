@@ -258,10 +258,11 @@ mod Fixpoint.Ast.Ram {
 
     @Internal
     pub def collectRelSym(program: RamProgram): List[RelSym] = region rc { match program {
-        case RamProgram.Program(stmt, _, _, _) =>
-            let map = MutSet.empty(rc);
-            collectRelSymStmt(map, stmt);
-            MutSet.toList(map)
+        case RamProgram.Program(stmt, facts, _, _) =>
+            let seen = MutSet.empty(rc);
+            collectRelSymStmt(seen, stmt);
+            Map.forEach(k -> _ -> MutSet.add(k, seen), facts);
+            MutSet.toList(seen)
     }}
 
     @Internal
@@ -412,6 +413,11 @@ mod Fixpoint.Ast.Ram {
 
     pub type alias Search = Vector[Int32]
 
+    
+    pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
+
     //The first is a list of the indices that should be made. The second is a map describing where they are suppoesed to be saved at runtime.
-    pub type alias IndexInformation = (Map[RelSym, Vector[Search]], Map[(RelSym, Int32), Int32])
+    pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
+
+
 }

@@ -58,22 +58,25 @@ mod Fixpoint.Solver {
         //     let _ = ();
         //     unchecked_cast(() -> ??? as _ \ rc)()
         // };
-        def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Normalization[rc]) \ rc= {
-            Fixpoint.Phase.Compiler.compile(cs, stf)
+        // def compiler(cs: Datalog, db: DatabaseExternal[rc]): (RamProgram, Normalization[rc]) \ rc= { ??? };
+        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (RamProgram, Normalization[rc]) \ rc= {
+            Fixpoint.Phase.Compiler.compile(cs, db, stf)
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.Hoisting.hoistProgram
-            // |> Fixpoint.Phase.IndexSelection.indexProgram
-            |> Fixpoint.Phase.VarsToIndices.lowerProgram
-            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc, db)
+            |> Fixpoint.Phase.IndexSelection.indexProgram
+            // |> Fixpoint.Phase.VarsToIndices.lowerProgram
+            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc)
         };
         let model = match d {
             case Datalog(_, _) =>
-                compiler(d, MutMap.empty(rc)) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
+            // ???
+                compiler(d, Map.empty()) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
 
 
             case Model(_) => d
             case Join(Model(m), cs) =>
-                compiler(cs, Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc)) |> Fixpoint.Interpreter.interpretWithDatabase(rc) |> toModelWithRenaming
+            ???
+                // compiler(cs, Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc)) |> Fixpoint.Interpreter.interpretWithDatabase(rc, m) |> toModelWithRenaming
             case _ => bug!("Datalog normalization bug")
         };
         let m = Fixpoint.Debugging.notifyPostSolve(model);

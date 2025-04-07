@@ -2,7 +2,7 @@ Renaming:
     SearchWithIndex => Query
 Ram => Ram
 Change indentation in BPlusTree
-Change TupleVar to Var
+Change TupleVar back to RowVar
 Use Redef for Array Order
 
 IndexSelection must generate an index for all relations. Also relations with no indexes.

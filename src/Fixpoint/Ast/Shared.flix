@@ -76,7 +76,7 @@ mod Fixpoint.Ast.Shared {
         case _                     => false
     }
 
-        ///
+    ///
     /// Returns `true` if the given denotation is relational.
     ///
     @Internal

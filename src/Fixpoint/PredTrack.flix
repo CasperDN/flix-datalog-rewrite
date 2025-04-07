@@ -91,7 +91,8 @@ mod PredTrack {
             case Datalog(facts, rules) =>
                 let (map1, max1) = collectPredicates(rules);
                 let (map2, max2) = collectPredicates(facts);
-                (Int64.max(max1, max2), Map.union(map1, map2))
+                let map1_ = unchecked_cast({println(Map.union(map1, map2)); map1} as _ \ {});
+                (Int64.max(max1, max2), Map.union(map1_, map2))
             case _ => bug!("Datalog normalization bug")
         }
         def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 
@@ -113,16 +114,20 @@ mod PredTrack {
             case PredSym(_, id) => id
         }
 
+        pub def getNewPred(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym =
+            oldPredSymToPredSym(self, predSym, t) 
+
+
         // pub def oldIDSymToPredSym(self: PredSymMapInternal, id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
         //     case RelSym.Symbol(pred, _, _) => pred
         // }
 
-        pub def oldPredSymToPredSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym = match oldPredSymToRelSym(self, predSym, t) {
+        def oldPredSymToPredSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym = match getNewRel(self, predSym, t) {
                 case RelSym.Symbol(pred, _, _) => pred
 
         }
 
-        pub def oldPredSymToRelSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): RelSym = match predSym {
+        pub def getNewRel(self: PredSymMapInternal, predSym: PredSym, t: PredType): RelSym = match predSym {
             case PredSym(_, id) => oldIDSymToRelSym(self, id, t)
         }
 

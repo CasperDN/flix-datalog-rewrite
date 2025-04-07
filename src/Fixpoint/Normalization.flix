@@ -53,7 +53,7 @@ mod Fixpoint.Normalization {
         (initializeInternal(rc, r, mapping), mapping)
 
     def initializeInternal(rc: Region[r], r: RamProgram, map: RamIdToMarshal): Normalization[r] \ r =
-        let max = snd(unwrap(Map.maximumValue(map)));
+        let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
         let posToIndex = Array.empty(rc, max);
@@ -156,10 +156,16 @@ mod Fixpoint.Normalization {
 
         pub def computeMapping(d: RamProgram): Map[RamId, Int32] = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
-            let RamProgram.Program(s, _, predTrack, _) = d;
+            let RamProgram.Program(s, facts, predTrack, _) = d;
             computeDisjointStmt(s, predTrack, disjointSet);
+            Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(id, i), disjointSet), Vector.range(0, arity))
+            }, facts);
             let mutMap = MutMap.empty(rc);
             let counter = Counter.empty(rc);
+            Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
+                Vector.forEach(i -> insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter), Vector.range(0, arity))
+            }, facts);            
             computeMappingStmt(s, predTrack, disjointSet, mutMap, counter);
             MutMap.toMap(mutMap)
             // let _ = "";
@@ -396,7 +402,7 @@ mod Fixpoint.Normalization {
         }
 
         @Internal
-        def computeMappingStmt(s: RamStmt, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = match s {
+        def computeMappingStmt(s: RamStmt, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeMappingOp(rest, predTrack, set, map, counter)
             case RamStmt.Merge(_, _) => ()
             case RamStmt.Swap(_, _) => ()
@@ -405,12 +411,12 @@ mod Fixpoint.Normalization {
             case RamStmt.Par(stmts) => Vector.forEach(x -> computeMappingStmt(x, predTrack, set, map, counter), stmts)
             case RamStmt.Until(bools, stmt) => 
                 computeMappingStmt(stmt, predTrack, set, map, counter); 
-                Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools)
+                Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
             case RamStmt.Comment(_) => ()
         }
 
 
-        def computeMappingOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = 
+        def computeMappingOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
         let recurse = x -> computeMappingOp(x, predTrack, set, map, counter);
         let insert = x -> insertIndex(x, set, map, counter);
         match s {
@@ -445,7 +451,7 @@ mod Fixpoint.Normalization {
         }
 
 
-        def computeMappingTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = 
+        def computeMappingTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
         let insert = x -> insertIndex(x, set, map, counter);
         let recurse = x -> computeMappingTerm(x, predTrack, set, map, counter);
         match s {
@@ -502,7 +508,7 @@ mod Fixpoint.Normalization {
             case _ => bug!("Unreachable")
         }
 
-        def computeMappingBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = 
+        def computeMappingBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
         let insert = x -> insertIndex(x, set, map, counter);
         let recurseOnTerm = x -> computeMappingTerm(x, predTrack, set, map, counter);
         match s {
@@ -592,7 +598,7 @@ mod Fixpoint.Normalization {
             // case _ => bug!("Unreachable")
         
 
-        def insertIndex(id: RamId, disjoint: MutDisjointSets[RamId, r1], map: MutMap[RamId, Int32, r2], counter: Counter[r3]): Unit \ {r1, r2, r3} = 
+        def insertIndex(id: RamId, disjoint: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
             def unwrap(v: Option[RamId]): RamId = match v {
                 case Some(x) => x
                 case None => bug!("Primitive value somehow exceeded the size it should fit into: ${Debug.stringify(id)}\n")

@@ -75,7 +75,7 @@ mod Fixpoint.Ast.ExecutableRam {
     pub enum RelOp {
         case Search(Int32, RelSym, (Vector[WriteTuple], Vector[WriteTuple]), RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
         case SearchWithIndex(Int32, RelSym, Vector[BoolExp], Int32, RelOp)
-        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
+        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox], Vector[IntToBox]) // The first is from the second is to.
         case Project(Vector[RamTerm], RelSym, IntToBox)
         case If(Vector[BoolExp], RelOp)
     }
@@ -91,7 +91,7 @@ mod Fixpoint.Ast.ExecutableRam {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(id, _, terms, body, _, _) => // TODO: Get correct id?
+                case RelOp.Functional(id, _, terms, _, body, _, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
@@ -156,6 +156,7 @@ mod Fixpoint.Ast.ExecutableRam {
     pub enum RamTerm {
         case Lit(Int64)
         case LoadIndex(IndexInMemory)
+        case LoadFromTuple(Int32, Int32)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
         // The first indices are the input. The last is the output
         case App0(Unit -> Boxed, IntToBox)
@@ -170,6 +171,7 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(term: RamTerm): String = match term {
             case RamTerm.Lit(v) => "%{v}"
             case RamTerm.LoadIndex(index) => "$Load[${index}]"
+            case RamTerm.LoadFromTuple(tupleIndex, indexInTuple) => "$LoadT[${tupleIndex}][${indexInTuple}]"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _, _) => "<clo>(${v})"
@@ -197,7 +199,9 @@ mod Fixpoint.Ast.ExecutableRam {
 
     type alias Tuple[r: Eff] = Array[Int64, r]
 
-    type alias WriteTuple = (Int32, Int32, Int32)
+    // (a, b, c) meaning: Write number a from the read values to search environment number b at position c.
+    // Aka (searchEnv[b])[c] = read[a]
+    pub type alias WriteTuple = (Int32, Int32, Int32)
 
     pub type alias Facts = Map[RelSym, Vector[Vector[Int64]]]
 }
