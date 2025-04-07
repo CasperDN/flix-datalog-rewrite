@@ -1,4 +1,8 @@
 mod Fixpoint.Helpers {
-    import java.lang.Object
-    import java.util.Objects
+
+    pub def unwrap(x: Option[a]): a = match x {
+        case Some(v) => v
+        case None => ???
+    }
+    
 }

@@ -93,7 +93,7 @@ mod PredTrack {
                 let (map2, max2) = collectPredicates(facts);
                 let map1_ = unchecked_cast({println(Map.union(map1, map2)); map1} as _ \ {});
                 (Int64.max(max1, max2), Map.union(map1_, map2))
-            case _ => bug!("Datalog normalization bug")
+            case _ => bug!("Datalog Boxing bug")
         }
         def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 
             // Missing Java's computeIfAbsent...

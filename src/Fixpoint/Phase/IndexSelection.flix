@@ -32,33 +32,34 @@ mod Fixpoint.Phase.IndexSelection {
                     Map.insert(relSym, Vector#{search}, acc),
                     Map#{}
                 );
-            let indexesFull  
+            let indexesFull =
                 indexes |>
-                Map.map(relSym ->
+                Map.mapWithKey(relSym -> searches ->
                     Vector.map(search -> 
                         Vector.range(0, arityOf(relSym)) |>
                         Vector.filter(x -> not Vector.memberOf(x, search)) |>
-                        Vector.append(search)
+                        Vector.append(search),
+                        searches
                     )
                 ) |> 
                 Map.union(indexesMissing);
             RamProgram.Program(indexedStmt, facts, meta, (indexesFull, indexPlacement))
     }
 
-    def indexStmt(stmt: RamStmt, indexInformation: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {
-        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, indexInformation, indexState), xs))
-        case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, indexInformation, indexState))
+    def indexStmt(stmt: RamStmt, constructedIndexes: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
+        case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, constructedIndexes, indexState))
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
-        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, indexInformation, indexState), xs))
-        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, indexInformation, indexState))
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, constructedIndexes, indexState))
         case RamStmt.Comment(_) => stmt 
     }
 
-    def indexOp(op: RelOp, indexInformation: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RelOp \ r = match op {
+    def indexOp(op: RelOp, constructedIndexes: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RelOp \ r = match op {
         case RelOp.Search(tupleVar, relSym, body) =>
-            RelOp.Search(tupleVar, relSym, indexOp(body, indexInformation, indexState))
+            RelOp.Search(tupleVar, relSym, indexOp(body, constructedIndexes, indexState))
         case RelOp.SearchWithIndex(tupleVar, relSym, boolExps, _, body) =>
             let search = 
                 Vector.foldLeft(acc -> exp -> match exp {
@@ -66,7 +67,7 @@ mod Fixpoint.Phase.IndexSelection {
                     case BoolExp.Eq(_, RamTerm.RowLoad(_, i, _)) => i :: acc
                     case _ => bug!("In IndexSelection.indexOp: Found non-equality BoolExp in indexOp!")
                 }, List.empty(), boolExps) |> List.toVector;
-            let index = match Map.get(relSym, indexInformation) {
+            let index = match Map.get(relSym, constructedIndexes) {
                 case Some(indexes) =>
                     match Vector.findIndexOf(index ->
                         Vector.slice(start = 0, end = Vector.length(search), index) |> 
@@ -81,9 +82,9 @@ mod Fixpoint.Phase.IndexSelection {
             };
             let absoluteIndex = UniqueInts.getIndex((relSym, index), indexState);
             RelOp.SearchWithIndex(tupleVar, relSym, boolExps, absoluteIndex, body)
-        case RelOp.If(boolExps, body) => RelOp.If(boolExps, indexOp(body, indexInformation, indexState))
+        case RelOp.If(boolExps, body) => RelOp.If(boolExps, indexOp(body, constructedIndexes, indexState))
         case RelOp.Functional(tupleVar, func, terms, body, arity) =>
-            RelOp.Functional(tupleVar, func, terms, indexOp(body, indexInformation, indexState), arity)
+            RelOp.Functional(tupleVar, func, terms, indexOp(body, constructedIndexes, indexState), arity)
         case RelOp.Project(_, _) => op
     }
 

@@ -39,9 +39,9 @@ mod BPlusTree {
             unchecked_cast((l.isLocked(): _ \ IO) as _ \ r)
     }
 
-    pub def forEach(f: Array[Int64, r] -> Int64 -> Unit \ ef, search: Search, node: Node[r] ): Unit \ ef + r =
-        let minLeaf = Node.leftMostChild(search, node);
-        Node.traverseRightUnconditional(f, 0, search, minLeaf)
+    pub def forEach(f: Array[Int64, r] -> Int64 -> Unit \ ef, tree: BPlusTree[r]): Unit \ ef + r =
+        let minLeaf = Node.leftMostChild(tree->search, tree->root);
+        Node.traverseRightUnconditional(f, 0, tree->search, minLeaf)
 
     pub def containsPair(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeaf(key, tree);

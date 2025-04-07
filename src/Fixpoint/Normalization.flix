@@ -3,14 +3,14 @@
 /// since the indices on relations work on Int64 due to the lower
 /// complexity of working with integers
 ///
-mod Fixpoint.Normalization {
+mod Fixpoint.Boxing {
     use Fixpoint.Boxed
     use Fixpoint.Boxable
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym}
     use Fixpoint.Ast.Datalog.{Datalog}
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
-    use Fixpoint.Normalization.Normalization
+    use Fixpoint.Boxing.Boxing
     use Fixpoint.Ast.Ram.{RelSym, RamProgram}
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use RelSymTypeInfo.{setType, getType, RealType}
@@ -44,15 +44,15 @@ mod Fixpoint.Normalization {
 
     // It would be nice if MutMap could take a comparison
     // (List of Boxed objects, [RelSym->IndexInTyple->BoxedObject->Int64], mapping fram RelSym and index to RealType)
-    pub type alias Normalization[r: Eff] = (Vector[MutList[Boxed, r]], Vector[MutMap[Boxed, Int64, r]], RelSymTypeInfo.RelSymTypeInfo[r])
+    pub type alias Boxing[r: Region] = (Vector[MutList[Boxed, r]], Vector[MutMap[Boxed, Int64, r]], RelSymTypeInfo.RelSymTypeInfo[r])
 
     pub type alias RamIdToMarshal = Map[RamId, Int32]
 
-    pub def initialize(rc: Region[r], r: RamProgram): (Normalization[r], RamIdToMarshal) \ r =
+    pub def initialize(rc: Region[r], r: RamProgram): (Boxing[r], RamIdToMarshal) \ r =
         let mapping = Equality.computeMapping(r);
         (initializeInternal(rc, r, mapping), mapping)
 
-    def initializeInternal(rc: Region[r], r: RamProgram, map: RamIdToMarshal): Normalization[r] \ r =
+    def initializeInternal(rc: Region[r], r: RamProgram, map: RamIdToMarshal): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
@@ -63,12 +63,12 @@ mod Fixpoint.Normalization {
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
                 case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) => 
-                    normalizeBox(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
+                    debox(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
         (intToBox, boxToInt, posToIndex)
 
-    def deMarshalObject(value: Int64, index: Int32, info: Normalization[r]): Boxed \ r = {
+    def deMarshalObject(value: Int64, index: Int32, info: Boxing[r]): Boxed \ r = {
         let (objectList, _, _) = info;
         // TODO: remove nth.
         unwrap(MutList.nth(unwrap(Int64.tryToInt32(value)), Vector.get(index, objectList)))
@@ -76,7 +76,7 @@ mod Fixpoint.Normalization {
     }
 
     // We could Box the object and thus have a Boxed as input and be able to sort them?
-    def marshallObject(box: Boxed, index: Int32, info: Normalization[r]): Int64 \ r = {
+    def marshallObject(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r = {
         let (objectLists, vecObjectMap, _) = info;
         let objectList = Vector.get(index, objectLists);
         let objectMap = Vector.get(index, vecObjectMap);
@@ -97,7 +97,7 @@ mod Fixpoint.Normalization {
     }
 
 
-    pub def normalizeBox(box: Boxed, index: Int32, info: Normalization[r]): Int64 \ r =
+    pub def debox(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
     let (_, _, symInfo) = info;
     match box {
         case BoxedBool(x)       => setType(RealType.Bool, index, symInfo); if (x) 1i64 else 0i64
@@ -111,7 +111,7 @@ mod Fixpoint.Normalization {
         case BoxedObject(_, _)  => setType(RealType.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
     }
 
-    pub def unNormalizeReal(v: Int64, index: Int32, info: Normalization[r]): Boxed \ r = 
+    pub def rebox(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
         let (_, _, symInfo) = info;
         match getType(index, symInfo) {
             case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
@@ -126,7 +126,7 @@ mod Fixpoint.Normalization {
             case RealType.Unknown   => bug!("Unormalizing value, which has never been normalized")
         }
 
-    // pub def unNormalizeRealByLatticeElem(v: Int64, index: Int32, info: Normalization[r]): Boxed \ r = 
+    // pub def reboxByLatticeElem(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
     //     let (_, _, symInfo) = info;
     //     match getType(index, symInfo) {
     //         case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))

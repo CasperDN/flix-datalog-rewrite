@@ -7,3 +7,5 @@ Use Redef for Array Order
 
 IndexSelection must generate an index for all relations. Also relations with no indexes.
 ^Extra note: new_path has same index as the first delta_path
+
+In project: optimize `bot` out

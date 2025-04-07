@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Options {
-
+    
     ///
     /// Prints the Datalog program before the fixpoint computation.
     ///

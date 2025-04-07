@@ -354,7 +354,7 @@ mod Fixpoint.Ast.Ram {
         // case InID(Int32, Int32) // (ID, index)
         case InID(Int32, Int32) // (OutID, index)
         case TuplePos(Int32, Int32) // (TupleVar, index)
-        case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for normalization.
+        case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for Boxing.
     }
 
     instance Eq[RamId] {
