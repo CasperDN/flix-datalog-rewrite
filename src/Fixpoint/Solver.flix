@@ -69,8 +69,7 @@ mod Fixpoint.Solver {
         };
         let model = match d {
             case Datalog(_, _) =>
-            ???
-                // compiler(d, Map.empty()) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
+                compiler(d, Map.empty()) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
 
 
             case Model(_) => d
@@ -768,7 +767,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def _toModelWithRenaming(dbMeta: (DatabaseExternal[r], PredSymMapInternal)): Datalog \ r =
+    def toModelWithRenaming(dbMeta: (DatabaseExternal[r], PredSymMapInternal)): Datalog \ r =
         let (db, meta) = dbMeta;
         let fst = MutMap.toMap(db); 
         let snd = Map.map(MutMap.toMap, fst);

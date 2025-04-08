@@ -172,9 +172,9 @@ mod Fixpoint.Phase.AugmentToExec {
                     )
                     case Denotation.Latticenal(bot, leq, lub, _) => (bot, leq, lub)
                 };
+                let compiledTerms = Vector.map(x -> compileTerm(x, idToIndex, idToMarshall, marshall), terms);
                 EProject(
-                    Vector.map(x -> compileTerm(x, idToIndex, idToMarshall, marshall), terms), 
-                    newRelPos, bot, leq, lub, relSymToDenId(s, idToMarshall)
+                    compiledTerms, newRelPos, bot, leq, lub, relSymToDenId(s, idToMarshall)
                 )
             case AIf(boolExps, body) =>
                 EIf(Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), boolExps), recursiveCall(body))
