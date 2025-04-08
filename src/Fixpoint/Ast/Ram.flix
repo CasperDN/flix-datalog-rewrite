@@ -67,13 +67,13 @@ mod Fixpoint.Ast.Ram {
     
     @Internal
     pub enum RelOp {
-        case Search(TupleVar, RelSym, RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
-        // case Query(TupleVar, RelSym, Vector[(Int32, TupleVar)], RelOp) // Loop through RelSym saving values in TupleVar 
+        case Search(RowVar, RelSym, RelOp) // Loop through RelSym, saving values in RowVar with body of loop RelOp.
+        // case Query(RowVar, RelSym, Vector[(Int32, RowVar)], RelOp) // Loop through RelSym saving values in RowVar 
 
         // TODO: Add extra field describing which index to use. Could use a simple int32.
-        case SearchWithIndex(TupleVar, RelSym, Vector[BoolExp], Int32, RelOp)
-        // case SearchWithIndex(TupleVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(TupleVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) // The last is the arity
+        case Query(RowVar, RelSym, Vector[BoolExp], Int32, RelOp)
+        // case Query(RowVar, RelSym, Vector[QueryExp], RelOp)
+        case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) // The last is the arity
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
     }
@@ -84,12 +84,12 @@ mod Fixpoint.Ast.Ram {
             match op {
                 case RelOp.Search(var, ramSym, body) =>
                     "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, _, body) =>
+                case RelOp.Query(var, ramSym, prefixQuery, _, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
-                    "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(TupleVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
+                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Functional(RowVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
@@ -108,7 +108,6 @@ mod Fixpoint.Ast.Ram {
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
         case Eq(RamTerm, RamTerm)
-        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed ->Bool, RamTerm)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
@@ -123,7 +122,7 @@ mod Fixpoint.Ast.Ram {
                 case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
                 case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
+                // case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
@@ -150,7 +149,7 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub enum RamTerm {
         case Lit(Boxed, RamId)
-        case RowLoad(TupleVar, Int32, RelSym)
+        case RowLoad(RowVar, Int32, RelSym)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamId)
         case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
@@ -162,7 +161,7 @@ mod Fixpoint.Ast.Ram {
 
     pub def getTermRamId(t: RamTerm): RamId = match t {
         case RamTerm.Lit(_, id) => id
-        case RamTerm.RowLoad(TupleVar.Named(i), index, _) => RamId.TuplePos(i, index)
+        case RamTerm.RowLoad(RowVar.Named(i), index, _) => RamId.TuplePos(i, index)
         case RamTerm.Meet(_, _, _, id) => id
         case RamTerm.App0(_, id) => id
         case RamTerm.App1(_ , _, id) => id
@@ -279,7 +278,7 @@ mod Fixpoint.Ast.Ram {
 
     def collectRelSymOp(soFar: MutSet[RelSym, r], op: RelOp): Unit \ r = match op {
         case RelOp.Search(_, r1, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest)
-        case RelOp.SearchWithIndex(_, r1, bools, _, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
+        case RelOp.Query(_, r1, bools, _, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
         case RelOp.Functional(_, _, terms, rest, _) => collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymTerm(soFar), terms)
         case RelOp.Project(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
         case RelOp.If(bools, rest) => Vector.forEach(collectRelSymBool(soFar), bools); collectRelSymOp(soFar, rest)
@@ -289,7 +288,7 @@ mod Fixpoint.Ast.Ram {
         case BoolExp.IsEmpty(r1) => MutSet.add(r1, soFar)
         case BoolExp.NotMemberOf(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
         case BoolExp.Eq(t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
-        case BoolExp.Leq(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
+        // case BoolExp.Leq(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
         case BoolExp.Guard0(_) => ()
         case BoolExp.Guard1(_, t1) => collectRelSymTerm(soFar, t1)
         case BoolExp.Guard2(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
@@ -312,7 +311,7 @@ mod Fixpoint.Ast.Ram {
 
 
     /////////////////////////////////////////////////////////////////////////////
-    // TupleVar                                                                //
+    // RowVar                                                                //
     /////////////////////////////////////////////////////////////////////////////
 
     /**
@@ -323,26 +322,26 @@ mod Fixpoint.Ast.Ram {
             search e2 ∈ Edge do
                 ...
 
-    'e1' and 'e2' would be the TupleVars.
+    'e1' and 'e2' would be the RowVars.
     */
 
     @Internal
-    pub enum TupleVar with Eq {
+    pub enum RowVar with Eq {
         case Named(Int32)
         //case Index(Int32)
     }
 
-    instance ToString[TupleVar] {
-        pub def toString(var: TupleVar): String = match var {
-            case TupleVar.Named(id) => "x${id}$"
-        //    case TupleVar.Index(i) => "${i}$"
+    instance ToString[RowVar] {
+        pub def toString(var: RowVar): String = match var {
+            case RowVar.Named(id) => "x${id}$"
+        //    case RowVar.Index(i) => "${i}$"
         }
     }
 
-    instance Order[TupleVar] {
-        pub def compare(a: TupleVar, b: TupleVar): Comparison = match (a, b) {
-            case (TupleVar.Named(i1), TupleVar.Named(i2)) => i1 <=> i2
-        //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
+    instance Order[RowVar] {
+        pub def compare(a: RowVar, b: RowVar): Comparison = match (a, b) {
+            case (RowVar.Named(i1), RowVar.Named(i2)) => i1 <=> i2
+        //    case (RowVar.Index(i1), RowVar.Index(i2)) => i1 <=> i2
             case _ => ?bug
         }
     }
@@ -353,7 +352,7 @@ mod Fixpoint.Ast.Ram {
         case Id(Int32) // (ID)
         // case InID(Int32, Int32) // (ID, index)
         case InID(Int32, Int32) // (OutID, index)
-        case TuplePos(Int32, Int32) // (TupleVar, index)
+        case TuplePos(Int32, Int32) // (RowVar, index)
         case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for Boxing.
     }
 
@@ -364,7 +363,7 @@ mod Fixpoint.Ast.Ram {
             case (RamId.InID(id1, index1), RamId.InID(id2, index2)) => id1 == id2 and index1 == index2
             case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
             case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) => i0 == j0 and i1 == j1
-        //    case (TupleVar.Index(i1), TupleVar.Index(i2)) => i1 <=> i2
+        //    case (RowVar.Index(i1), RowVar.Index(i2)) => i1 <=> i2
             case _ => false
         }
     }

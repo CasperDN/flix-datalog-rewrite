@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, Facts, PredicateState, RamProgram, RamId}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram, RamId}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -317,17 +317,17 @@ mod Fixpoint.Phase.Compiler {
     }
 
     ///
-    /// Augment body atoms with TupleVars.
-    /// Every atom is thus identified by a unique TupleVar, regardless of its position in the body.
+    /// Augment body atoms with RowVars.
+    /// Every atom is thus identified by a unique RowVar, regardless of its position in the body.
     ///
-    def augmentBody(body: Vector[BodyPredicate], counter: Counter.Counter[r]): Vector[(BodyPredicate, TupleVar)] \ r =
+    def augmentBody(body: Vector[BodyPredicate], counter: Counter.Counter[r]): Vector[(BodyPredicate, RowVar)] \ r =
         Vector.map(atom -> match atom {
-            case BodyAtom(_, _, Polarity.Positive, _, _) => (atom, TupleVar.Named(Counter.getNewID(counter)))
-            case Functional(_, _, _)                     => (atom, TupleVar.Named(Counter.getNewID(counter)))
+            case BodyAtom(_, _, Polarity.Positive, _, _) => (atom, RowVar.Named(Counter.getNewID(counter)))
+            case Functional(_, _, _)                     => (atom, RowVar.Named(Counter.getNewID(counter)))
             case _ => ???
-            // case BodyAtom(predSym, _, Polarity.Positive, _, _) => (atom, TupleVar.Named("${predSym}$${i}"))
-            // case Functional(_, _, _)                                 => (atom, TupleVar.Named("l$${i}"))
-            // case _ => (atom, TupleVar.Named("IfYouSeeThisYouFoundABug"))
+            // case BodyAtom(predSym, _, Polarity.Positive, _, _) => (atom, RowVar.Named("${predSym}$${i}"))
+            // case Functional(_, _, _)                                 => (atom, RowVar.Named("l$${i}"))
+            // case _ => (atom, RowVar.Named("IfYouSeeThisYouFoundABug"))
         }, body)
 
     ///
@@ -339,7 +339,7 @@ mod Fixpoint.Phase.Compiler {
     /// `x` is mapped to B$1[0] because `x` occurs positively in the second atom.
     /// `s` is mapped to the glb of all its positive occurences because it is latticenal.
     ///
-    def unifyVars(predSymMaps: PredSymMapInternal, counter: Counter.Counter[r], body: Vector[(BodyPredicate, TupleVar)]): Map[VarSym, RamTerm] \ r =
+    def unifyVars(predSymMaps: PredSymMapInternal, counter: Counter.Counter[r], body: Vector[(BodyPredicate, RowVar)]): Map[VarSym, RamTerm] \ r =
         let toFullSym = sym -> (PredTrack.getNewRel(predSymMaps, sym, Full));
         let innerFunc = {
             acc -> atomVar -> 
@@ -424,7 +424,7 @@ mod Fixpoint.Phase.Compiler {
     /// (2) comes from the negative atom `not A(x)`.
     /// (3) is a function call that computes the expression `x > 0`.
     ///
-    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, TupleVar)], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r]): Vector[BoolExp] \ r =
+    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r]): Vector[BoolExp] \ r =
         let toFullSym = sym -> (PredTrack.getNewRel(predSymMaps, sym, Full));
         Vector.flatMap(match (atom, rowVar) ->
             let compileBodyTerm = oldSym -> j -> term -> match term {
@@ -435,13 +435,15 @@ mod Fixpoint.Phase.Compiler {
             match atom {
                 case BodyAtom(bodySym, denotation, Polarity.Positive, _, terms) =>
                     Vector.mapWithIndex(compileBodyTerm(bodySym), terms) |>
-                    Vector.mapWithIndex(i -> t -> match denotation {
-                        case Denotation.Relational => BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
-                        case Denotation.Latticenal(_, leq, _, _) =>
+                    Vector.zip(Vector.range(0, Vector.length(terms))) |>
+                    Vector.filterMap(match (i, t) -> match denotation {
+                        case Denotation.Relational => 
+                            Some(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t))
+                        case Denotation.Latticenal(_, _, _, _) =>
                             if (i < Vector.length(terms) - 1)
-                                BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
+                                Some(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t))
                             else
-                                BoolExp.Leq(leq, t, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)))
+                                None
                     })
                 case BodyAtom(bodySym, _, Polarity.Negative, _, terms) =>
                     let ramTerms = Vector.mapWithIndex(compileBodyTerm(bodySym), terms);

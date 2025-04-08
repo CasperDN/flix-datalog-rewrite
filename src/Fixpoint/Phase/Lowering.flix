@@ -1,4 +1,4 @@
-mod Fixpoint.Phase.AugmentToExec {
+mod Fixpoint.Phase.Lowering {
     use Fixpoint.Boxed.BoxedBool
     use Fixpoint.Ast.Ram.IndexInformation
     use Fixpoint.Ast.Ram.Search
@@ -8,16 +8,16 @@ mod Fixpoint.Phase.AugmentToExec {
     use Fixpoint.Boxing.Boxing;
     use Fixpoint.Interpreter.DatabaseExternal
     use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation}
-    use Fixpoint.Ast.Ram.{TupleVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp, TupleVar => ATupleVar}
-    use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, SearchWithIndex => ASearchWithIndex, Functional => AFunctional, Project => AProject, If => AIf}
-    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, Eq => AEq, Leq => ALeq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
+    use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
+    use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
+    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, Eq => AEq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, Meet => AMeet, App0 => AApp0, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
 
 
     use Fixpoint.Ast.ExecutableRam.{RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
-    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, SearchWithIndex => ESearchWithIndex, Functional => EFunctional, Project => EProject, If => EIf}
-    use Fixpoint.Ast.ExecutableRam.BoolExp.{IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Eq => EEq, Leq => ELeq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
-    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App0 => EApp0, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple}
+    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, SearchLattice => ESearchLattice, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
+    use Fixpoint.Ast.ExecutableRam.BoolExp.{IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Eq => EEq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
+    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App0 => EApp0, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
 
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram}
@@ -26,14 +26,16 @@ mod Fixpoint.Phase.AugmentToExec {
 
     use Fixpoint.Boxing.{Equality, RamIdToMarshal}
     use Fixpoint.Boxing
+    use Fixpoint.Boxed
+    use Fixpoint.Debugging
 
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
 
-    // Maps TupleVars to their memory-position.
-    type alias IdToIndex[r: Region] = UniqueInts.IndexState[TupleVar, r]
+    // Maps RowVars to their memory-position.
+    type alias IdToIndex[r: Region] = UniqueInts.IndexState[RowVar, r]
 
-    type alias WriteTos[r: Region] = MutMap[TupleVar, List[WriteTuple], r]
+    type alias WriteTos[r: Region] = MutMap[RowVar, List[WriteTuple], r]
 
     def relSymToDenId(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
         case RelSym.Symbol(_, _, Denotation.Relational) => -1
@@ -42,46 +44,64 @@ mod Fixpoint.Phase.AugmentToExec {
     }
 
     @Internal
-    pub def compileToExec(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
+    pub def compileToExec(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match Debugging.notifyPreLowering(program) { 
         case AProgram.Program(stmt, facts, meta, indexInfo) =>
-            unchecked_cast(println("Hej") as _ \ r);
             // let counter = Counter.empty(rc);
             let idToIndex = UniqueInts.empty(rc);
             let (marshall, idToMarshall) = Boxing.initialize(rc, program);
-            unchecked_cast(println(Debug.stringify(idToMarshall)) as _ \ r);
-            unchecked_cast(println("Hej3") as _ \ r);
-            unchecked_cast(println("Hej4") as _ \ r);
             let writeTo = MutMap.empty(rc);
             let compiledStmt = compileStmt(stmt, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
-            unchecked_cast(println("Hej5") as _ \ r);
-            let newFacts = Map.mapWithKey(k -> values ->
-                let RelSym.Symbol(PredSym.PredSym(_, id), _, _) = k;
-                Vector.map(vec ->
-                    Vector.mapWithIndex(index -> v ->
-                        {unchecked_cast(println(id) as _ \ r);
-                        let (_, _, back) = meta;
-                        unchecked_cast(println(unwrap(Map.get(id, back))) as _ \ r);                        
-                        unchecked_cast(println(index) as _ \ r);
-                        Boxing.debox(v, unwrap(Map.get(RamId.RelPos(id, index), idToMarshall)), marshall)
-                    }, vec)
-                , values)
-            , facts);
             // Compile facts.
-            (EProgram.Program(compiledStmt, newFacts, meta, indexInfo, ???), marshall)
+            let newFacts = 
+                facts |>
+                Map.mapWithKey(k -> values ->
+                    let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
+                    values |> 
+                    Vector.map(vec -> match den {
+                        case Denotation.Relational => 
+                            let tuple = vec |>
+                                Vector.mapWithIndex(i -> v -> 
+                                    Boxing.debox(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall));
+                            (tuple, Boxed.None)
+                        case Denotation.Latticenal(_, _, _ ,_) =>
+                            let len = Vector.length(vec);
+                            let tuple = Array.empty(rc, len - 1);
+                            vec |> Vector.forEachWithIndex(i -> term -> {
+                                if (i < len)
+                                    Array.put(Boxing.debox(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
+                                else ()
+                            });
+                            let latVal = Vector.get(len - 1, vec);
+                            (Array.toVector(tuple), latVal)
+                            // let tuple = vec |>
+                            //     Vector.mapWithIndex(i -> v -> Boxing.debox(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall));
+                            // let (vec1, vec2) = Vector.splitAt(Vector.length(tuple) - 1, tuple);
+                            // (vec1, Vector.get(0, vec2))
+                    })
+                );
+
+            // Compute arities
+            let numOfArities = snd(unwrap(Map.maximumValue(snd(indexInfo)))) + 1;
+            let arities = Array.empty(rc, numOfArities);
+            Map.forEach(k -> v -> match k {
+                case (RelSym.Symbol(_, arity, _), _) =>
+                    Array.put(arity, v, arities)
+            }, snd(indexInfo));
+            (EProgram.Program(compiledStmt, newFacts, meta, indexInfo, Array.toVector(arities)), marshall)
     }
 
     @Internal
     def compileStmt(stmt: ARamStmt, rc: Region[r], idToIndex: IdToIndex[r], idToMarshall: RamIdToMarshal, marshall: Boxing[r], writeTo: WriteTos[r], indexInfo: IndexInformation): ERamStmt \ r =
-        let recurse = x -> compileStmt(x, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
+        let compileStmtRec = x -> compileStmt(x, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
         match stmt {
             case ARamStmt.Insert(op) =>
                 let newOp = compileOp(op, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
                 ERamStmt.Insert(newOp)
                 // if(MutList.size(independent) == 0) 
                 //     ERamStmt.Insert(newOp) else ERamStmt.Insert(EIf(MutList.toVector(independent), newOp))
-            case ARamStmt.Seq(xs) => Vector.map(x -> recurse(x), xs) |> ERamStmt.Seq
-            case ARamStmt.Par(xs) => Vector.map(x -> recurse(x), xs) |> ERamStmt.Par
-            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), test), recurse(body))
+            case ARamStmt.Seq(xs) => Vector.map(x -> compileStmtRec(x), xs) |> ERamStmt.Seq
+            case ARamStmt.Par(xs) => Vector.map(x -> compileStmtRec(x), xs) |> ERamStmt.Par
+            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), test), compileStmtRec(body))
 
             // For all of these we have to do the operation for all indexes created for the relations.
             case ARamStmt.Merge(newRel, deltaRel) =>
@@ -135,29 +155,38 @@ mod Fixpoint.Phase.AugmentToExec {
 
     @Internal
     def compileOp(op: ARelOp, rc: Region[r], idToIndex: IdToIndex[r], idToMarshall: RamIdToMarshal, marshall: Boxing[r], writeTo: WriteTos[r], indexInfo: IndexInformation): ERelOp \ r = 
-        let recursiveCall: ARelOp -> ERelOp \ r = x -> compileOp(x, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
+        let compileOpRec: ARelOp -> ERelOp \ r = x -> compileOp(x, rc, idToIndex, idToMarshall, marshall, writeTo, indexInfo);
         match op {
-            case ASearch(tpv, relSym, body) =>
-                // let arity = Ram.arityOf(relSym);
-                // let ATupleVar.Named(id) = tpv;
-                // let _ = Vector.forEach(x -> MutMap.put(RamId.TuplePos(id, x), Counter.getNewID(counter), idToIndex), Vector.range(0, arity));
-                // let thisPosition = UniqueInts.getIndex(tpv, idToIndex);
-                let compiledBody = recursiveCall(body);
-                let thisWriteTo = getWriteTo(tpv, writeTo);
+            case ASearch(rv, relSym, body) =>
+                let compiledBody = compileOpRec(body);
+                let thisWriteTo = getWriteTo(rv, writeTo);
                 let placements = snd(indexInfo);
                 let relPos = unwrap(Map.get((relSym, 0), placements));
-                ESearch(compileTupleVar(tpv), relPos, thisWriteTo, compiledBody)
-            case AFunctional(tpv, f, terms, body, arity) =>
-                let TupleVar.Named(id) = tpv;
+                // let _ = rel;
+                match toDenotation(relSym) {
+                    case Denotation.Relational => (
+                        ESearch(compileRowVar(rv), relPos, thisWriteTo, compiledBody)
+                    )
+                    case Denotation.Latticenal(bot, leq, lub, _) =>
+                        ESearchLattice(compileRowVar(rv), relPos, ???, ???, thisWriteTo, compiledBody)
+
+                }
+                // if() {
+                //     ESearch(compileRowVar(tpv), relPos, thisWriteTo, compiledBody)
+                // } else {
+
+                // }
+            case AFunctional(rv, f, terms, body, arity) =>
+                let RowVar.Named(id) = rv;
                 let termToIndex = term -> unwrap(Map.get(getTermRamId(term), idToMarshall));
                 let idToMarhsalled = id_ -> unwrap(Map.get(id_, idToMarshall));
                 let from_ = Vector.map(termToIndex, terms);
                 // let thisPosition = UniqueInts.getIndex(tpv, idToIndex);
-                let compiledBody = recursiveCall(body);
-                let thisWriteTo = getWriteTo(tpv, writeTo);
+                let compiledBody = compileOpRec(body);
+                let thisWriteTo = getWriteTo(rv, writeTo);
                 let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(id, i)), Vector.range(0, arity));
                 EFunctional(
-                    compileTupleVar(tpv), f, 
+                    compileRowVar(rv), f, 
                     Vector.map(x -> compileTerm(x, idToIndex, idToMarshall, marshall), terms), 
                     thisWriteTo, compiledBody, from_, to
                 )
@@ -168,7 +197,7 @@ mod Fixpoint.Phase.AugmentToExec {
                     case Denotation.Relational => (
                         BoxedBool(false),
                         _ -> _ -> bug!("Using lattice logic on normal relation"),
-                        a -> _ -> bug!("Using lattice logic on normal relation")
+                        _ -> _ -> bug!("Using lattice logic on normal relation")
                     )
                     case Denotation.Latticenal(bot, leq, lub, _) => (bot, leq, lub)
                 };
@@ -177,22 +206,23 @@ mod Fixpoint.Phase.AugmentToExec {
                     compiledTerms, newRelPos, bot, leq, lub, relSymToDenId(s, idToMarshall)
                 )
             case AIf(boolExps, body) =>
-                EIf(Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), boolExps), recursiveCall(body))
-            case ASearchWithIndex(tpv, _, tests, index, body) =>
-                let compiledTests = Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), tests);
-                // Remove the bools that are used for the index anyway.
-                Vector.filterMap(x -> match x {
-                    case ABoolExp.Eq(ARamTerm.RowLoad(tpv1, index1, _), ARamTerm.RowLoad(tpv2, index2, _)) if tpv == tpv1 =>
-                        let indexInSearch = ???;
-                        addWriteTo(tpv2, index2, tpv1, indexInSearch, writeTo);
-                        None
-                    case ABoolExp.Eq(ARamTerm.RowLoad(tpv2, index2, _), ARamTerm.RowLoad(tpv1, index1, _)) if tpv == tpv1 =>
-                        let indexInSearch = ???;
-                        addWriteTo(tpv2, index2, tpv1, indexInSearch, writeTo);
-                        None
-                    case _ => Some(x)
-                }, tests);
-                ESearchWithIndex(compileTupleVar(tpv), index, compiledTests, index, recursiveCall(body))
+                EIf(Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), boolExps), compileOpRec(body))
+            case AQuery(rv, _, tests, index, body) =>
+                if(Vector.isEmpty(tests)) {
+                    // let compiledTests = Vector.map(x -> compileBool(x, idToIndex, idToMarshall, marshall, indexInfo), tests);
+                    // Remove the bools that are used for the index anyway.
+                    let thisWriteTo = getWriteTo(rv, writeTo);
+                    Vector.filterMap(x -> match x {
+                        case ABoolExp.Eq(ARamTerm.RowLoad(rv1, i1, _), ARamTerm.RowLoad(rv2, i2, _)) if rv == rv1 =>
+                            addWriteTo(rv2, i2, rv1, i1, writeTo);
+                            None
+                        case ABoolExp.Eq(ARamTerm.RowLoad(rv2, i2, _), ARamTerm.RowLoad(rv1, i1, _)) if rv == rv1 =>
+                            addWriteTo(rv2, i2, rv1, i1, writeTo);
+                            None
+                        case _ => Some(x)
+                    }, tests);
+                    EQuery(compileRowVar(rv), index, thisWriteTo, compileOpRec(body))
+                } else bug!("There should be no conditions at this point")
             // case _ => ???
         }
 
@@ -202,8 +232,17 @@ mod Fixpoint.Phase.AugmentToExec {
         let termToM = t -> unwrap(Map.get(getTermRamId(t), idToMarshall));
         let idToMarhsalled = id -> unwrap(Map.get(id, idToMarshall));
         match term {
-            case ALit(val, id)                      => ELit(Boxing.debox(val, unwrap(Map.get(id, idToMarshall)), marshall))
-            case ARowLoad(tpv, index, _)            => ELoadFromTuple(UniqueInts.getIndex(tpv, mapToIndex), index)
+            case ALit(val, id) => ELit(Boxing.debox(val, unwrap(Map.get(id, idToMarshall)), marshall), val)
+            case ARowLoad(tpv, index, RelSym.Symbol(_, arity, den)) => 
+                match den {
+                    case Denotation.Relational => ELoadFromTuple(UniqueInts.getIndex(tpv, mapToIndex), index, termToM(term))
+                    case Denotation.Latticenal(_, _, _, _) => 
+                        if(index < arity - 1) {
+                            ELoadFromTuple(UniqueInts.getIndex(tpv, mapToIndex), index, termToM(term))
+                        } else {
+                            ELoadLatVar(UniqueInts.getIndex(tpv, mapToIndex))
+                        }
+                }
             case AMeet(f, t1, t2, _)                => EMeet(f, compileT(t1), compileT(t2), termToM(t1))
             case AApp0(f, id)                       => EApp0(f, idToMarhsalled(id))
             case AApp1(f, t1, id)                   => EApp1(f, compileT(t1), termToM(t1), idToMarhsalled(id))
@@ -211,7 +250,6 @@ mod Fixpoint.Phase.AugmentToExec {
             case AApp3(f, t1, t2, t3, id)           => EApp3(f, compileT(t1), compileT(t2), compileT(t3), termToM(t1), termToM(t2), termToM(t3), idToMarhsalled(id))
             case AApp4(f, t1, t2, t3, t4, id)       => EApp4(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), termToM(t1), termToM(t2), termToM(t3), termToM(t4), idToMarhsalled(id))
             case AApp5(f, t1, t2, t3, t4, t5, id)   => EApp5(f, compileT(t1), compileT(t2), compileT(t3), compileT(t4), compileT(t5), termToM(t1), termToM(t2), termToM(t3), termToM(t4), termToM(t5), idToMarhsalled(id))
-            case _ => ELit(0i64)
     }
 
     def compileBool(bool: ABoolExp, map: IdToIndex[r], idToMarshall: RamIdToMarshal, marshall: Boxing[r], indexInfo: IndexInformation): EBoolExp \ r = 
@@ -230,8 +268,8 @@ mod Fixpoint.Phase.AugmentToExec {
                 };
                 let sPos = unwrap(Map.get((s, 0), placements));
                 ENotMemberOf(Vector.map(compileT, terms), sPos, leq, relSymToDenId(s, idToMarshall))
-            case AEq(term1, term2) => EEq(compileT(term1), compileT(term2))
-            case ALeq(f, term1, term2) => ELeq(f, compileT(term1), compileT(term2), termToIndex(term1))
+            case AEq(term1, term2) => 
+                EEq(compileT(term1), compileT(term2))
             case AGuard0(f) => EGuard0(f)
             case AGuard1(f, term1) => EGuard1(f, compileT(term1), termToIndex(term1))
             case AGuard2(f, term1, term2) => EGuard2(f, compileT(term1), compileT(term2), termToIndex(term1), termToIndex(term2))
@@ -240,20 +278,21 @@ mod Fixpoint.Phase.AugmentToExec {
             case AGuard5(f, term1, term2, term3, term4, term5) => EGuard5(f, compileT(term1), compileT(term2), compileT(term3), compileT(term4), compileT(term5), termToIndex(term1), termToIndex(term2), termToIndex(term3), termToIndex(term4), termToIndex(term5))
     }
 
-    def compileTupleVar(tupleVar: ATupleVar): Int32 = match tupleVar {
-        case ATupleVar.Named(id) => id
+    // Please not that other code depends on this working like this.
+    def compileRowVar(rowVar: RowVar): Int32 = match rowVar {
+        case RowVar.Named(id) => id
     }
 
-    def getWriteTo(tupleVar: ATupleVar, writeTo: WriteTos[r]): Vector[WriteTuple] \ r = 
-        List.toVector(Option.getWithDefault(Nil, MutMap.get(tupleVar, writeTo)))
+    def getWriteTo(rowVar: RowVar, writeTo: WriteTos[r]): Vector[WriteTuple] \ r = 
+        List.toVector(Option.getWithDefault(Nil, MutMap.get(rowVar, writeTo)))
 
-    def addWriteTo(fromTuple: ATupleVar, fromIndex: Int32, toTuple: ATupleVar, toIndex: Int32, writeTo: WriteTos[r]): Unit \ r =
-        let written = (fromIndex, compileTupleVar(toTuple), toIndex);
+    def addWriteTo(fromTuple: RowVar, fromIndex: Int32, toTuple: RowVar, toIndex: Int32, writeTo: WriteTos[r]): Unit \ r =
+        let written = (fromIndex, compileRowVar(toTuple), toIndex);
         MutMap.putWith(_ -> old -> written :: old, fromTuple, written :: Nil, writeTo)
 
 
     def unwrap(opt: Option[a]): a = match opt {
-        case None => bug!("Unwrap none in AugmentToExec")
+        case None => bug!("Unwrap None in Lowering")
         case Some(v) => v
     }
 

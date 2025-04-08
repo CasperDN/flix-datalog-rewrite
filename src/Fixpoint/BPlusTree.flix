@@ -10,6 +10,7 @@ pub struct BPlusTree[r] {
 
 mod BPlusTree {
     import java.util.concurrent.locks.{ReentrantLock => JReentrantLock}
+    use Fixpoint.Boxed
 
     @Internal
     pub enum Lock[_: Region](JReentrantLock)
@@ -39,17 +40,17 @@ mod BPlusTree {
             unchecked_cast((l.isLocked(): _ \ IO) as _ \ r)
     }
 
-    pub def forEach(f: Array[Int64, r] -> Int64 -> Unit \ ef, tree: BPlusTree[r]): Unit \ ef + r =
+    pub def forEach(f: Array[Int64, r] -> Boxed -> Unit \ ef, tree: BPlusTree[r]): Unit \ ef + r =
         let minLeaf = Node.leftMostChild(tree->search, tree->root);
         Node.traverseRightUnconditional(f, 0, tree->search, minLeaf)
 
-    pub def containsPair(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Bool \ r =
+    pub def containsPair(key: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
         let res = Node.leafContainsPair(key, val, tree->search, leaf);
         Lock.unlock(Node.getLock(leaf));
         res
 
-    pub def containsPairThreadUnsafe(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Bool \ r =
+    pub def containsPairThreadUnsafe(key: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeafThreadUnsafe(key, tree);
         Node.leafContainsPair(key, val, tree->search, leaf)
 
@@ -62,7 +63,7 @@ mod BPlusTree {
         BPlusTree.rangeQueryWith(k -> v -> BPlusTree.insert(k, v, dst), min, max, src)
     }
 
-    pub def mergeWith(f: Int64 -> Int64 -> Int64 \ ef, src: BPlusTree[r], dst: BPlusTree[r]): Unit \ r + ef = {
+    pub def mergeWith(f: Boxed -> Boxed -> Boxed \ ef, src: BPlusTree[r], dst: BPlusTree[r]): Unit \ r + ef = {
         let len = Vector.length(src->search);
         let min = Array.repeat(src->rc, len, Int64.minValue());
         let max = Array.repeat(src->rc, len, Int64.maxValue());
@@ -117,7 +118,7 @@ mod BPlusTree {
             getLockedRoot(tree)
         }
 
-    pub def insert(key: Array[Int64, r], val: Int64, tree: BPlusTree[r]): Unit \ r =
+    pub def insert(key: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Unit \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
         let newRoot = Node.insertIntoLeaf(key, val, tree->order, tree->rc, tree->search, leaf);
         fixRoot(newRoot, tree)
@@ -136,7 +137,7 @@ mod BPlusTree {
         case None => ()
     }
 
-    pub def getWithDefault(key: Array[Int64, r], default_: Int64, tree: BPlusTree[r]): Int64 \ r =
+    pub def getWithDefault(key: Array[Int64, r], default_: Boxed, tree: BPlusTree[r]): Boxed \ r =
         let leaf = BPlusTree.findLeafThreadUnsafe(key, tree);
         let res = Node.getWithDefault(key, tree->search, default_, leaf);
         res
@@ -159,12 +160,12 @@ mod BPlusTree {
         let leaf = BPlusTree.findLeafThreadUnsafe(key, tree);
         Node.leafContains(key, tree->search, leaf)
 
-    pub def rangeQueryWith(f: Array[Int64, r] -> Int64 -> Unit \ ef, min: Array[Int64, r], max: Array[Int64, r], tree: BPlusTree[r]): Unit \ {r, ef} =
+    pub def rangeQueryWith(f: Array[Int64, r] -> Boxed -> Unit \ ef, min: Array[Int64, r], max: Array[Int64, r], tree: BPlusTree[r]): Unit \ {r, ef} =
         Node.rangeQueryWith(f, min, max, tree->search, tree->root)
 
-    pub def putWith(f: Int64 -> Int64 -> Int64 \ ef, k: Array[Int64, r], v: Int64, tree: BPlusTree[r]): Unit \ ef + r =
+    pub def putWith(f: Boxed -> Boxed -> Boxed \ ef, k: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Unit \ ef + r =
         let leaf = findLeaf(k, tree);
-        let optNewRoot = Node.putWith(f, k, v, tree->search, tree->order, tree->rc, leaf);
+        let optNewRoot = Node.putWith(f, k, val, tree->search, tree->order, tree->rc, leaf);
         fixRoot(optNewRoot, tree)
 
     @Internal
@@ -179,7 +180,7 @@ mod BPlusTree {
     pub struct Node[r] {
         keys:       Array[Array[Int64, r], r],
         children:   Array[Node[r], r],
-        values:     Array[Int64, r],
+        values:     Array[Boxed, r],
         lock:       Lock[r],
         mut size:   Int32,
         mut parent: Option[Node[r]],
@@ -192,8 +193,9 @@ mod BPlusTree {
         import java.lang.Object
         import java.util.Objects
         use BPlusTree.Lock
+        use Fixpoint.Boxed
 
-        pub def putWith(f: Int64 -> Int64 -> Int64 \ ef, key: Array[Int64, r], val: Int64, search: Search, order: Int32, rc: Region[r], node: Node[r]): Option[Node[r]] \ r + ef =
+        pub def putWith(f: Boxed -> Boxed -> Boxed \ ef, key: Array[Int64, r], val: Boxed, search: Search, order: Int32, rc: Region[r], node: Node[r]): Option[Node[r]] \ r + ef =
             let index = binarySearch(key, node->size, search, node->keys);
             if (index < 0) {
                 insertIntoLeafPropagate(key, val, order, rc, search, index, node)
@@ -203,7 +205,7 @@ mod BPlusTree {
                 None
 
         pub def traverseRightUnconditional(
-            f: Array[Int64, r] -> Int64 -> Unit \ ef,
+            f: Array[Int64, r] -> Boxed -> Unit \ ef,
             index: Int32,
             search: Search,
             node: Node[r]
@@ -217,7 +219,7 @@ mod BPlusTree {
                 case None => ()
             }
 
-        pub def getWithDefault(key: Array[Int64, r], search: Search, default_: Int64, node: Node[r]): Int64 \ r =
+        pub def getWithDefault(key: Array[Int64, r], search: Search, default_: Boxed, node: Node[r]): Boxed \ r =
             let index = binarySearch(key, node->size, search, node->keys);
             if (index < 0)
                 default_
@@ -226,7 +228,7 @@ mod BPlusTree {
 
         def actualInsertLeaf(
             key: Array[Int64, r],
-            val: Int64,
+            val: Boxed,
             insertionPoint: Int32,
             node: Node[r]
         ): Unit \ r =
@@ -309,7 +311,7 @@ mod BPlusTree {
 
         pub def insertIntoLeaf(
             key: Array[Int64, r],
-            val: Int64,
+            val: Boxed,
             order: Int32,
             rc: Region[r],
             search: Search,
@@ -322,7 +324,7 @@ mod BPlusTree {
 
         def insertIntoLeafPropagate(
                 key: Array[Int64, r],
-                val: Int64,
+                val: Boxed,
                 order: Int32,
                 rc: Region[r],
                 search: Search,
@@ -351,7 +353,7 @@ mod BPlusTree {
             else
                 true
 
-        pub def leafContainsPair(key: Array[Int64, r], val: Int64, search: Search, node: Node[r]): Bool \ r =
+        pub def leafContainsPair(key: Array[Int64, r], val: Boxed, search: Search, node: Node[r]): Bool \ r =
             let index1 = binarySearch(key, node->size, search, node->keys);
             if (index1 < 0)
                 false
@@ -378,7 +380,7 @@ mod BPlusTree {
         pub def mkLeaf(
             rc: Region[r],
             keys: Array[Array[Int64, r], r],
-            values: Array[Int64, r],
+            values: Array[Boxed, r],
             size: Int32,
             parent: Option[Node[r]],
             next: Option[Node[r]]
@@ -456,7 +458,7 @@ mod BPlusTree {
         }
 
         pub def rangeQueryWith(
-            f: Array[Int64, r] -> Int64 -> Unit \ r0,
+            f: Array[Int64, r] -> Boxed -> Unit \ r0,
             min: Array[Int64, r],
             max: Array[Int64, r],
             search: Search,
@@ -473,7 +475,7 @@ mod BPlusTree {
                 traverseRight(f, index, max, search, minLeaf)
 
         pub def forEach(
-            f: Array[Int64, r] -> Int64 -> Unit \ r0,
+            f: Array[Int64, r] -> Boxed -> Unit \ r0,
             search: Search,
             node: Node[r]
         ): Unit \ r0 + r =
@@ -483,7 +485,7 @@ mod BPlusTree {
         def splitLeaf(
             leftLeaf: Node[r],
             key: Array[Int64, r],
-            val: Int64,
+            val: Boxed,
             insertionPoint: Int32,
             order: Int32,
             rc: Region[r],
@@ -536,7 +538,7 @@ mod BPlusTree {
             rightNode->parent = leftNode->parent;
             pushKeyToParent(leftNode->parent, leftNode, rightNode, keyOfRight, order, rc, search)
 
-        def splitToRightLeaf(rc: Region[r], mid: Int32, order: Int32, leftLeaf: Node[r]): (Array[Array[Int64, r], r], Array[Int64, r]) \ r = {
+        def splitToRightLeaf(rc: Region[r], mid: Int32, order: Int32, leftLeaf: Node[r]): (Array[Array[Int64, r], r], Array[Boxed, r]) \ r = {
             let rightKeys = Array.empty(rc, order);
             let rightValues = Array.empty(rc, order);
             Array.copyInto(srcPos = mid, dstPos = 0, len = order - mid, src = leftLeaf->keys, rightKeys);
@@ -643,7 +645,7 @@ mod BPlusTree {
             }
 
         def traverseRight(
-            f: Array[Int64, r] -> Int64 -> Unit \ r0,
+            f: Array[Int64, r] -> Boxed -> Unit \ r0,
             index: Int32,
             max: Array[Int64, r],
             search: Search,

@@ -64,8 +64,7 @@ mod Fixpoint.Solver {
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Phase.Hoisting.hoistProgram
             |> Fixpoint.Phase.IndexSelection.indexProgram
-            // |> Fixpoint.Phase.VarsToIndices.lowerProgram
-            |> Fixpoint.Phase.AugmentToExec.compileToExec(rc)
+            |> Fixpoint.Phase.Lowering.compileToExec(rc)
         };
         let model = match d {
             case Datalog(_, _) =>

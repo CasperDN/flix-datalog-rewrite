@@ -2,8 +2,8 @@ def main(): Unit \ IO =
     println("Print");
     let path = #{
         Edge(1,2).
-        Path(x, y) :- Edge(x, y).
-        // Path(x, y) :- Path(x, z), Path(z, y).
+        Path(x, y) :- Edge(x, y), Edge(y, x).
+        Path(x, y) :- Path(x, z), Path(y, z).
     };
     println("Print2");
     let r = query path select (x, y) from Path(x,y);

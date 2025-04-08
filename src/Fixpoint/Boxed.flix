@@ -30,6 +30,7 @@ mod Fixpoint {
         case BoxedInt64(Int64)
         case BoxedFloat32(Float32)
         case BoxedFloat64(Float64)
+        case None
         case BoxedObject(
             Object,
             (Object, Object) -> Comparison
@@ -77,6 +78,7 @@ mod Fixpoint {
             case Boxed.BoxedFloat32(v)   => ToString.toString(v)
             case Boxed.BoxedFloat64(v)   => ToString.toString(v)
             case Boxed.BoxedObject(v, _) => Debug.stringify(v)
+            case Boxed.None => "None box"
         }
     }
 }

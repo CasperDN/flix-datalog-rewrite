@@ -62,8 +62,14 @@ mod Fixpoint.Ast.ExecutableRam {
     
     @Internal
     pub enum RelOp {
-        case Search(Int32, Int32, Vector[WriteTuple], RelOp) // Loop through RelSym, saving values in TupleVar with body of loop RelOp.
-        case SearchWithIndex(Int32, Int32, Vector[BoolExp], Int32, RelOp)
+        // (RowVar, searchIndex, writeTuple, body)
+        case Search(Int32, Int32, Vector[WriteTuple], RelOp)
+        // (RowVar, searchIndex, meetWith, meet, writeTuple, body)
+        case SearchLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, body)
+        case Query(Int32, Int32, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, meetWith, meet, writeLatticeTo, body)
+        case QueryLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox], Vector[IntToBox])
         // The Boxed is Bot. The first Boxed -> Boxed -> Boxed is leq and the second is lub.
@@ -75,13 +81,20 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(op: RelOp): String =
             let nl = String.lineSeparator();
             match op {
-                case RelOp.Search(var, ramSym, _, body) =>
-                    "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchWithIndex(var, ramSym, prefixQuery, _, body) =>
+                case RelOp.Search(var, relSym, _, body) =>
+                    "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Query(var, ramSym, prefixQuery, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
-                    "SearchWithIndex {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.SearchLattice(var, relSym, _, _, _, body) =>
+                    "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.QueryLattice(var, ramSym, _, _, prefixQuery, body) =>
+                    let qry = Vector.joinWith(match term -> {
+                        ToString.toString(term)
+                    }, " ∧ ", prefixQuery);
+                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(id, _, terms, _, body, _, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _, _, _, _) =>
@@ -106,7 +119,6 @@ mod Fixpoint.Ast.ExecutableRam {
         // Boxed -> Boxed -> bool is leq.
         case NotMemberOf(Vector[RamTerm], Int32, Boxed -> Boxed -> Bool, IntToBox)
         case Eq(RamTerm, RamTerm)
-        case Leq(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm, IntToBox)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm, IntToBox, IntToBox)
@@ -121,7 +133,6 @@ mod Fixpoint.Ast.ExecutableRam {
                 case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
                 case BoolExp.NotMemberOf(terms, ramSym, _, _) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                case BoolExp.Leq(_, lhs, rhs, _) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v, _) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2, _, _) => "<clo>(${v1}, ${v2})"
@@ -146,9 +157,10 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     @Internal
     pub enum RamTerm {
-        case Lit(Int64)
+        case Lit(Int64, Boxed)
         // case LoadIndex(IndexInMemory)
-        case LoadFromTuple(Int32, Int32)
+        case LoadFromTuple(Int32, Int32, IntToBox)
+        case LoadLatVar(Int32)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
         // The first indices are the input. The last is the output
         case App0(Unit -> Boxed, IntToBox)
@@ -161,8 +173,9 @@ mod Fixpoint.Ast.ExecutableRam {
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
-            case RamTerm.Lit(v) => "%{v}"
-            case RamTerm.LoadFromTuple(tupleIndex, indexInTuple) => "$LoadT[${tupleIndex}][${indexInTuple}]"
+            case RamTerm.Lit(v, _) => "%{v}"
+            case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) => "$LoadT[${tupleIndex}][${indexInTuple}]"
+            case RamTerm.LoadLatVar(i) => "$LoadLatVar[${i}]"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _, _) => "<clo>(${v})"
@@ -195,5 +208,5 @@ mod Fixpoint.Ast.ExecutableRam {
     // Aka (searchEnv[b])[c] = read[a]
     pub type alias WriteTuple = (Int32, Int32, Int32)
 
-    pub type alias Facts = Map[RelSym, Vector[Vector[Int64]]]
+    pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
 }

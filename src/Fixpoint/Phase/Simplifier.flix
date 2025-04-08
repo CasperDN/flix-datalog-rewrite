@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, Facts, RamProgram}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, RamProgram}
     use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit, Meet}
 
     ///
@@ -94,9 +94,6 @@ mod Fixpoint.Phase.Simplifier {
                 // Delete checks of the form `x[i] == x[i]` and `x ≤ x` and `x ⊓ y ≤ x`.
                 Vector.filter(e -> match e {
                     case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
-                    case BoolExp.Leq(_, lhs, RowLoad(rhsVar, _, _)) =>
-                        let lhsVars = ramTermVars(lhs);
-                        not Set.memberOf(rhsVar, lhsVars)
                     case _ => true
                 }, test) |>
                 // Partition into membership tests and rest.
@@ -123,9 +120,9 @@ mod Fixpoint.Phase.Simplifier {
                 newBody <- simplifyOp(stratum, body);
                 res <- f(newBody)
             ) yield res
-        case RelOp.SearchWithIndex(rowVar, ramSym, qry, _, body) =>
+        case RelOp.Query(rowVar, ramSym, qry, _, body) =>
             let f = nb -> match ramSym {
-                case _ => Some(RelOp.SearchWithIndex(rowVar, ramSym, qry, -1, nb))
+                case _ => Some(RelOp.Query(rowVar, ramSym, qry, -1, nb))
             };
             forM (
                 newBody <- simplifyOp(stratum, body);
@@ -151,34 +148,34 @@ mod Fixpoint.Phase.Simplifier {
         case RelOp.Project(_, _)    => Some(op)
     }
 
-    ///
-    /// Returns the set of variables that occur in `term`.
-    ///
-    def ramTermVars(term: RamTerm): Set[TupleVar] = match term {
-        case RamTerm.Lit(_, _) => Set#{}
-        case RamTerm.RowLoad(var, _, _) => Set#{var}
-        // case RamTerm.LoadLatVar(var, _, _) => Set#{var}
-        case RamTerm.Meet(_, lhs, rhs, _) => Set.union(ramTermVars(lhs), ramTermVars(rhs))
-        case RamTerm.App0(_, _) => Set#{}
-        case RamTerm.App1(_, t, _) => ramTermVars(t)
-        case RamTerm.App2(_, t1, t2, _) => Set.union(ramTermVars(t1), ramTermVars(t2))
-        case RamTerm.App3(_, t1, t2, t3, _) =>
-            let v1 = ramTermVars(t1);
-            let v2 = ramTermVars(t2);
-            let v3 = ramTermVars(t3);
-            Set.union(v1, Set.union(v2, v3))
-        case RamTerm.App4(_, t1, t2, t3, t4, _) =>
-            let v1 = ramTermVars(t1);
-            let v2 = ramTermVars(t2);
-            let v3 = ramTermVars(t3);
-            let v4 = ramTermVars(t4);
-            Set.union(v1, Set.union(v2, Set.union(v3, v4)))
-        case RamTerm.App5(_, t1, t2, t3, t4, t5, _) =>
-            let v1 = ramTermVars(t1);
-            let v2 = ramTermVars(t2);
-            let v3 = ramTermVars(t3);
-            let v4 = ramTermVars(t4);
-            let v5 = ramTermVars(t5);
-            Set.union(v1, Set.union(v2, Set.union(v3, Set.union(v4, v5))))
-    }
+    // ///
+    // /// Returns the set of variables that occur in `term`.
+    // ///
+    // def ramTermVars(term: RamTerm): Set[RowVar] = match term {
+    //     case RamTerm.Lit(_, _) => Set#{}
+    //     case RamTerm.RowLoad(var, _, _) => Set#{var}
+    //     // case RamTerm.LoadLatVar(var, _, _) => Set#{var}
+    //     case RamTerm.Meet(_, lhs, rhs, _) => Set.union(ramTermVars(lhs), ramTermVars(rhs))
+    //     case RamTerm.App0(_, _) => Set#{}
+    //     case RamTerm.App1(_, t, _) => ramTermVars(t)
+    //     case RamTerm.App2(_, t1, t2, _) => Set.union(ramTermVars(t1), ramTermVars(t2))
+    //     case RamTerm.App3(_, t1, t2, t3, _) =>
+    //         let v1 = ramTermVars(t1);
+    //         let v2 = ramTermVars(t2);
+    //         let v3 = ramTermVars(t3);
+    //         Set.union(v1, Set.union(v2, v3))
+    //     case RamTerm.App4(_, t1, t2, t3, t4, _) =>
+    //         let v1 = ramTermVars(t1);
+    //         let v2 = ramTermVars(t2);
+    //         let v3 = ramTermVars(t3);
+    //         let v4 = ramTermVars(t4);
+    //         Set.union(v1, Set.union(v2, Set.union(v3, v4)))
+    //     case RamTerm.App5(_, t1, t2, t3, t4, t5, _) =>
+    //         let v1 = ramTermVars(t1);
+    //         let v2 = ramTermVars(t2);
+    //         let v3 = ramTermVars(t3);
+    //         let v4 = ramTermVars(t4);
+    //         let v5 = ramTermVars(t5);
+    //         Set.union(v1, Set.union(v2, Set.union(v3, Set.union(v4, v5))))
+    // }
 }

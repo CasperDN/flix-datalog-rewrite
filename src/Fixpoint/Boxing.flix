@@ -16,9 +16,6 @@ mod Fixpoint.Boxing {
     use RelSymTypeInfo.{setType, getType, RealType}
     import java.lang.{Float, Double, Object, Character}
 
-
-    
-
     // Could just as well be a list
 
     mod RelSymTypeInfo {
@@ -109,6 +106,7 @@ mod Fixpoint.Boxing {
         case BoxedFloat32(x)    => setType(RealType.Float32, index, symInfo); Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(x).floatValue()))
         case BoxedFloat64(x)    => setType(RealType.Float64, index, symInfo); Double.doubleToRawLongBits(Float64.valueOf(x).doubleValue())
         case BoxedObject(_, _)  => setType(RealType.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
+        case Boxed.None         => bug!("None should never be in a position to be unboxed unboxed")
     }
 
     pub def rebox(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
@@ -147,7 +145,7 @@ mod Fixpoint.Boxing {
     mod Equality {
         use Fixpoint.Ast.Ram.getTermRamId
         use Fixpoint.Ast.Ram
-        use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, toPredID, TupleVar}
+        use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, toPredID, RowVar}
         use PredTrack.PredSymMapInternal
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
         use Fixpoint.Ast.Shared.PredSym
@@ -192,20 +190,20 @@ mod Fixpoint.Boxing {
         }
 
         def computeDisjointOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
-            case RelOp.Search(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
+            case RelOp.Search(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+            case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Functional(TupleVar.Named(id), _, inputTerms, rest, _) => // equality on the input should be handled elsewhere.
+            case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, _) => // equality on the input should be handled elsewhere.
                 Vector.forEachWithIndex(i -> curTerm -> {
                     let termID = Ram.getTermRamId(curTerm);
                     MutDisjointSets.union(RamId.InID(id, i), termID, set);
@@ -238,12 +236,6 @@ mod Fixpoint.Boxing {
                     MutDisjointSets.union(Ram.getTermRamId(term), RamId.RelPos(id, i), set)
                 }, terms)
             case BoolExp.Eq(term1, term2) =>
-                computeDisjointTerm(term1, predTrack, set);
-                computeDisjointTerm(term2, predTrack, set);
-                MutDisjointSets.makeSet(Ram.getTermRamId(term1), set);
-                MutDisjointSets.makeSet(Ram.getTermRamId(term2), set);
-                MutDisjointSets.union(Ram.getTermRamId(term1), Ram.getTermRamId(term2), set)
-            case BoolExp.Leq(_, term1, term2) =>
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
                 MutDisjointSets.makeSet(Ram.getTermRamId(term1), set);
@@ -421,27 +413,16 @@ mod Fixpoint.Boxing {
         let insert = x -> insertIndex(x, set, map, counter);
         match s {
             case RelOp.Search(_, _, rest) => recurse(rest)
-            case RelOp.SearchWithIndex(TupleVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+            case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
                 Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
                 Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
                 recurse(rest)
-            case RelOp.Functional(TupleVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
+            case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
                 Vector.forEach(i -> insert(RamId.InID(id, i)), Vector.range(0, arity));
                 Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, Vector.length(inputTerms)));
                 Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), inputTerms);
                 recurse(rest)
-                // Vector.forEachWithIndex(i -> curTerm -> {
-                //     let termID = Ram.getTermRamId(curTerm);
-                //     MutDisjointSets.union(RamId.FunctionalOutID(outID, i), termID, set); // Possibly not needed as it should be covered by equality
-                //     computeDisjointTerm(curTerm, predTrack, set)
-                //     // match curTerm {
-                //     //     case RamTerm.RowLoad(varr, index, ramID) => MutDisjointSets.makeSet(ramID, set); MutDisjointSets.makeSet((varr, index), set)
-                //     //     case _ => ()
-                //     // }
-                // }, inputTerms);
-                // computeDisjointOp(rest, predTrack, set);
-                // ??? // I think it works, so this should be removed
             case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
                 Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                 Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), terms)
@@ -517,9 +498,6 @@ mod Fixpoint.Boxing {
                 Vector.forEach(x -> recurseOnTerm(x), terms);
                 Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity))
             case BoolExp.Eq(t1, t2) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2)
-            case BoolExp.Leq(_, t1, t2) =>
                 recurseOnTerm(t1);
                 recurseOnTerm(t2)
             case BoolExp.Guard0(_) => ()

@@ -1,11 +1,13 @@
 Renaming:
-    SearchWithIndex => Query
+    Query => Query
 Ram => Ram
 Change indentation in BPlusTree
-Change TupleVar back to RowVar
+Change RowVar back to RowVar
 Use Redef for Array Order
 
 IndexSelection must generate an index for all relations. Also relations with no indexes.
 ^Extra note: new_path has same index as the first delta_path
 
 In project: optimize `bot` out
+
+Leq doesn't add anything. Ask Magnus.

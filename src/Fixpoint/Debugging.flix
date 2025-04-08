@@ -17,9 +17,8 @@
 mod Fixpoint.Debugging {
 
     use Fixpoint.Ast.Datalog.Datalog
-    // use Fixpoint.Ast.Ram.RamStmt
-    // use Fixpoint.Ast.Ram.RamProgram
-    use Fixpoint.Ast.ExecutableRam.RamProgram
+    use Fixpoint.Ast.ExecutableRam
+    use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Shared.PredSym
 
     def flush(s: String, overwrite: Bool): Unit \ IO = 
@@ -81,24 +80,42 @@ mod Fixpoint.Debugging {
         }
     } as _ \ {})
 
+    @Internal
+    pub def notifyPreLowering(program: Ram.RamProgram): Ram.RamProgram = match program {
+        case Ram.RamProgram.Program(stmt, _, _, _) => unchecked_cast({
+            if (Fixpoint.Options.enableDebugging()) {
+                let str = String.repeat(80, "*") |>
+                concatRev("** Relation Algebra Machine AST") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>                
+                concatRev(String.indent(4, "${stmt}")) |>
+                concatRev("");
+                flush(str, false);
+                program
+            } else {
+                program
+            }
+        } as _ \ {})
+    }
+
     ///
     /// Invoked before the fixpoint computation.
     ///
     /// Note: Returns `s` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreInterpret(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, _meta, (index, _), _) => unchecked_cast({
+    pub def notifyPreInterpret(program: ExecutableRam.RamProgram): ExecutableRam.RamProgram = match program {
+        case ExecutableRam.RamProgram.Program(stmt, facts, _meta, (index, _), _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
                 let str = String.repeat(80, "*") |>
                 concatRev("** Facts") |>
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>
-                concatRev(String.indent(4, "${unchecked_cast(facts as Map[Int64, Vector[Vector[Fixpoint.Boxed]]])}")) |>
+                concatRev(String.indent(4, "${unchecked_cast(facts as Map[Fixpoint.Ast.Ram.RelSym, Vector[(Vector[Int64], Fixpoint.Boxed)]])}")) |>
                 concatRev(String.indent(4, "${Debug.stringify(facts)}")) |>
                 concatRev("") |>
                 concatRev(String.repeat(80, "*")) |>
-                concatRev("** Relation Algebra Machine AST") |>
+                concatRev("** Executable Relation Algebra Machine AST") |>
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>                
                 concatRev(String.indent(4, "${stmt}")) |>

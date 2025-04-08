@@ -17,7 +17,7 @@ mod PredTrack {
         use Fixpoint.Ast.Datalog.Constraint.Constraint
         use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
         use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-        use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, TupleVar, Facts, PredicateState, RamProgram}
+        use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram}
 
         // (max+1, map from old index to RelSym, map from new index to old PredSym)
         pub type alias PredSymMapInternal = (Int64, Map[Int64, RelSym], Map[Int64, PredSym])
