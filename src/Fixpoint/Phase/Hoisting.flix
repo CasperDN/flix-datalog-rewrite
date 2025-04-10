@@ -54,23 +54,19 @@ mod Fixpoint.Phase.Hoisting {
 
             }
         case RamStmt.Seq(xs) =>
-            let someChildren =
-                Vector.map(hoistStmt(rc, termMap, equalitySets, impossible), xs) |>
-                Vector.filter(Option.nonEmpty) |>
-                Vector.map(unwrap);
-            if (Vector.isEmpty(someChildren)) None
-            else if (Vector.length(someChildren) == 1)
-                Vector.head(someChildren)
-            else Some(RamStmt.Seq(someChildren))
+            let children =
+                Vector.filterMap(hoistStmt(rc, termMap, equalitySets, impossible), xs);
+            if (Vector.isEmpty(children)) None
+            else if (Vector.length(children) == 1)
+                Vector.head(children)
+            else Some(RamStmt.Seq(children))
         case RamStmt.Par(xs) => 
-            let someChildren =
-                Vector.map(hoistStmt(rc, termMap, equalitySets, impossible), xs) |>
-                Vector.filter(Option.nonEmpty) |>
-                Vector.map(unwrap);
-            if (Vector.isEmpty(someChildren)) None
-            else if (Vector.length(someChildren) == 1)
-                Vector.head(someChildren)
-            else Some(RamStmt.Par(someChildren))
+            let children =
+                Vector.filterMap(hoistStmt(rc, termMap, equalitySets, impossible), xs);
+            if (Vector.isEmpty(children)) None
+            else if (Vector.length(children) == 1)
+                Vector.head(children)
+            else Some(RamStmt.Par(children))
         case RamStmt.Until(test, body) =>
             match hoistStmt(rc, termMap, equalitySets, impossible, body) {
                 case None => None
@@ -105,7 +101,7 @@ mod Fixpoint.Phase.Hoisting {
                 let RelSym.Symbol(_, arity, _) = relSym;
                 Vector.forEach(i -> {
                     match MutDisjointSets.find((rowVar, i), equalitySets) {
-                        case Some(rep) => MutMap.putWith(v -> _ -> v, rep, RamTerm.RowLoad(rowVar, i, relSym), termMap)
+                        case Some(rep) => MutMap.putWith(_ -> v -> v, rep, RamTerm.RowLoad(rowVar, i, relSym), termMap)
                         case None => ()
                     }
                 }, Vector.range(0, arity));
@@ -153,14 +149,13 @@ mod Fixpoint.Phase.Hoisting {
                 // let insertt = b -> MutList.push(b, independentBool);
                 Vector.forEach(b -> {
                     let vars = collectBoolVariables(b);
-                    // Vector.forEach(v -> if (Set.size(vars) == 0) () else (), vars)
-
-                    // Vector.forEach(v -> if (Set.size(vars) == 0) {MutList.append(b, independentBool); ()} else (), vars)
                     if (Set.size(vars) == 0)
                         MutList.push(b, independentBool) 
-                    else 
-                        Set.forEach(v -> {
-                            let boolList = MutMap.getOrElsePut(v, MutList.empty(rc), idToBool);
+                    else
+                    // Don't collect Eq's. They are handled separately to ensure we refer to the earliest evaluated expression.
+                        Set.forEach(v -> match b {
+                            case Eq(_, _) => ()
+                            case _ => let boolList = MutMap.getOrElsePut(v, MutList.empty(rc), idToBool);
                             MutList.push(b, boolList)
                         }, vars)
                 }, boolExps);
@@ -303,13 +298,13 @@ mod Fixpoint.Phase.Hoisting {
             equalitySets: MutDisjointSets[Load, r],
             constEqualities: MutMap[Load, List[(Boxed, RamId)], r],
             boolExp: BoolExp): Unit \ r = match boolExp {
-        case BoolExp.Eq(RamTerm.RowLoad(tv1, i1, _), RamTerm.RowLoad(tv2, i2, _)) => 
+        case Eq(RamTerm.RowLoad(tv1, i1, _), RamTerm.RowLoad(tv2, i2, _)) => 
             MutDisjointSets.makeSet((tv1, i1), equalitySets);
             MutDisjointSets.makeSet((tv2, i2), equalitySets);
             MutDisjointSets.union((tv1, i1), (tv2, i2), equalitySets)
-        case BoolExp.Eq(RamTerm.RowLoad(tv, i, _), RamTerm.Lit(val, id)) => 
+        case Eq(RamTerm.RowLoad(tv, i, _), RamTerm.Lit(val, id)) => 
             MutMap.putWith(_ -> list -> (val, id) :: list, (tv, i), (val, id) :: Nil, constEqualities)
-        case BoolExp.Eq(RamTerm.Lit(val, id), RamTerm.RowLoad(tv, i, _)) => 
+        case Eq(RamTerm.Lit(val, id), RamTerm.RowLoad(tv, i, _)) => 
             MutMap.putWith(_ -> list -> (val, id) :: list, (tv, i), (val, id) :: Nil, constEqualities)
         case _ => ()
     }

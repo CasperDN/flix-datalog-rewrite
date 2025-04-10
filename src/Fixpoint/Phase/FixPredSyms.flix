@@ -6,7 +6,7 @@ Also: Why does it even have it, if it is not used and why use strings internally
 */
 
 mod Fixpoint.Phase.FixPredSyms {
-    use Fixpoint.Phase.FixPredSyms.FixInformation
+    use Fixpoint.UniqueInts
 
     use Fixpoint.Ast.Ram.{RelSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
@@ -23,28 +23,32 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use PredTrack.{PredSymMapInternal}
     use PredTrack.PredType.{Full, Delta, New}
+    use Fixpoint.UniqueInts.{IndexState, ReverseState}
+    use Fixpoint.Helpers.unwrap
 
 
-    pub type alias FixInformation = Map[PredSym, Int64]
+    pub type alias FixInformation = UniqueInts.ReverseState[PredSym]
 
     @Internal
     pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = match d {
         case Datalog(facts, rules) => region rc {
-            let predToID = MutMap.empty(rc);
-            let counter = Ref.fresh(rc, 0i64);
-            let transformer = mapForward(counter, predToID);
-            (Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer)), MutMap.toMap(predToID))
+            let mapping = UniqueInts.empty(rc);
+            // ;
+            // let predToID = MutMap.empty(rc);
+            // let counter = Ref.fresh(rc, 0i64);
+            let transformer = mapForward(mapping);
+            (Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer)), UniqueInts.reverse(mapping))
         }
         case _ => bug!("PredSym error")
     }
 
     @Internal
-    pub def unfixPredSym(d: Datalog, forwardMap: FixInformation): Datalog = match d {
+    pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
-            let transformer = mapBack(swapMapOrder(forwardMap));
+            let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
         case Model(map) => 
-            let transformer = mapBack(swapMapOrder(forwardMap));
+            let transformer = mapBack(fixing);
             Map.foldLeftWithKey(newMap -> k -> v -> match k {
                 case RelSym.Symbol(p, arity, den) => Map.insert(RelSym.Symbol(transformer(p), arity, den), v, newMap)
             }, Map#{}, map)
@@ -53,40 +57,19 @@ mod Fixpoint.Phase.FixPredSyms {
     }
     
     @Internal
-    def mapBack(idToPred: Map[Int64, PredSym], pred: PredSym): PredSym = 
+    def mapBack(reversing: ReverseState[PredSym], pred: PredSym): PredSym = 
         let PredSym(_, id) = pred;
-        match Map.get(id, idToPred) {
+        match Map.get(unwrap(Int64.tryToInt32(id)), reversing) {
             case Some(v) => v
             case _ => bug!("Incomplete mapping given to when 'unfixing predicates'")
         }
     
 
-    // @Internal
-    // def mapBack(pred: PredSym, idToPred: Map[Int64, PredSym]): PredSym = 
-    //     let PredSym(_, id) = pred;  
-    //     match Map.get(id, idToPred) {
-    //         case Some(v) => v
-    //         case _ => bug!("Incomplete mapping given to when 'unfixing predicates'")
-    //     }
-
-    @Internal 
-    def swapMapOrder(forwardMap: Map[PredSym, Int64]): Map[Int64, PredSym] = 
-        Map.foldLeftWithKey(map -> k -> v -> Map.insert(v, k, map), Map#{}, forwardMap)
-
-    // def mapReverse()
-
     @Internal
-    def mapForward(counter: Ref[Int64, r], predToID: MutMap[PredSym, Int64, r], pred: PredSym): PredSym \ r = 
+    def mapForward(state: IndexState[PredSym, r], pred: PredSym): PredSym \ r = 
         let PredSym(name, _) = pred;
-        match MutMap.get(pred, predToID) {
-            case None => 
-                let newID = Ref.get(counter); 
-                Ref.put(newID + 1i64, counter); 
-                MutMap.put(pred, newID, predToID); 
-                PredSym(name, newID)
-            case Some(v) => PredSym(name, v)
-        }
-    
+        let index = UniqueInts.getIndex(pred, state);
+        PredSym(name, Int32.toInt64(index))
 
     @Internal
     def remapConstraints(constraints: Vector[Constraint], transformer: PredSym -> PredSym \ r): Vector[Constraint] \ r = {
@@ -103,12 +86,4 @@ mod Fixpoint.Phase.FixPredSyms {
         case BodyAtom(pred, den, pol, fixed, terms) => BodyAtom(transformer(pred), den, pol, fixed, terms)
         case _ => body
     }
-
-    // @Internal
-    // def remapPred(pred: PredSym, transformer: PredSym -> PredSym \ r): PredSym \ r = match pred {
-    //     case PredSym(name, _) => match MutMap.get(pred, predToID) {
-    //         case None => let newID = Ref.get(counter); Ref.put(newID + 1i64, counter); MutMap.put(pred, newID, predToID); PredSym(name, newID)
-    //         case Some(v) => PredSym(name, v)
-    //     }
-    // }
 }

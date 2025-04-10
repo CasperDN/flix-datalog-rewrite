@@ -37,6 +37,21 @@ mod PredTrack {
             , forwardMap);
             (max, forwardMap, backMap)
         
+        // pub def allRelSyms(predTrack: PredSymMapInternal): List[RelSym] =
+        //     let (max, forwardMap, _) = predTrack;
+        //     Map.foldLeftWithKey(acc -> _ -> relSym -> match relSym {
+        //         case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => 
+        //             List.foldLeft(acc1 -> counter -> 
+        //                 RelSym.Symbol(PredSym.PredSym(name, id + counter), arity, den) :: acc1
+        //             , acc, 0i64 :: max :: max * 2i64 :: Nil)
+        //     }, Nil, forwardMap)
+
+        pub def allFullRelSyms(predTrack: PredSymMapInternal): List[RelSym] =
+            let (_, forwardMap, _) = predTrack;
+            Map.foldLeftWithKey(acc -> _ -> relSym -> 
+                relSym :: acc
+            , Nil, forwardMap)
+
 
         pub def isFullPredicate(self: PredSymMapInternal, pred: PredSym): Bool = match pred {
             case PredSym(_, id) => isFullID(self, id)
@@ -91,8 +106,7 @@ mod PredTrack {
             case Datalog(facts, rules) =>
                 let (map1, max1) = collectPredicates(rules);
                 let (map2, max2) = collectPredicates(facts);
-                let map1_ = unchecked_cast({println(Map.union(map1, map2)); map1} as _ \ {});
-                (Int64.max(max1, max2), Map.union(map1_, map2))
+                (Int64.max(max1, max2), Map.union(map1, map2))
             case _ => bug!("Datalog Boxing bug")
         }
         def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 

@@ -73,14 +73,14 @@ mod Fixpoint.Phase.Compiler {
         }, db);
 
         let test =
-        Vector.foldRight(a -> b -> {
-            match a {
-                case Constraint(HeadAtom(predSym, _, headTerms), _) => 
-                    let x = Vector.map(getFactTerm, headTerms);
-                    let sym = PredTrack.getNewRel(predSymMaps, predSym, Full);
-                    Map.insertWith(List.append, sym, x :: Nil, b)
-            }
-        }, startingPoint, facts);
+            Vector.foldRight(a -> b -> {
+                match a {
+                    case Constraint(HeadAtom(predSym, _, headTerms), _) => 
+                        let x = Vector.map(getFactTerm, headTerms);
+                        let sym = PredTrack.getNewRel(predSymMaps, predSym, Full);
+                        Map.insertWith(List.append, sym, x :: Nil, b)
+                }
+            }, startingPoint, facts);
         Map.map(List.toVector, test)
 
 

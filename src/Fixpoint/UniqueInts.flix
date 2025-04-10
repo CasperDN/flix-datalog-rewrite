@@ -1,8 +1,10 @@
 mod Fixpoint.UniqueInts {
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
+    use Fixpoint.Helpers.unwrap
     
     pub type alias IndexState[k: Type, r: Region] = (MutMap[k, Int32, r], Counter[r])
+    pub type alias ReverseState[k: Type] = Map[Int32, k]
 
     pub def empty(rc: Region[r]): IndexState[k, r] \ r = (MutMap.empty(rc), Counter.empty(rc))
 
@@ -11,9 +13,9 @@ mod Fixpoint.UniqueInts {
         Counter.resetTo(newState, counter)
     }
 
-    pub def getCurrentId(state: IndexState[k, r]): Int32 \ r = {
+    pub def peekCurrentId(state: IndexState[k, r]): Int32 \ r = {
         let (_, counter) = state;
-        Counter.getCurrentId(counter)
+        Counter.peekCurrentId(counter)
     }
 
 
@@ -26,4 +28,11 @@ mod Fixpoint.UniqueInts {
                 id
             case Some(v) => v
         }
+
+    pub def fromIndex(val: Int32, reverseState: ReverseState[k]): k = 
+        unwrap(Map.get(val, reverseState))
+
+    pub def reverse(state: IndexState[k, r]): ReverseState[k] \ r with Order[k] =
+        let (map, _) = state;
+        MutMap.foldLeftWithKey(acc -> k -> v -> Map.insert(v, k, acc), Map#{}, map)
 }

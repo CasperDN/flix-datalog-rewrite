@@ -11,10 +11,7 @@ mod Fixpoint.Phase.IndexSelection {
             // This type annotation is apparently needed?
             let (newIndexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = region rc {
                 let indexes = MutMap.empty(rc);
-                unchecked_cast(println(stmt) as _ \ rc);
-
                 let collectedStmt = collectSearchesStmt(indexes, rc, stmt);
-                unchecked_cast(println(MutMap.toString(indexes)) as _ \ rc);
                 let newIndexes = 
                     indexes |>
                     MutMap.toMap |> 
@@ -51,10 +48,7 @@ mod Fixpoint.Phase.IndexSelection {
                 let (finalState, _) = indexState;
                 (indexedStmt, MutMap.toMap(finalState))
             };
-            // let indexedStmt_ = unchecked_cast({println(indexesMissing); indexedStmt} as _ \ {});
-            // let facts_ = unchecked_cast({println(indexPlacement); facts} as _ \ {});
-            let meta_ = unchecked_cast({println(newIndexes); meta} as _ \ {});
-            RamProgram.Program(indexedStmt, facts, meta_, (indexes, indexPlacement))
+            RamProgram.Program(indexedStmt, facts, meta, (indexes, indexPlacement))
     }
 
     def indexStmt(stmt: RamStmt, constructedIndexes: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {
@@ -127,7 +121,6 @@ mod Fixpoint.Phase.IndexSelection {
             let search = boolExps |>
                 Vector.foldLeft(acc -> exp -> match exp {
                     case BoolExp.Eq(RamTerm.RowLoad(tv1, i, _), t2) if tv1 == rowVar => 
-                        unchecked_cast(println("T2: ${t2}") as _ \ r);
                         if (isTermGround(t2, seenTuples)) {
                             MutList.push(exp, equalExpList);
                             i :: acc
@@ -142,7 +135,6 @@ mod Fixpoint.Phase.IndexSelection {
             MutSet.add(rowVar, seenTuples);
             let newBody = collectSearchesOp(body, indexes, seenTuples, rc);
             MutSet.remove(rowVar, seenTuples);
-            unchecked_cast(println("Search: ${search}") as _ \ r);
             if (not Vector.isEmpty(search)){
                 let searches = MutMap.getWithDefault(relSym, List.empty(), indexes);
                 if (not List.memberOf(search, searches))

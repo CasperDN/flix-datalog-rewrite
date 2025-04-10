@@ -145,7 +145,7 @@ mod Fixpoint.Boxing {
     mod Equality {
         use Fixpoint.Ast.Ram.getTermRamId
         use Fixpoint.Ast.Ram
-        use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, toPredID, RowVar}
+        use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
         use PredTrack.PredSymMapInternal
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
         use Fixpoint.Ast.Shared.PredSym

@@ -83,17 +83,17 @@ mod Fixpoint.Ast.ExecutableRam {
             match op {
                 case RelOp.Search(var, relSym, _, body) =>
                     "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Query(var, ramSym, prefixQuery, body) =>
+                case RelOp.Query(var, ramSym, writes, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
-                    }, " ∧ ", prefixQuery);
+                    }, " ∧ ", writes);
                     "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.SearchLattice(var, relSym, _, _, _, body) =>
                     "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.QueryLattice(var, ramSym, _, _, prefixQuery, body) =>
+                case RelOp.QueryLattice(var, ramSym, _, _, writes, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
-                    }, " ∧ ", prefixQuery);
+                    }, " ∧ ", writes);
                     "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(id, _, terms, _, body, _, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
@@ -197,7 +197,7 @@ mod Fixpoint.Ast.ExecutableRam {
 
     // RamProgram consisting of the the ExecutableRam program/statements, the starting database/facts and information about which indices should be used.
     pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation, Arities)
+        case Program(RamStmt, Facts, PredicateState, IndexInformation, Arities, Fixpoint.Boxing.RamIdToMarshal)
     }
 
     type alias Arities = Vector[Int32]

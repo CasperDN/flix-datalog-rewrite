@@ -105,7 +105,7 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreInterpret(program: ExecutableRam.RamProgram): ExecutableRam.RamProgram = match program {
-        case ExecutableRam.RamProgram.Program(stmt, facts, _meta, (index, _), _) => unchecked_cast({
+        case ExecutableRam.RamProgram.Program(stmt, facts, _meta, (index, indexPos), _, _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
                 let str = String.repeat(80, "*") |>
                 concatRev("** Facts") |>
@@ -125,6 +125,12 @@ mod Fixpoint.Debugging {
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>
                 concatRev(String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", index))) |>
+                concatRev("") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("** Index Position") |>
+                concatRev(String.repeat(80, "*")) |>
+                concatRev("") |>
+                concatRev(String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", indexPos))) |>
                 concatRev("");
                 flush(str, false);
                 program

@@ -310,6 +310,32 @@ mod Fixpoint.Ast.Ram {
     }
 
 
+    @Internal
+    pub def collectTpvArity(program: RamProgram): List[(RowVar, Int32)] = match program {
+        case RamProgram.Program(stmt, _, _, _) =>
+            collectTpvArityStmt(stmt)
+    }
+
+    @Internal
+    pub def collectTpvArityStmt(stmt: RamStmt): List[(RowVar, Int32)] \ r = match stmt {
+        case RamStmt.Insert(op) => collectTpvArityOp(op)
+        case RamStmt.Merge(_, _) => Nil
+        case RamStmt.Swap(_, _) => Nil
+        case RamStmt.Purge(_) => Nil
+        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectTpvArityStmt(x), acc), Nil, stmts)
+        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectTpvArityStmt(x), acc), Nil, stmts)
+        case RamStmt.Until(_, rest) => collectTpvArityStmt(rest)
+        case RamStmt.Comment(_) => Nil
+    }
+
+    def collectTpvArityOp(op: RelOp): List[(RowVar, Int32)] \ r = match op {
+        case RelOp.Search(tpv, RelSym.Symbol(_, arity, _), rest) => (tpv, arity) :: collectTpvArityOp(rest)
+        case RelOp.Query(tpv, RelSym.Symbol(_, arity, _), _, _, rest) => (tpv, arity) :: collectTpvArityOp(rest)
+        case RelOp.Functional(tpv, _, terms, rest, _) =>  (tpv, Vector.length(terms)) :: collectTpvArityOp(rest)
+        case RelOp.Project(_, _) => Nil
+        case RelOp.If(_, rest) => collectTpvArityOp(rest)
+    }
+
     /////////////////////////////////////////////////////////////////////////////
     // RowVar                                                                //
     /////////////////////////////////////////////////////////////////////////////
@@ -381,10 +407,6 @@ mod Fixpoint.Ast.Ram {
             case (RamId.InID(i0, i1), RamId.InID(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            // case (RamId.InID(i0, i1), RamId.InID(j0, j1)) =>
-            //     let firstComp = i0 <=> j0;
-            //     if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            // TODO: This is perhaps not transitive. Should add cases for all...
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
             case (_,  RamId.TuplePos(_, _)) => Comparison.GreaterThan
             case (RamId.RelPos(_, _), _) => Comparison.LessThan

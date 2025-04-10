@@ -10,7 +10,7 @@ mod Fixpoint.Counter {
     pub def resetTo(i: Int32, c: Counter[r]): Unit \ r =
         Ref.put(i, c)
 
-    pub def getCurrentId(c: Counter[r]): Int32 \ r =
+    pub def peekCurrentId(c: Counter[r]): Int32 \ r =
         Ref.get(c)
 
     // pub def getIncrementBy(c: Counter[r], i: Int32): Unit \ r =
