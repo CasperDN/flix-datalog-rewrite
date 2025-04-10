@@ -10,7 +10,7 @@ mod Fixpoint.Phase.FixPredSyms {
 
     use Fixpoint.Ast.Ram.{RelSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
@@ -30,17 +30,28 @@ mod Fixpoint.Phase.FixPredSyms {
     pub type alias FixInformation = UniqueInts.ReverseState[PredSym]
 
     @Internal
-    pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = match d {
-        case Datalog(facts, rules) => region rc {
-            let mapping = UniqueInts.empty(rc);
-            // ;
-            // let predToID = MutMap.empty(rc);
-            // let counter = Ref.fresh(rc, 0i64);
+    pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = region rc {
+        let mapping = UniqueInts.empty(rc);
+        let fixed = fixPredSymsInternal(d, mapping);
+        (fixed, UniqueInts.reverse(mapping))
+    }
+
+    @Internal
+    pub def fixPredSymsInternal(d: Datalog, mapping: IndexState[PredSym, r]): Datalog \ r = match d {
+        case Datalog(facts, rules) =>
             let transformer = mapForward(mapping);
-            (Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer)), UniqueInts.reverse(mapping))
-        }
+            Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
+        case Model(facts) =>
+            Model(Map.foldLeftWithKey(acc -> k -> v -> match k {
+                case RelSym.Symbol(predSym, arity, den) =>
+                    let newSym = RelSym.Symbol(mapForward(mapping, predSym), arity, den);
+                    Map.insert(newSym, v, acc)
+            }, Map#{}, facts))
+        case Join(d1, d2) =>
+            Join(fixPredSymsInternal(d1, mapping), fixPredSymsInternal(d2, mapping))
         case _ => bug!("PredSym error")
     }
+
 
     @Internal
     pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {

@@ -72,9 +72,7 @@ mod Fixpoint.Solver {
 
 
             case Model(_) => d
-            case Join(Model(m), cs) =>
-            ???
-                // compiler(cs, Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc)) |> Fixpoint.Interpreter.interpretWithDatabase(rc, m) |> toModelWithRenaming
+            case Join(Model(m), cs) => compiler(cs, m) |> Fixpoint.Interpreter.interpret(rc) |> toModelWithRenaming
             case _ => bug!("Datalog Boxing bug")
         };
         let m = Fixpoint.Debugging.notifyPostSolve(model);

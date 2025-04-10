@@ -1,9 +1,11 @@
 def main(): Unit \ IO =
     println("Print");
-    let path = #{
-        Edge(1,2).
-        Edge(2,3).
-        Edge(3,4).
+    let map = List.map(x -> (x, x + 1), List.range(0, 400));
+    let injected = inject map into Edge;
+    let path = injected <+> #{
+        // Edge(1,2).
+        // Edge(2,3).
+        // Edge(3,4).
         Path(x, y) :- Edge(x, y).
         Path(x, y) :- Edge(x, z), Path(y, z).
     };

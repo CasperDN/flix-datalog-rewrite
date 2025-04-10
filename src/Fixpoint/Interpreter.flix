@@ -115,7 +115,7 @@ mod Fixpoint.Interpreter {
         interpretWithDatabaseInternal(rc, indexes, boxing, program)
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Database[r], Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
+    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
         ???
         // let (program, db, boxing) = input;
         // interpretWithDatabaseInternal(rc, db, boxing, program)
