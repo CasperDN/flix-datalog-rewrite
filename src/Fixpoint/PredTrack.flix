@@ -9,6 +9,8 @@ Solution: Start by creating a map from old relation-numbers to new.
 
 // Purpose: We need to make more predicates than there are 
 mod PredTrack {
+    use PredTrack.idToPredType
+    use PredTrack.allFullRelSyms
     use PredTrack.PredType
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Ast.Shared.PredSym.PredSym
@@ -52,6 +54,12 @@ mod PredTrack {
                 relSym :: acc
             , Nil, forwardMap)
 
+        pub def allRelSyms(predTrack: PredSymMapInternal): List[RelSym] =
+            let full = allFullRelSyms(predTrack);
+            full |>
+            List.append(List.map(fullRelSymToType(predTrack, PredType.Delta), full)) |>
+            List.append(List.map(fullRelSymToType(predTrack, PredType.New), full))
+
 
         pub def isFullPredicate(self: PredSymMapInternal, pred: PredSym): Bool = match pred {
             case PredSym(_, id) => isFullID(self, id)
@@ -59,6 +67,10 @@ mod PredTrack {
 
         pub def isFullID(self: PredSymMapInternal, id: Int64): Bool = 
             PredType.Full == idToPredType(self, id)
+
+        pub def fullRelSymToType(self: PredSymMapInternal, wantedType: PredType, relSym: RelSym): RelSym = match relSym {
+            case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => RelSym.Symbol(PredSym.PredSym(name, fullIDtoPredType(id, wantedType, self)), arity, den)
+        }
 
         pub def idToPredType(self: PredSymMapInternal, id: Int64): PredType = 
             let (max, _, _) = self;
@@ -80,6 +92,17 @@ mod PredTrack {
             } else {
                 id - 2i64 * max
             }
+
+        pub def relSymToPredType(relSym: RelSym, self: PredSymMapInternal): PredType = match relSym {
+            case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => idToPredType(self, id)
+        }
+
+
+        pub def relSymFromPredType(relSym: RelSym, wanted: PredType, self: PredSymMapInternal): RelSym = match relSym {
+            case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) =>
+                RelSym.Symbol(PredSym.PredSym(name, fullIDtoPredType(idToFullPredID(id, self), wanted, self)), arity, den)
+        }
+
 
 
         // Could use previos method, but would duplicate computation... 
@@ -106,7 +129,7 @@ mod PredTrack {
             case Datalog(facts, rules) =>
                 let (map1, max1) = collectPredicates(rules);
                 let (map2, max2) = collectPredicates(facts);
-                (Int64.max(max1, max2), Map.union(map1, map2))
+                (Int64.max(max1, max2) + 1i64, Map.union(map1, map2))
             case _ => bug!("Datalog Boxing bug")
         }
         def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 

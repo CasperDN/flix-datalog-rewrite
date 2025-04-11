@@ -1,4 +1,5 @@
 mod Fixpoint.Phase.Hoisting {
+    use MutDisjointSets.MutDisjointSets
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
     use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
@@ -96,44 +97,51 @@ mod Fixpoint.Phase.Hoisting {
         match op {
             // We could here keep the BoolExps that we do not want to handle as if, but then we limit
             // later iterations of the query algorithms, or require that this file is changed later
-            case Search(rowVar, relSym, body) => 
+            case Search(rowVar, relSym, body) =>
                 let RowVar.Named(id) = rowVar;
                 let RelSym.Symbol(_, arity, _) = relSym;
                 Vector.forEach(i -> {
                     match MutDisjointSets.find((rowVar, i), equalitySets) {
                         case Some(rep) => MutMap.putWith(_ -> v -> v, rep, RamTerm.RowLoad(rowVar, i, relSym), termMap)
-                        case None => ()
+                        case None => bug!("In Fixpoint.Hoisting: Everything should be in the equalitySet")
                     }
                 }, Vector.range(0, arity));
-                match hoistOpRec(body) {
+                let optHoistedBody = hoistOpRec(body);
+                match optHoistedBody {
                     case None => None
-                    case Some(hoistedBody) => match MutMap.get(id, idToBool) { 
-                        case Some(v) =>
-                            let relevant = List.filter(isBoolGround(termMap, equalitySets), MutList.toList(v));
-                            let range = Vector.range(0, arity);
-                            Vector.forEach(i -> MutMap.remove((rowVar, i), termMap), range);
-                            let hoistedToHere =
-                                List.filter(x -> not isBoolGround(termMap, equalitySets, x), relevant) |>
-                                List.map(simplifyLoadsBool(termMap, equalitySets)) |>
-                                List.toVector;
-                            let equalExps = range |>
-                                Vector.filterMap(i -> {
-                                    let load = unwrap(MutDisjointSets.find((rowVar, i), equalitySets));
-                                    match MutMap.get(load, termMap) {
-                                        case None => None
-                                        case Some(val) => if(isTermGround(termMap, equalitySets, val)) {
-                                            Some(Eq(RowLoad(rowVar, i, relSym), val))
-                                        } else None
-                                    }
-                                });
-                            let combined = Vector.append(hoistedToHere, equalExps);
-                            let newOp = 
-                                if (Vector.length(combined) != 0)
-                                    Query(rowVar, relSym, combined, -1, hoistedBody)
-                                else Search(rowVar, relSym, hoistedBody);
-                            Some(newOp)
-                        case None => Some(Search(RowVar.Named(id), relSym, hoistedBody))
-                    }
+                    case Some(hoistedBody) =>
+                        let relevant = List.filter(isBoolGround(termMap, equalitySets), MutList.toList(MutMap.getWithDefault(id, MutList.empty(rc), idToBool)));
+                        let range = Vector.range(0, arity);
+                        // Remove all terms that were bound here.
+                        // If there are equalities between 2 variables from the same tuple save them for later
+                        let _intraEqualities = MutList.empty(rc);
+                        let knownEqualities = MutList.empty(rc);
+                        range |> Vector.forEach(i -> {match MutDisjointSets.find((rowVar, i), equalitySets) {
+                            case None => ()
+                            case Some(rep) => match unwrap(MutMap.get(rep, termMap)) {
+                                case RamTerm.RowLoad(rv, i1, rel) =>
+                                    if (rv == rowVar) {
+                                        MutMap.remove((rv, i1), termMap);
+                                        if(i == i1) {
+                                            ()
+                                        } else {
+                                            bug!("Case not handled currently")
+                                            // MutList.push((i, i1), intraEqualities)
+                                        }
+                                    } else 
+                                    MutList.push(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, relSym), RamTerm.RowLoad(rv, i1, rel)), knownEqualities)
+                                case value => MutList.push(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, relSym), value), knownEqualities)
+                        }}});
+                        let hoistedToHere =
+                            List.filter(x -> not isBoolGround(termMap, equalitySets, x), relevant) |>
+                            List.map(simplifyLoadsBool(termMap, equalitySets));
+                            // List.toVector;
+                        let combined = List.toVector(List.append(hoistedToHere, MutList.toList(knownEqualities)));
+                        let newOp = 
+                            if (Vector.length(combined) != 0)
+                                Query(rowVar, relSym, combined, -1, hoistedBody)
+                            else Search(rowVar, relSym, hoistedBody);
+                        Some(newOp)
                 }
                 // MutSet.remove(id, seenRowVars); // Corectness
                 // MutMap.remove(id, idToBool); // Not needed anymore
@@ -253,7 +261,7 @@ mod Fixpoint.Phase.Hoisting {
             case Guard5(_, term1, term2, term3, term4, term5) => termGround(term1) and termGround(term2) and termGround(term3) and termGround(term4) and termGround(term5)
     }
 
-        @Internal
+    @Internal
     def isTermGround(
         termMap: MutMap[Load, RamTerm, r],
         equalitySets: MutDisjointSets[Load, r],

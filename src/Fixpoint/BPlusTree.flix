@@ -40,9 +40,24 @@ mod BPlusTree {
             unchecked_cast((l.isLocked(): _ \ IO) as _ \ r)
     }
 
+    pub def toString(tree: BPlusTree[r]): String \ r =
+        "Search: ${Vector.join(" < ", tree->search)}\nTree:\n${Node.toString(0, tree->rc, tree->root)}"
+
     pub def forEach(f: Array[Int64, r] -> Boxed -> Unit \ ef, tree: BPlusTree[r]): Unit \ ef + r =
         let minLeaf = Node.leftMostChild(tree->search, tree->root);
         Node.traverseRightUnconditional(f, 0, tree->search, minLeaf)
+
+    pub def forEachOp(
+            rc: Region[r],
+            tuplePos: Int32,
+            ctxt: Fixpoint.Interpreter.Context[r],
+            writes: Vector[(Int32, Int32, Int32)],
+            body: Fixpoint.Ast.ExecutableRam.RelOp,
+            tree: BPlusTree[r]): Unit \ r =
+        let minLeaf = Node.leftMostChild(tree->search, tree->root);
+        let (_, env, _) = ctxt;
+        let (minEnv, maxEnv, tupleEnv, _) = env;
+        Node.traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, 0, tree->search, minLeaf)
 
     pub def containsPair(key: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
@@ -69,6 +84,16 @@ mod BPlusTree {
         let max = Array.repeat(src->rc, len, Int64.maxValue());
         BPlusTree.rangeQueryWith(k -> v -> BPlusTree.putWith(f, k, v, dst), min, max, src)
     }
+
+    pub def emptyWithOrder(rc: Region[r], order: Int32, search: Search): BPlusTree[r] \ r = 
+        let node = Node.mkLeaf(rc, Array.empty(rc, order), Array.empty(rc, order), 0, None, None);
+        new BPlusTree @ rc {
+            root = node,
+            order = order,
+            rootLock = Lock.mkLock(rc),
+            rc = rc,
+            search = search
+        }
 
     pub def empty(rc: Region[r], search: Search): BPlusTree[r] \ r = 
         let order = 64;
@@ -195,14 +220,39 @@ mod BPlusTree {
         use BPlusTree.Lock
         use Fixpoint.Boxed
 
+        pub def tupleToString(tuple: Array[Int64, r]): String \ r = 
+            let s = Array.join(",", tuple); 
+            "(${s})"
+
+        pub def toString(indent: Int32, rc: Region[r], node: Node[r]): String \ r =
+            let indentString = String.repeat(indent, " ");
+            match node->isLeaf {
+                case false =>
+                    let children = node->children;
+                    let keysString = 
+                        Array.copyOfRange(rc, 0, node->size - 1, node->keys) |> 
+                        Array.map(rc, tupleToString) |>
+                        Array.join(",");
+                    let childrenArr = Array.copyOfRange(rc, 0, node->size, children);
+                    let childrenString = Array.foldLeft(a -> x -> "${a}${toString(indent+2, rc, x)}", "", childrenArr);
+                    "T${indentString}Internal(${keysString})\n${childrenString}"
+                case true =>
+                    let values = Array.copyOfRange(rc, 0, node->size, node->values);
+                    let keys = Array.copyOfRange(rc, 0, node->size, node->keys);
+                    let keysStrings = Array.mapWithIndex(rc, i -> key -> "${tupleToString(key)}: ${Array.get(i, values)}", keys);
+                    let keysString = Array.join(",\n${indentString}  ", keysStrings);
+                    "${indentString}Leaf(\n${indentString}  ${keysString}\n${indentString})\n"
+            }
+
         pub def putWith(f: Boxed -> Boxed -> Boxed \ ef, key: Array[Int64, r], val: Boxed, search: Search, order: Int32, rc: Region[r], node: Node[r]): Option[Node[r]] \ r + ef =
             let index = binarySearch(key, node->size, search, node->keys);
             if (index < 0) {
                 insertIntoLeafPropagate(key, val, order, rc, search, index, node)
-            } else
+            } else{
                 let v1 = Array.get(index, node->values);
                 Array.put(f(val, v1), index, node->values);
                 None
+            }
 
         pub def traverseRightUnconditional(
             f: Array[Int64, r] -> Boxed -> Unit \ ef,
@@ -216,6 +266,33 @@ mod BPlusTree {
                 traverseRightUnconditional(f, index + 1, search, node)
             } else match node->next {
                 case Some(next) => traverseRightUnconditional(f, 0, search, next)
+                case None => ()
+            }
+
+        pub def traverseRightUnconditionalOp(
+            rc: Region[r],
+            tuplePos: Int32,
+            minEnv: Vector[Array[Int64, r]],
+            maxEnv: Vector[Array[Int64, r]],
+            tupleEnv: Array[Array[Int64, r], r],
+            ctxt: Fixpoint.Interpreter.Context[r],
+            writes: Vector[(Int32, Int32, Int32)],
+            body: Fixpoint.Ast.ExecutableRam.RelOp,
+            index: Int32,
+            search: Search,
+            node: Node[r]
+        ): Unit \ r =
+            if(index < node->size) {
+                let k = Array.get(index, node->keys);
+                Array.put(k, tuplePos, tupleEnv);
+                writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
+                    Array.put(Array.get(srcIndex, k), dstIndex, Vector.get(dst, minEnv));
+                    Array.put(Array.get(srcIndex, k), dstIndex, Vector.get(dst, maxEnv))
+                });
+                Fixpoint.Interpreter.evalOp(rc, ctxt, body);
+                traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, index + 1, search, node)
+            } else match node->next {
+                case Some(next) => traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, 0, search, next)
                 case None => ()
             }
 
@@ -336,7 +413,7 @@ mod BPlusTree {
                 Array.put(val, index, node->values);
                 Lock.unlock(node->lock);
                 None
-            } else
+            } else {
                 let insertionPoint = toInsertionPoint(index);
                 if (size < order) {
                     actualInsertLeaf(key, val, insertionPoint, node);
@@ -344,7 +421,7 @@ mod BPlusTree {
                     None
                 } else
                     splitLeaf(node, key, val, insertionPoint, order, rc, search)
-        }
+        }}
 
         pub def leafContains(key: Array[Int64, r], search: Search, node: Node[r]): Bool \ r =
             let index = binarySearch(key, node->size, search, node->keys);
@@ -470,7 +547,7 @@ mod BPlusTree {
                 let insertionPoint = toInsertionPoint(index);
                 if (insertionPoint <= minLeaf->size)
                     traverseRight(f, insertionPoint, max, search, minLeaf)
-                    else ()
+                else ()
             } else
                 traverseRight(f, index, max, search, minLeaf)
 
@@ -672,9 +749,10 @@ mod BPlusTree {
         def arrayInsert(x: a, i: Int32, len: Int32, arr: Array[a, r]): Unit \ r =
             if (len == i)
                 Array.put(x, i, arr)
-            else
+            else {
                 Array.copyInto(srcPos = i, dstPos = i + 1, len = len - i, src = arr, arr);
                 Array.put(x, i, arr)
+            }
 
         def binarySearch(key: Array[Int64, r], length: Int32, search: Search, arr: Array[Array[Int64, r], r]): Int32 \ r =
             let len = Vector.length(search);

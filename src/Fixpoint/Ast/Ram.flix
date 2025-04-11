@@ -88,7 +88,7 @@ mod Fixpoint.Ast.Ram {
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
-                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(RowVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym) =>
@@ -256,12 +256,14 @@ mod Fixpoint.Ast.Ram {
     }
 
     @Internal
-    pub def collectRelSym(program: RamProgram): List[RelSym] = region rc { match program {
-        case RamProgram.Program(stmt, facts, _, _) =>
-            let seen = MutSet.empty(rc);
-            collectRelSymStmt(seen, stmt);
-            Map.forEach(k -> _ -> MutSet.add(k, seen), facts);
-            MutSet.toList(seen)
+    pub def collectRelSym(program: RamProgram): List[RelSym] = region _rc { match program {
+        case RamProgram.Program(_, _, predState, _) =>
+            PredTrack.allRelSyms(predState)
+            // let seen = MutSet.empty(rc);
+            // collectRelSymStmt(seen, stmt);
+            // Map.forEach(k -> _ -> MutSet.add(k, seen), facts);
+            // MutSet.forEach(relSym -> (), seen);
+            // MutSet.toList(seen)
     }}
 
     @Internal
@@ -359,7 +361,7 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[RowVar] {
         pub def toString(var: RowVar): String = match var {
-            case RowVar.Named(id) => "x${id}$"
+            case RowVar.Named(id) => "x${id}"
         //    case RowVar.Index(i) => "${i}$"
         }
     }
@@ -381,6 +383,18 @@ mod Fixpoint.Ast.Ram {
         case TuplePos(Int32, Int32) // (RowVar, index)
         case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for Boxing.
     }
+
+    instance ToString[RamId] {
+    
+        pub def toString(x: RamId): String = match x {
+            case (RamId.Id(i1)) => "ID[${i1}]"
+            case (RamId.InID(i0, i1)) => "InID[${i0}, ${i1}]"
+            case (RamId.TuplePos(i0, i1)) => "TuplePos[${i0}, ${i1}]"
+            case (RamId.RelPos(i0, i1)) => "RelPos[${i0}, ${i1}]"
+        }
+    
+    }
+    
 
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {

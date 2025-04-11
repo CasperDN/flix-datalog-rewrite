@@ -1,4 +1,5 @@
 mod Fixpoint.Phase.IndexSelection {
+    use PredTrack.relSymFromPredType
     use AutomaticIndexSelection.{minIndex}
     use Fixpoint.UniqueInts
     use Fixpoint.UniqueInts.IndexState
@@ -19,14 +20,6 @@ mod Fixpoint.Phase.IndexSelection {
                     Map.map(List.toVector);
                 (newIndexes, collectedStmt)
             };
-            let indexesMissing = 
-                collectRelSym(program) |>
-                List.filter(relSym -> not Map.memberOf(relSym, newIndexes)) |>
-                List.foldLeft(acc -> relSym -> 
-                    let search = Vector.range(0, arityOf(relSym));
-                    Map.insert(relSym, Vector#{search}, acc),
-                    Map#{}
-                );
             let indexesFull =
                 newIndexes |>
                 Map.mapWithKey(relSym -> searches ->
@@ -37,6 +30,21 @@ mod Fixpoint.Phase.IndexSelection {
                         searches
                     )
                 );
+            let indexesMissing = 
+                collectRelSym(program) |>
+                List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
+                List.foldLeft(acc -> relSym -> {
+                    let deltaRelSym = relSymFromPredType(relSym, PredTrack.PredType.Delta, meta);
+                    let search = match PredTrack.relSymToPredType(relSym, meta) {
+                        case PredTrack.PredType.New => 
+                            match Map.get(deltaRelSym, indexesFull) {
+                                case Some(v) => Vector.get(0, v)
+                                case None => Vector.range(0, arityOf(deltaRelSym))
+                            }
+                        case _ => Vector.range(0, arityOf(relSym))
+                    };
+                    Map.insert(relSym, Vector#{search}, acc)
+                }, Map#{});
             let indexes = Map.union(indexesFull, indexesMissing); 
             let (indexedStmt, indexPlacement) = region rc2 {
                 let indexState = UniqueInts.empty(rc2);

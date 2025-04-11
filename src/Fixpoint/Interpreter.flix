@@ -17,7 +17,7 @@
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.Ram.RamId
     use Fixpoint.Boxing
-    use Fixpoint.Boxing.{Boxing, rebox, debox}
+    use Fixpoint.Boxing.{Boxing, boxWith, unboxWith}
     use PredTrack.PredSymMapInternal
     use Fixpoint.Boxed
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
@@ -49,27 +49,6 @@ mod Fixpoint.Interpreter {
         SearchEnv[r], 
         Boxing[r]
     )
-
-    // @Internal
-    // pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
-    //     ???
-
-
-    // @Internal
-    // pub def interpretWithDatabase(rc: Region[r], db: DatabaseExternal[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
-    //     ???
-
-    // pub def lubWith(
-    //     index: Int32, 
-    //     boxing: Boxing[r], 
-    //     lub: Boxed -> Boxed -> Boxed, 
-    //     l1: Int64, 
-    //     l2: Int64
-    // ): Int64 =
-    // ???
-        // let box1 = rebox(l1, index, boxing);
-        // let box2 = rebox(l2, index, boxing);
-        // debox(box1 `lub` box2, index, boxing)
     
     pub def mkIndex(
         rc: Region[r], 
@@ -112,16 +91,10 @@ mod Fixpoint.Interpreter {
                 });
                 indexes
         };
-        interpretWithDatabaseInternal(rc, indexes, boxing, program)
+        interpretWithDatabase(rc, indexes, boxing, program)
 
     @Internal
-    pub def interpretWithDatabase(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
-        ???
-        // let (program, db, boxing) = input;
-        // interpretWithDatabaseInternal(rc, db, boxing, program)
-
-    @Internal
-    pub def interpretWithDatabaseInternal(
+    pub def interpretWithDatabase(
         rc: Region[r], 
         db: Indexes[r], 
         boxing: Boxing[r], 
@@ -130,7 +103,8 @@ mod Fixpoint.Interpreter {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), arities, marshallIndexes) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
-            let tupleEnv = arities |> Vector.length |> Array.empty(rc);
+            // let tupleEnv = arities |> Vector.length |> Array.empty(rc);
+            let tupleEnv = Array.repeat(rc, Vector.length(arities), Array.empty(rc, 0));
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
             let ctxt = (db, env, boxing);
@@ -149,13 +123,14 @@ mod Fixpoint.Interpreter {
                     case Denotation.Relational => Vector.range(0, arityOf(relSym))
                     case Denotation.Latticenal(_,_,_,_) => Vector.range(0, arityOf(relSym) - 1)
                 } |>
-                Vector.map(i -> unwrap(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes)));
-            // let indexes =  Vector.range(0, arityOf(rel));
+                Vector.map(i -> 
+                    unwrap(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+                );
             Array.get(unwrap(Map.get((relSym, 0), indexPos)), db) |>
-            BPlusTree.forEach(arr -> latticeElem -> 
-                let boxedArr = Vector.mapWithIndex(i -> val ->  rebox(val, Vector.get(i, curBoxingInfo), boxing), Array.toVector(arr));
+            BPlusTree.forEach(arr -> latticeElem -> {
+                let boxedArr = Vector.mapWithIndex(i -> val ->  boxWith(val, Vector.get(i, curBoxingInfo), boxing), Array.toVector(arr));
                 MutMap.put(boxedArr, latticeElem, innerMap)
-            );
+            });
             MutMap.put(relSym, innerMap, res)
         });
         res
@@ -198,19 +173,25 @@ mod Fixpoint.Interpreter {
             evalStmt(rc, ctxt, RamStmt.Seq(stmts))
     }
 
-    def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
-        let (db, env, boxing) = ctxt; 
+    pub def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
+        let (db, env, boxing) = ctxt;
         match op {
             case RelOp.Search(tuplePos, searchIndex, writes, body) =>
-                let (_, _, tupleEnv, _) = env;
-                Array.get(searchIndex, db) |> 
+                // Array.get(searchIndex, db) |>
+                // BPlusTree.forEachOp(rc, tuplePos, ctxt, writes, body)
+
+                let (minEnv, maxEnv, tupleEnv, _) = env;
+                Array.get(searchIndex, db) |>
                 BPlusTree.forEach(t -> _ -> {
                     Array.put(t, tuplePos, tupleEnv);
+                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
+                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
+                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
+                    });
                     evalOp(rc, ctxt, body)
                 })
             case RelOp.Query(tuplePos, searchIndex, writes, body) =>
                 let (minEnv, maxEnv, tupleEnv, _) = env;
-                Array.get(searchIndex, db);
                 Array.get(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
                     t -> _ -> {
@@ -225,12 +206,16 @@ mod Fixpoint.Interpreter {
                     Vector.get(tuplePos, maxEnv)
                 )
             case RelOp.SearchLattice(tuplePos, searchIndex, meetWith, glb, writes, body) => 
-                let (_, _, tupleEnv, latEnv) = env;
+                let (minEnv, maxEnv, tupleEnv, latEnv) = env;
                 Array.get(searchIndex, db) |> 
                 BPlusTree.forEach(t -> l -> {
                     Array.put(t, tuplePos, tupleEnv);
                     if (meetWith == tuplePos) Array.put(l, tuplePos, latEnv) 
                     else Array.put(l `glb` Array.get(meetWith, latEnv), tuplePos, latEnv);
+                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
+                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
+                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
+                    });
                     evalOp(rc, ctxt, body)
                 })
             case RelOp.QueryLattice(tuplePos, searchIndex, meetWith, glb, writes, body) => 
@@ -250,19 +235,24 @@ mod Fixpoint.Interpreter {
                     Vector.get(tuplePos, minEnv),
                     Vector.get(tuplePos, maxEnv)
                 )
-            case RelOp.Functional(i, f, terms, _, body, i1, _) =>
-                let args = terms |> 
+            case RelOp.Functional(tupleIndex, f, terms, writes, body, i2) =>
+                let args = 
+                    terms |> 
                     Vector.mapWithIndex(_ -> x -> evalBoxedTerm(env, boxing, x));
-
-                let result = f(args)|> 
-                    Vector.map(vec -> Vector.mapWithIndex(i_ -> x -> debox(x, Vector.get(i_, i1), boxing), vec));
-
-                ???
-                // let (tupleEnv, _latEnv) = env;
-                // foreach (t <- result) {
-                //     Array.put(t, i, tupleEnv);
-                //     evalOp(rc, ctxt, body)
-                // }
+                let result = 
+                    f(args)|> 
+                    Vector.map(vec ->
+                        Vector.mapWithIndex(i -> x -> unboxWith(x, Vector.get(i, i2), boxing), vec)
+                    );
+                let (minEnv, maxEnv, tupleEnv, _) = env;
+                result |> Vector.forEach(t -> {
+                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
+                        Array.put(Vector.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
+                        Array.put(Vector.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
+                    });
+                    Array.put(unchecked_cast(t as Array[Int64, r]), tupleIndex, tupleEnv);
+                    evalOp(rc, ctxt, body)
+                })
             case RelOp.Project(terms, rel, bot, leq, lub, index) =>
                 let relIndex = Array.get(rel, db);
                 if (index == -1) {
@@ -272,7 +262,7 @@ mod Fixpoint.Interpreter {
                     let len = Vector.length(terms);
                     let tuple = Array.empty(rc, len - 1);
                     terms |> Vector.forEachWithIndex(i -> term -> {
-                        if (i < len) 
+                        if (i < len)
                             Array.put(evalTerm(env, boxing, term), i, tuple)
                         else ()
                     });
@@ -287,15 +277,6 @@ mod Fixpoint.Interpreter {
                     ()
                 }
         }
-
-    // def evalQuery(env: SearchEnv[r], boxing: Boxing[r], qry: List[(Int32, RamTerm)], tuple: Vector[Int64]): Comparison \ r + r =
-    //     match qry {
-    //         case Nil => Comparison.EqualTo
-    //         case (j, t) :: tl => match Vector.get(j, tuple) <=> evalTerm(env, boxing, t) {
-    //             case Comparison.EqualTo => evalQuery(env, boxing, tl, tuple)
-    //             case cmp => cmp
-    //         }
-    //     }
 
     def evalBoolExp(rc: Region[r], ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
         let (db, env, boxing) = ctxt;
@@ -323,31 +304,31 @@ mod Fixpoint.Interpreter {
             case BoolExp.Guard0(f) => f()
             case BoolExp.Guard1(f, t, i) =>
                 let v = evalT(t);
-                let boxed = rebox(v, i, boxing);
+                let boxed = boxWith(v, i, boxing);
                 f(boxed)
             case BoolExp.Guard2(f, t1, t2, i1, i2) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
                 f(boxed1)(boxed2)
             case BoolExp.Guard3(f, t1, t2, t3, i1, i2, i3) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
                 f(boxed1)(boxed2)(boxed3)
             case BoolExp.Guard4(f, t1, t2, t3, t4, i1, i2, i3, i4) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
                 let v4 = evalT(t4);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
-                let boxed4 = rebox(v4, i4, boxing);
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
+                let boxed4 = boxWith(v4, i4, boxing);
                 f(boxed1)(boxed2)(boxed3)(boxed4)
             case BoolExp.Guard5(f, t1, t2, t3, t4, t5, i1, i2, i3, i4, i5) =>
                 let v1 = evalT(t1);
@@ -355,11 +336,11 @@ mod Fixpoint.Interpreter {
                 let v3 = evalT(t3);
                 let v4 = evalT(t4);
                 let v5 = evalT(t5);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
-                let boxed4 = rebox(v4, i4, boxing);
-                let boxed5 = rebox(v5, i5, boxing);
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
+                let boxed4 = boxWith(v4, i4, boxing);
+                let boxed5 = boxWith(v5, i5, boxing);
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
         })
 
@@ -370,7 +351,7 @@ mod Fixpoint.Interpreter {
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, i) => 
                 let (_, _, tupleEnv, _) = env;
                 let unboxed = Array.get(tupleIndex, Array.get(indexInTuple, tupleEnv));
-                rebox(unboxed, i, boxing)
+                boxWith(unboxed, i, boxing)
             case RamTerm.LoadLatVar(index) =>
                 let (_, _, _, latEnv) = env;
                 Array.get(index, latEnv)
@@ -413,52 +394,53 @@ mod Fixpoint.Interpreter {
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) =>
                 let (_, _, tupleEnv, _) = env;
                 Array.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
-            case RamTerm.LoadLatVar(_) => ???
+            case RamTerm.LoadLatVar(_) => 
+                bug!("In Interpreter.evalTerm: unreachable code")
             case RamTerm.Meet(cap, lhs, rhs, i) =>
-                let boxed1 = rebox(evalTerm(env, boxing, lhs), i, boxing);
-                let boxed2 = rebox(evalTerm(env, boxing, rhs), i, boxing);
-                debox(boxed1 `cap` boxed2, i, boxing)
+                let boxed1 = boxWith(evalTerm(env, boxing, lhs), i, boxing);
+                let boxed2 = boxWith(evalTerm(env, boxing, rhs), i, boxing);
+                unboxWith(boxed1 `cap` boxed2, i, boxing)
             case RamTerm.App0(f, i) =>
-                debox(f(), i, boxing)
+                unboxWith(f(), i, boxing)
             case RamTerm.App1(f, t, i1, i) =>
                 let v = evalT(t); // Could make an eval that returns Boxed. Would be slightly more performant.
-                let boxed1 = rebox(v, i1, boxing);
-                debox(f(boxed1), i, boxing)
+                let boxed1 = boxWith(v, i1, boxing);
+                unboxWith(f(boxed1), i, boxing)
             case RamTerm.App2(f, t1, t2, i1, i2, i) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                debox(f(boxed1)(boxed2), i, boxing)
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                unboxWith(f(boxed1)(boxed2), i, boxing)
             case RamTerm.App3(f, t1, t2, t3, i1, i2, i3, i) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
-                debox(f(boxed1)(boxed2)(boxed3), i, boxing)
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
+                unboxWith(f(boxed1)(boxed2)(boxed3), i, boxing)
             case RamTerm.App4(f, t1, t2, t3, t4, i1, i2, i3, i4, i) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
                 let v4 = evalT(t4);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
-                let boxed4 = rebox(v4, i4, boxing);
-                debox(f(boxed1)(boxed2)(boxed3)(boxed4), i, boxing)
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
+                let boxed4 = boxWith(v4, i4, boxing);
+                unboxWith(f(boxed1)(boxed2)(boxed3)(boxed4), i, boxing)
             case RamTerm.App5(f, t1, t2, t3, t4, t5, i1, i2, i3, i4, i5, i) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
                 let v4 = evalT(t4);
                 let v5 = evalT(t5);
-                let boxed1 = rebox(v1, i1, boxing);
-                let boxed2 = rebox(v2, i2, boxing);
-                let boxed3 = rebox(v3, i3, boxing);
-                let boxed4 = rebox(v4, i4, boxing);
-                let boxed5 = rebox(v5, i5, boxing);
-                debox(f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5), i, boxing)
+                let boxed1 = boxWith(v1, i1, boxing);
+                let boxed2 = boxWith(v2, i2, boxing);
+                let boxed3 = boxWith(v3, i3, boxing);
+                let boxed4 = boxWith(v4, i4, boxing);
+                let boxed5 = boxWith(v5, i5, boxing);
+                unboxWith(f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5), i, boxing)
         }
 }

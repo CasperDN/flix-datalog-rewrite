@@ -49,7 +49,7 @@ mod Fixpoint.Phase.Compiler {
             // let predicateState = collectMetaInformation(d, predSymMaps);
             // Vector.forEach(x -> compileRule(stmts, x, predSymMaps), facts);
             // Create map of stratum to list of rules in stratum
-            let counter = Counter.empty(rc);
+            let counter = Counter.fresh(rc);
             Vector.foldRight(rule -> match rule {
                 case Constraint(HeadAtom(p, _, _), _) =>
                     let ruleStratum = Map.getWithDefault(p, 0, strat);
@@ -187,9 +187,9 @@ mod Fixpoint.Phase.Compiler {
                     case BodyAtom(bodySym, _, Polarity.Positive, _, _) =>
                         RelOp.Search(rowVar, PredTrack.getNewRel(predSymMaps, bodySym, Full), acc)
                         // RelOp.Search(rowVar, RelSym.Full(bodySym, arity1, den), acc)
-                    case Functional(_, f, freeVars) =>
+                    case Functional(boundVars, f, freeVars) =>
                         let terms = Vector.map(v -> unwrap(Map.get(v, env)), freeVars);
-                        RelOp.Functional(rowVar, f, terms, acc, ?arity)
+                        RelOp.Functional(rowVar, f, terms, acc, Vector.length(boundVars))
                     case _ => acc
                 }, loopBody, augBody) |>
                 RamStmt.Insert;
@@ -260,9 +260,9 @@ mod Fixpoint.Phase.Compiler {
                                 PredTrack.getNewRel(predSymMaps, bodySym, Full)
                             };
                             RelOp.Search(rowVar, ramSym, acc)
-                        case Functional(_, f, freeVars) =>
+                        case Functional(boundVars, f, freeVars) =>
                             let terms = Vector.map(v -> unwrap(Map.get(v, env)), freeVars);
-                            RelOp.Functional(rowVar, f, terms, acc, ???)
+                            RelOp.Functional(rowVar, f, terms, acc, Vector.length(boundVars))
                         case _ => acc
                     }, loopBody, augBody) |>
                     RamStmt.Insert;
@@ -324,7 +324,7 @@ mod Fixpoint.Phase.Compiler {
         Vector.map(atom -> match atom {
             case BodyAtom(_, _, Polarity.Positive, _, _) => (atom, RowVar.Named(Counter.getNewID(counter)))
             case Functional(_, _, _)                     => (atom, RowVar.Named(Counter.getNewID(counter)))
-            case _ => ???
+            case _ => (atom, RowVar.Named(-1))
             // case BodyAtom(predSym, _, Polarity.Positive, _, _) => (atom, RowVar.Named("${predSym}$${i}"))
             // case Functional(_, _, _)                                 => (atom, RowVar.Named("l$${i}"))
             // case _ => (atom, RowVar.Named("IfYouSeeThisYouFoundABug"))

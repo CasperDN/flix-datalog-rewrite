@@ -17,7 +17,6 @@ mod Fixpoint.Boxing {
     import java.lang.{Float, Double, Object, Character}
 
     // Could just as well be a list
-
     mod RelSymTypeInfo {
         pub enum RealType {
             case Unknown
@@ -40,27 +39,30 @@ mod Fixpoint.Boxing {
     }
 
     // It would be nice if MutMap could take a comparison
-    // (List of Boxed objects, [RelSym->IndexInTyple->BoxedObject->Int64], mapping fram RelSym and index to RealType)
-    pub type alias Boxing[r: Region] = (Vector[MutList[Boxed, r]], Vector[MutMap[Boxed, Int64, r]], RelSymTypeInfo.RelSymTypeInfo[r])
+    pub type alias Boxing[r: Region] = (
+        Vector[MutList[Boxed, r]], // List of Boxed objects 
+        Vector[MutMap[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
+        RelSymTypeInfo.RelSymTypeInfo[r] // mapping fram RelSym and index to RealType
+    )
 
     pub type alias RamIdToMarshal = Map[RamId, Int32]
 
-    pub def initialize(rc: Region[r], r: RamProgram): (Boxing[r], RamIdToMarshal) \ r =
-        let mapping = Equality.computeMapping(r);
-        (initializeInternal(rc, r, mapping), mapping)
+    pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToMarshal) \ r =
+        let mapping = Equality.computeMapping(program);
+        (initializeInternal(rc, program, mapping), mapping)
 
-    def initializeInternal(rc: Region[r], r: RamProgram, map: RamIdToMarshal): Boxing[r] \ r =
+    def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToMarshal): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
         let posToIndex = Array.empty(rc, max);
         let info = (intToBox, boxToInt, posToIndex);
-        let relSyms = Ram.collectRelSym(r);
+        let relSyms = Ram.collectRelSym(program);
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
                 case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) => 
-                    debox(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
+                    unboxWith(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
         (intToBox, boxToInt, posToIndex)
@@ -94,22 +96,22 @@ mod Fixpoint.Boxing {
     }
 
 
-    pub def debox(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
-    let (_, _, symInfo) = info;
-    match box {
-        case BoxedBool(x)       => setType(RealType.Bool, index, symInfo); if (x) 1i64 else 0i64
-        case BoxedChar(x)       => setType(RealType.Char, index, symInfo); Int32.toInt64(Char.toBmpCodePoint(x))
-        case BoxedInt8(x)       => setType(RealType.Int8, index, symInfo); Int8.toInt64(x)
-        case BoxedInt16(x)      => setType(RealType.Int16, index, symInfo); Int16.toInt64(x)
-        case BoxedInt32(x)      => setType(RealType.Int32, index, symInfo); Int32.toInt64(x)
-        case BoxedInt64(x)      => setType(RealType.Int64, index, symInfo); x
-        case BoxedFloat32(x)    => setType(RealType.Float32, index, symInfo); Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(x).floatValue()))
-        case BoxedFloat64(x)    => setType(RealType.Float64, index, symInfo); Double.doubleToRawLongBits(Float64.valueOf(x).doubleValue())
-        case BoxedObject(_, _)  => setType(RealType.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
-        case Boxed.None         => bug!("None should never be in a position to be unboxed unboxed")
-    }
+    pub def unboxWith(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
+        let (_, _, symInfo) = info;
+        match box {
+            case BoxedBool(x)       => setType(RealType.Bool, index, symInfo); if (x) 1i64 else 0i64
+            case BoxedChar(x)       => setType(RealType.Char, index, symInfo); Int32.toInt64(Char.toBmpCodePoint(x))
+            case BoxedInt8(x)       => setType(RealType.Int8, index, symInfo); Int8.toInt64(x)
+            case BoxedInt16(x)      => setType(RealType.Int16, index, symInfo); Int16.toInt64(x)
+            case BoxedInt32(x)      => setType(RealType.Int32, index, symInfo); Int32.toInt64(x)
+            case BoxedInt64(x)      => setType(RealType.Int64, index, symInfo); x
+            case BoxedFloat32(x)    => setType(RealType.Float32, index, symInfo); Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(x).floatValue()))
+            case BoxedFloat64(x)    => setType(RealType.Float64, index, symInfo); Double.doubleToRawLongBits(Float64.valueOf(x).doubleValue())
+            case BoxedObject(_, _)  => setType(RealType.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
+            case Boxed.None         => bug!("None should never be in a position to be unboxed unboxed")
+        }
 
-    pub def rebox(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
+    pub def boxWith(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
         let (_, _, symInfo) = info;
         match getType(index, symInfo) {
             case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
@@ -124,7 +126,7 @@ mod Fixpoint.Boxing {
             case RealType.Unknown   => bug!("Unormalizing value, which has never been normalized")
         }
 
-    // pub def reboxByLatticeElem(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
+    // pub def boxWithByLatticeElem(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
     //     let (_, _, symInfo) = info;
     //     match getType(index, symInfo) {
     //         case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
@@ -154,16 +156,22 @@ mod Fixpoint.Boxing {
 
         pub def computeMapping(d: RamProgram): Map[RamId, Int32] = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
-            let RamProgram.Program(s, facts, predTrack, _) = d;
+            let RamProgram.Program(s, _, predTrack, _) = d;
             computeDisjointStmt(s, predTrack, disjointSet);
-            Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
+            let relSyms = Ram.collectRelSym(d);
+            List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(id, i), disjointSet), Vector.range(0, arity))
-            }, facts);
+            }, relSyms);
             let mutMap = MutMap.empty(rc);
-            let counter = Counter.empty(rc);
-            Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
-                Vector.forEach(i -> insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter), Vector.range(0, arity))
-            }, facts);            
+            let counter = Counter.fresh(rc);
+            List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
+                Vector.forEach(i -> {
+                    insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter)
+                }, Vector.range(0, arity))
+            }, relSyms);
+            // Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
+            //     Vector.forEach(i -> insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter), Vector.range(0, arity))
+            // }, facts);            
             computeMappingStmt(s, predTrack, disjointSet, mutMap, counter);
             MutMap.toMap(mutMap)
             // let _ = "";

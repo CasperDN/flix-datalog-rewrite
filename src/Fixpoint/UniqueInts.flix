@@ -6,16 +6,16 @@ mod Fixpoint.UniqueInts {
     pub type alias IndexState[k: Type, r: Region] = (MutMap[k, Int32, r], Counter[r])
     pub type alias ReverseState[k: Type] = Map[Int32, k]
 
-    pub def empty(rc: Region[r]): IndexState[k, r] \ r = (MutMap.empty(rc), Counter.empty(rc))
+    pub def empty(rc: Region[r]): IndexState[k, r] \ r = (MutMap.empty(rc), Counter.fresh(rc))
 
     pub def resetCounterTo(newState: Int32, state: IndexState[k, r]): Unit \ r = {
         let (_, counter) = state;
         Counter.resetTo(newState, counter)
     }
 
-    pub def peekCurrentId(state: IndexState[k, r]): Int32 \ r = {
+    pub def peek(state: IndexState[k, r]): Int32 \ r = {
         let (_, counter) = state;
-        Counter.peekCurrentId(counter)
+        Counter.peek(counter)
     }
 
 

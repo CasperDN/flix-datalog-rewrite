@@ -71,7 +71,7 @@ mod Fixpoint.Ast.ExecutableRam {
         // (RowVar: EnvPos, searchIndex, meetWith, meet, writeLatticeTo, body)
         case QueryLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
-        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox], Vector[IntToBox])
+        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox])
         // The Boxed is Bot. The first Boxed -> Boxed -> Boxed is leq and the second is lub.
         case Project(Vector[RamTerm], Int32, Boxed, Boxed -> Boxed -> Bool, Boxed -> Boxed -> Boxed, IntToBox)
         case If(Vector[BoolExp], RelOp)
@@ -87,15 +87,15 @@ mod Fixpoint.Ast.ExecutableRam {
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", writes);
-                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.SearchLattice(var, relSym, _, _, _, body) =>
                     "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.QueryLattice(var, ramSym, _, _, writes, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", writes);
-                    "Query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(id, _, terms, _, body, _, _) => // TODO: Get correct id?
+                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Functional(id, _, terms, _, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _, _, _, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"

@@ -1,6 +1,6 @@
 mod Fixpoint.Counter {
     pub type alias Counter[r: Eff] = Ref[Int32, r]
-    pub def empty(rc: Region[r]): Counter[r] \ r = Ref.fresh(rc, 0)
+    pub def fresh(rc: Region[r]): Counter[r] \ r = Ref.fresh(rc, 0)
 
     pub def getNewID(c: Counter[r]): Int32 \ r =
         let newID = Ref.get(c);
@@ -10,7 +10,11 @@ mod Fixpoint.Counter {
     pub def resetTo(i: Int32, c: Counter[r]): Unit \ r =
         Ref.put(i, c)
 
-    pub def peekCurrentId(c: Counter[r]): Int32 \ r =
+    pub def increment(c: Counter[r]): Unit \ r =
+        Ref.put(Ref.get(c) + 1, c);
+        ()
+
+    pub def peek(c: Counter[r]): Int32 \ r =
         Ref.get(c)
 
     // pub def getIncrementBy(c: Counter[r], i: Int32): Unit \ r =
@@ -19,4 +23,7 @@ mod Fixpoint.Counter {
 
     pub def clone(c: Counter[r1], rc: Region[r2]): Counter[r2] \ {r1, r2} =
         Ref.fresh(rc, Ref.get(c))
+
+    pub def ++(c: Counter[r]): Int32 \ r = getNewID(c)
+
 }

@@ -81,11 +81,11 @@ mod Fixpoint.Debugging {
     } as _ \ {})
 
     @Internal
-    pub def notifyPreLowering(program: Ram.RamProgram): Ram.RamProgram = match program {
+    pub def notifyPreLowering(phase: String, program: Ram.RamProgram): Ram.RamProgram = match program {
         case Ram.RamProgram.Program(stmt, _, _, _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) {
                 let str = String.repeat(80, "*") |>
-                concatRev("** Relation Algebra Machine AST") |>
+                concatRev("** (${phase}) Relation Algebra Machine AST") |>
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>                
                 concatRev(String.indent(4, "${stmt}")) |>
@@ -127,7 +127,7 @@ mod Fixpoint.Debugging {
                 concatRev(String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", index))) |>
                 concatRev("") |>
                 concatRev(String.repeat(80, "*")) |>
-                concatRev("** Index Position") |>
+                concatRev("** Index Position in Database") |>
                 concatRev(String.repeat(80, "*")) |>
                 concatRev("") |>
                 concatRev(String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", indexPos))) |>
