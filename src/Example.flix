@@ -1,10 +1,8 @@
 def main(): Unit \ IO =
-    println("Print");
-    // let map = Map.empty();
-    // println();
-    Clock.runWithIO(() ->
+    println("Starting");
+    let func = () -> {
         let start = Clock.currentTime(TimeUnit.Seconds);
-        let map = List.map(x -> (x, x + 1), List.range(1, 20000));
+        let map = List.map(x -> (x, x + 1), List.range(1, 3000));
         let injected = inject map into Edge;
         let path = injected <+> #{
             // Edge(x, y) :- Edge(y, x).
@@ -19,17 +17,35 @@ def main(): Unit \ IO =
         //     Path(x, y) :- Edge(x, y).
         //     Path(x, y) :- Edge(x, z), Path(z, y), if (x < y).
         // };
-        println("Print2");
         let r = query path select (x, y) from Path(x,y);
         // println(r);
         let x = Vector.head(r);
-        println(x);
-        println(Vector.length(r));
-        let end = Clock.currentTime(TimeUnit.Seconds);
-        println("Took: ${end - start} s");
-        println("Print6")
-    );
+        if(Option.isEmpty(x)) {
+            let end = Clock.currentTime(TimeUnit.Seconds);
+            println("Took: ${end - start} s")
+        } else {
+            let end = Clock.currentTime(TimeUnit.Seconds);
+            println("Took: ${end - start} s")
+        }
+        // println(x);
+        // println(Vector.length(r));
+        // let end = Clock.currentTime(TimeUnit.Seconds);
+        // println("Took: ${end - start} s")
+    };
+    Clock.runWithIO(() -> repeatN(func, 10));
     ()
+
+
+
+def repeatN(f: Unit -> Unit \ ef, num: Int32): Unit \ef =
+    if(num <= 0) {
+        ()
+    } else {
+        f();
+        repeatN(f, num - 1)
+    }
+
+
 
 def isPrime(x: Int32): Bool = 
     ???
