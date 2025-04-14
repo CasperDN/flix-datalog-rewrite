@@ -61,8 +61,8 @@ mod Fixpoint.Boxing {
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
-                case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) => 
-                    unboxWith(bot, unwrap(Map.get(RamId.RelPos(index, arity), map)), info); ()
+                case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) =>
+                    unboxWith(bot, unwrap(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
         (intToBox, boxToInt, posToIndex)
@@ -71,7 +71,6 @@ mod Fixpoint.Boxing {
         let (objectList, _, _) = info;
         // TODO: remove nth.
         unwrap(MutList.nth(unwrap(Int64.tryToInt32(value)), Vector.get(index, objectList)))
-        // unchecked_cast(fst(info).get(unwrap(Int64.tryToInt32(index))) as _ \ {})
     }
 
     // We could Box the object and thus have a Boxed as input and be able to sort them?
@@ -79,19 +78,18 @@ mod Fixpoint.Boxing {
         let (objectLists, vecObjectMap, _) = info;
         let objectList = Vector.get(index, objectLists);
         let objectMap = Vector.get(index, vecObjectMap);
-        let map = objectMap;
-        match MutMap.get(box, map) {
-            case Some(id)   => id
-            case None       => 
-                let id = getNextIndex(objectList);
-                MutList.insert(box, id, objectList); // TODO: Not thread safe
+        match MutMap.get(box, objectMap) {
+            case Some(id) => id
+            case None => 
+                let id = getNextIndex(objectList); // TODO: Not thread safe
+                MutList.insert(box, id, objectList);
+                MutMap.put(box, Int32.toInt64(id), objectMap);
                 Int32.toInt64(id)
         }
     }
 
     // TODO: Not thread safe. Apply locking (or use an AtomicInteger). Locking is needed for MutList anyway.
     def getNextIndex(objectList: MutList[Boxed, r]): Int32 \ r = {
-        // let (objectList, _, _) = info;
         MutList.length(objectList)
     }
 
@@ -126,21 +124,6 @@ mod Fixpoint.Boxing {
             case RealType.Unknown   => bug!("Unormalizing value, which has never been normalized")
         }
 
-    // pub def boxWithByLatticeElem(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
-    //     let (_, _, symInfo) = info;
-    //     match getType(index, symInfo) {
-    //         case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
-    //         case RealType.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(unwrap(Int64.tryToInt32(v)))) as _ \ {}))
-    //         case RealType.Int8      => BoxedInt8(unwrap(Int64.tryToInt8(v)))
-    //         case RealType.Int16     => BoxedInt16(unwrap(Int64.tryToInt16(v)))
-    //         case RealType.Int32     => BoxedInt32(unwrap(Int64.tryToInt32(v)))
-    //         case RealType.Int64     => BoxedInt64(v)
-    //         case RealType.Float32   => BoxedFloat32(Float.intBitsToFloat(unwrap(Int64.tryToInt32(v))))
-    //         case RealType.Float64   => BoxedFloat64(Double.longBitsToDouble(v))
-    //         case RealType.Object    => deMarshalObject(v, info)
-    //         case RealType.Unknown   => bug!("Unormalizing value, which has never been normalized")
-    //     }
-
 
     // Compute equality for the terms, deciding what can safely be stored together. Might miss some, but only a problem for objects.
     // Equality is on the full symbols.
@@ -148,7 +131,7 @@ mod Fixpoint.Boxing {
         use Fixpoint.Ast.Ram.getTermRamId
         use Fixpoint.Ast.Ram
         use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
-        use PredTrack.PredSymMapInternal
+        use Fixpoint.Predicates.{PredSymMapInternal, PredType, idToFullPredID, fullIDtoPredType}
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Counter
@@ -169,22 +152,9 @@ mod Fixpoint.Boxing {
                     insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter)
                 }, Vector.range(0, arity))
             }, relSyms);
-            // Map.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> _ -> {
-            //     Vector.forEach(i -> insertIndex(RamId.RelPos(id, i), disjointSet, mutMap, counter), Vector.range(0, arity))
-            // }, facts);            
             computeMappingStmt(s, predTrack, disjointSet, mutMap, counter);
             MutMap.toMap(mutMap)
-            // let _ = "";
-            // Map.empty()
         }
-
-        // pub def computeDisjointSet(d: RamProgram): Unit = region rc {
-        //     let disjoint = MutDisjointSets.empty(rc);
-        //     let RamProgram.Program(s, _, predTrack, _) = d;
-        //     computeDisjointStmt(s, predTrack, disjoint);
-        //     // disjoint
-        //     ()
-        // }
 
         def computeDisjointStmt(s: RamStmt, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeDisjointOp(rest, predTrack, set)
@@ -220,7 +190,6 @@ mod Fixpoint.Boxing {
                 computeDisjointOp(rest, predTrack, set)
             case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
                 unifyPredTypes(predSym, arity, predTrack, set);
-                // Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(fullSym, i), set), Vector.range(0, Vector.length(terms)));
                 Vector.forEachWithIndex(i -> term ->{
                     computeDisjointTerm(term, predTrack, set);
                     let termID = Ram.getTermRamId(term);
@@ -287,9 +256,9 @@ mod Fixpoint.Boxing {
         }
 
         def unifyPredTypes(predSym: Int64, arity: Int32, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r =
-            let fullSymbol = PredTrack.idToFullPredID(predSym, predTrack);
-            let deltaSymbol = PredTrack.fullIDtoPredType(fullSymbol, PredTrack.PredType.Delta, predTrack);
-            let newSymbol = PredTrack.fullIDtoPredType(fullSymbol, PredTrack.PredType.New, predTrack);
+            let fullSymbol = idToFullPredID(predSym, predTrack);
+            let deltaSymbol = fullIDtoPredType(fullSymbol, PredType.Delta, predTrack);
+            let newSymbol = fullIDtoPredType(fullSymbol, PredType.New, predTrack);
             Vector.forEach(i -> {
                 MutDisjointSets.makeSet(RamId.RelPos(fullSymbol, i), set);
                 MutDisjointSets.makeSet(RamId.RelPos(deltaSymbol, i), set);
@@ -304,18 +273,15 @@ mod Fixpoint.Boxing {
         def computeDisjointTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamTerm.Lit(_, _) => ()
             case RamTerm.RowLoad(_, _, _) => ()
-            // case RamTerm.LoadLatVar(_, _, _) => ()
-            case RamTerm.Meet(_, t1, t2, RamId.Id(id)) => 
+            case RamTerm.Meet(_, t1, t2, id) => 
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
                 let id1 = Ram.getTermRamId(t1);
                 let id2 = Ram.getTermRamId(t2);
                 MutDisjointSets.makeSet(id1, set);
-                MutDisjointSets.makeSet(id1, set);
-                MutDisjointSets.makeSet(RamId.TuplePos(id, 0), set);
-                MutDisjointSets.makeSet(RamId.TuplePos(id, 1), set);
-                MutDisjointSets.union(id1, RamId.TuplePos(id, 0), set);
-                MutDisjointSets.union(id2, RamId.TuplePos(id, 1), set);
+                MutDisjointSets.makeSet(id2, set);
+                MutDisjointSets.makeSet(id, set);
+                MutDisjointSets.union(id1, id, set);
                 MutDisjointSets.union(id1, id2, set)
             case RamTerm.App0(_, _) => ()
             case RamTerm.App1(_, t1, RamId.Id(id)) =>
@@ -446,13 +412,10 @@ mod Fixpoint.Boxing {
         match s {
             case RamTerm.Lit(_, id) => insert(id)
             case RamTerm.RowLoad(_, _, _) => insert(getTermRamId(s))
-            // case RamTerm.LoadLatVar(_, _, id) => insert(id)
             case RamTerm.Meet(_, t1, t2, RamId.Id(id)) =>
                 recurse(t1);
                 recurse(t2);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0));
-                insert(RamId.InID(id, 1))
+                insert(RamId.Id(id))
             case RamTerm.App0(_, id) => insert(id)
             case RamTerm.App1(_, t1, RamId.Id(id)) =>
                 recurse(t1);
@@ -531,63 +494,11 @@ mod Fixpoint.Boxing {
                 recurseOnTerm(t5)
 
         }
-            // case RamTerm.Lit(_, id) => insert(id)
-            // case RamTerm.RowLoad(_, _, _, id) => insert(id)
-            // case RamTerm.LoadLatVar(_, _, id) => insert(id)
-            // case RamTerm.Meet(_, t1, t2, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     recurse(t2);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0));
-            //     insert(RamId.InID(id, 1))
-            // case RamTerm.App0(_, id) => insert(id)
-            // case RamTerm.App1(_, t1, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0))
-            // case RamTerm.App2(_, t1, t2, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     recurse(t2);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0));
-            //     insert(RamId.InID(id, 1))
-            // case RamTerm.App3(_, t1, t2, t3, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     recurse(t2);
-            //     recurse(t3);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0));
-            //     insert(RamId.InID(id, 1));
-            //     insert(RamId.InID(id, 2))
-            // case RamTerm.App4(_, t1, t2, t3, t4, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     recurse(t2);
-            //     recurse(t3);
-            //     recurse(t4);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0));
-            //     insert(RamId.InID(id, 1));
-            //     insert(RamId.InID(id, 2));
-            //     insert(RamId.InID(id, 3))
-            // case RamTerm.App5(_, t1, t2, t3, t4, t5, RamId.Id(id)) =>
-            //     recurse(t1);
-            //     recurse(t2);
-            //     recurse(t3);
-            //     recurse(t4);
-            //     recurse(t5);
-            //     insert(RamId.Id(id));
-            //     insert(RamId.InID(id, 0));
-            //     insert(RamId.InID(id, 1));
-            //     insert(RamId.InID(id, 2));
-            //     insert(RamId.InID(id, 3));
-            //     insert(RamId.InID(id, 4))
-            // case _ => bug!("Unreachable")
-        
 
         def insertIndex(id: RamId, disjoint: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
             def unwrap(v: Option[RamId]): RamId = match v {
                 case Some(x) => x
-                case None => bug!("Primitive value somehow exceeded the size it should fit into: ${Debug.stringify(id)}\n")
+                case None => bug!("Primitive value somehow exceeded the size it should fit into: ${id}\n")
             };
             let repID = unwrap(MutDisjointSets.find(id, disjoint)); match MutMap.get(repID, map) {
             case Some(v) => MutMap.put(id, v, map)

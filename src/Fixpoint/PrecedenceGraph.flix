@@ -5,6 +5,12 @@ mod Fixpoint.PrecedenceGraph {
         case SCC(Set[Vertex])
     }
 
+    instance ToString[StronglyConnectedComponent] {
+        pub def toString(x: StronglyConnectedComponent): String = match x {
+            case StronglyConnectedComponent.SCC(val) => Set.toString(val)
+        }
+    }
+    
     pub struct MutGraph[r] {
         vertices: MutSet[Vertex, r],
         adjList: MutMap[Vertex, List[Vertex], r]
@@ -67,17 +73,21 @@ mod Fixpoint.PrecedenceGraph {
                 set |> Set.forEach(partOfComp -> 
                     MutMap.put(partOfComp, StronglyConnectedComponent.SCC(set), componentMap)
                 )
-            }); 
+            });
             
             g->adjList |> MutMap.forEach(u -> neighbors -> 
-                neighbors |> List.forEach(v -> 
-                contractedGraph |> 
-                addEdge(
-                    unwrap(MutMap.get(u, rootMap)), 
-                    unwrap(MutMap.get(v, rootMap)))
+                neighbors |> 
+                List.forEach(v -> 
+                    let uSCC = unwrap(MutMap.get(u, rootMap));
+                    let vSCC = unwrap(MutMap.get(v, rootMap));
+                    if(uSCC != vSCC) {
+                        addEdge(uSCC, vSCC, contractedGraph)
+                    } else ()
                 )
             );
-            topologicalSort(contractedGraph) |> List.map(u -> unwrap(MutMap.get(u, componentMap)))
+            let inverseRootMap = MutMap.empty(rc);
+            MutMap.forEach(k -> v -> MutMap.put(v, k, inverseRootMap), rootMap);
+            topologicalSort(contractedGraph) |> List.map(u -> unwrap(MutMap.get(unwrap(MutMap.get(u, inverseRootMap)), componentMap)))
         }
 
         pub def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
@@ -89,7 +99,7 @@ mod Fixpoint.PrecedenceGraph {
                     topologicalSortVisit(g, colors, sorted, u)
                 } else ()
             });
-            sorted |> MutList.toList 
+            sorted |> MutList.toList |> List.reverse
         }
 
         def topologicalSortVisit(

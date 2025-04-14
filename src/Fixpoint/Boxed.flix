@@ -48,6 +48,9 @@ mod Fixpoint {
             case (Boxed.BoxedFloat32(v1),      Boxed.BoxedFloat32(v2))   => v1 == v2
             case (Boxed.BoxedFloat64(v1),      Boxed.BoxedFloat64(v2))   => v1 == v2
             case (Boxed.BoxedObject(v1, cmp1), Boxed.BoxedObject(v2, _)) => cmp1(v1, v2) == Comparison.EqualTo
+            case (Boxed.None, Boxed.None)                                => true
+            case (Boxed.None, _)                                         => false
+            case (_, Boxed.None)                                         => false
             case _                                                       => bug!("Mismatched types.")
         }
     }

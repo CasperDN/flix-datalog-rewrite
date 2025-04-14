@@ -25,12 +25,12 @@ Spørg Magnus om forskel på følgende:
             match a {
                 case Constraint(HeadAtom(predSym, _, headTerms), _) => 
                     let x = Vector.map(compileHeadTerm(Map.empty()), headTerms); 
-                    match PredTrack.getPredSymFullId(PredTrack, predSym) {
+                    match Predicates.getPredSymFullId(Predicates, predSym) {
                         case PredSym(_, id) => Map.insertWith(List.append, id, x :: Nil, b)
                     }
                     // ()
             }
-            // let _ = PredTrack.getPredSymFullId(PredTrack, PredSym("", 1i64)); 
+            // let _ = Predicates.getPredSymFullId(Predicates, PredSym("", 1i64)); 
             // b
         }, Map#{}, facts);
         Map.map(List.toVector, test);
@@ -40,7 +40,7 @@ Spørg Magnus om forskel på følgende:
         // let test = 
         // Vector.foldRight(match Constraint(HeadAtom(predSym, _, headTerms), _) ->
         //             let x = Vector.map(compileHeadTerm(Map.empty()), headTerms);
-        //             match PredTrack.getPredSymFullId(PredTrack, predSym) {
+        //             match Predicates.getPredSymFullId(Predicates, predSym) {
         //                 case PredSym(_, id) => Map.insertWith(List.append, id, x :: Nil)
         //             }, Map#{}, facts);
         // Map.map(List.toVector, test)

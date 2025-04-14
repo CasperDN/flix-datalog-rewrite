@@ -18,10 +18,10 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Ast.Ram.RamId
     use Fixpoint.Boxing
     use Fixpoint.Boxing.{Boxing, boxWith, unboxWith}
-    use PredTrack.PredSymMapInternal
+    use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
     use Fixpoint.Boxed
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
-    use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOf, toId}
+    use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Helpers.{unwrap}
 
@@ -45,8 +45,8 @@ mod Fixpoint.Interpreter {
     )
 
     pub type alias Context[r: Region] = (
-        Indexes[r], 
-        SearchEnv[r], 
+        Indexes[r],
+        SearchEnv[r],
         Boxing[r]
     )
     
@@ -100,10 +100,13 @@ mod Fixpoint.Interpreter {
         boxing: Boxing[r], 
         program: RamProgram
     ): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
-        case RamProgram.Program(stmt, _, predState, (_, indexPos), arities, marshallIndexes) =>
+        case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
-            // let tupleEnv = arities |> Vector.length |> Array.empty(rc);
+            constWrites |> Vector.forEach(match (id1, id2, val) -> {
+                Array.put(val, id2, Vector.get(id1, minEnv));
+                Array.put(val, id2, Vector.get(id1, maxEnv))
+            });
             let tupleEnv = Array.repeat(rc, Vector.length(arities), Array.empty(rc, 0));
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
@@ -115,15 +118,11 @@ mod Fixpoint.Interpreter {
 
     def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: PredSymMapInternal, boxingIndexes: Fixpoint.Boxing.RamIdToMarshal): DatabaseExternal[r] \ r =
         let res = MutMap.empty(rc);
-        PredTrack.allFullRelSyms(predTrack) |>
+        allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
             let innerMap = MutMap.empty(rc);
-            let curBoxingInfo =
-                match toDenotation(relSym) {
-                    case Denotation.Relational => Vector.range(0, arityOf(relSym))
-                    case Denotation.Latticenal(_,_,_,_) => Vector.range(0, arityOf(relSym) - 1)
-                } |>
-                Vector.map(i -> 
+            let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym)) |>
+                Vector.map(i ->
                     unwrap(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );
             Array.get(unwrap(Map.get((relSym, 0), indexPos)), db) |>
@@ -136,8 +135,7 @@ mod Fixpoint.Interpreter {
         res
 
 
-    def evalStmt(rc: Region[r], ctxt: Context[r], stmt: RamStmt): Unit \ r = 
-        match stmt {
+    def evalStmt(rc: Region[r], ctxt: Context[r], stmt: RamStmt): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, relOp)
         case RamStmt.Merge(srcIndex, dstIndex, lub, index) =>
@@ -168,18 +166,27 @@ mod Fixpoint.Interpreter {
                 evalStmt(rc, ctxt, stmt)
             }
         case RamStmt.Comment(_) => ()
-        case RamStmt.Par(stmts) => 
-            // Temp solution
-            evalStmt(rc, ctxt, RamStmt.Seq(stmts))
+        case RamStmt.Par(stmts) => region rc2 {
+            let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
+            stmts |> Vector.forEach(innerStmt -> unchecked_cast({
+                let _: Unit = spawn unchecked_cast({
+                    let threadMinEnv = minEnv |> Vector.map(x -> x);
+                    let threadMaxEnv = maxEnv |> Vector.map(x -> x);
+                    let threadTupleEnv = tupleEnv |> Array.map(rc, x -> x);
+                    let threadLatEnv = latEnv |> Array.map(rc, x -> x); 
+                    let threadEnv = (threadMinEnv, threadMaxEnv, threadTupleEnv, threadLatEnv);
+                    let threadCtxt = (db, threadEnv, boxing);
+                    evalStmt(rc, threadCtxt, innerStmt)
+                } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
+                ()
+            } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
+        }
     }
 
-    pub def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
+    def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
         let (db, env, boxing) = ctxt;
         match op {
             case RelOp.Search(tuplePos, searchIndex, writes, body) =>
-                // Array.get(searchIndex, db) |>
-                // BPlusTree.forEachOp(rc, tuplePos, ctxt, writes, body)
-
                 let (minEnv, maxEnv, tupleEnv, _) = env;
                 Array.get(searchIndex, db) |>
                 BPlusTree.forEach(t -> _ -> {
@@ -210,7 +217,7 @@ mod Fixpoint.Interpreter {
                 Array.get(searchIndex, db) |> 
                 BPlusTree.forEach(t -> l -> {
                     Array.put(t, tuplePos, tupleEnv);
-                    if (meetWith == tuplePos) Array.put(l, tuplePos, latEnv) 
+                    if (meetWith == tuplePos) Array.put(l, tuplePos, latEnv)
                     else Array.put(l `glb` Array.get(meetWith, latEnv), tuplePos, latEnv);
                     writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
                         Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
@@ -260,23 +267,30 @@ mod Fixpoint.Interpreter {
                     BPlusTree.insert(tuple, Boxed.None, relIndex)
                 } else {
                     let len = Vector.length(terms);
-                    let tuple = Array.empty(rc, len - 1);
-                    terms |> Vector.forEachWithIndex(i -> term -> {
-                        if (i < len)
-                            Array.put(evalTerm(env, boxing, term), i, tuple)
-                        else ()
-                    });
+                    let tuple = evalTermsWithLat(rc, ctxt, terms);
                     let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
                     if (latVal `leq` bot) ()
                     else BPlusTree.putWith(lub, tuple, latVal, relIndex)
                 }
             case RelOp.If(test, then) =>
-                if (evalBoolExp(rc, ctxt, test)) {
+                if (evalBoolExp(rc, ctxt, test))
                     evalOp(rc, ctxt, then)
-                } else {
+                else
                     ()
-                }
+                
         }
+
+    def evalTermsWithLat(rc: Region[r], ctxt: Context[r], terms: Vector[RamTerm]): Array[Int64, r] \ r =
+        let (_, env, boxing) = ctxt;
+        let evalT = evalTerm(env, boxing);
+        let len = Vector.length(terms);
+        let tuple = Array.empty(rc, len - 1);
+        def loop(i) = if (i < len - 1) {
+            Array.put(evalT(Vector.get(i, terms)), i, tuple);
+            loop(i + 1)
+        } else ();
+        loop(0);
+        tuple
 
     def evalBoolExp(rc: Region[r], ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
         let (db, env, boxing) = ctxt;
@@ -290,15 +304,13 @@ mod Fixpoint.Interpreter {
                     not BPlusTree.memberOfThreadUnsafe(unchecked_cast(tuple as Array[Int64, r]), relIndex)
                 else {
                     let len = Vector.length(terms);
-                    let tuple = Array.empty(rc, len - 1);
-                    terms |> Vector.forEachWithIndex(i -> term -> {
-                        if (i < len) 
-                            Array.put(evalT(term), i, tuple)
-                        else ()
-                    });
+                    let tuple = evalTermsWithLat(rc, ctxt, terms);
                     let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
                     let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.None, relIndex);
-                    not (latVal `leq` curLatVal)
+                    if(curLatVal == Boxed.None)
+                        false
+                    else
+                        not (latVal `leq` curLatVal)
                 }
             case BoolExp.Eq(lhs, rhs) => evalTerm(env, boxing, lhs) == evalTerm(env, boxing, rhs)
             case BoolExp.Guard0(f) => f()
@@ -352,12 +364,12 @@ mod Fixpoint.Interpreter {
                 let (_, _, tupleEnv, _) = env;
                 let unboxed = Array.get(tupleIndex, Array.get(indexInTuple, tupleEnv));
                 boxWith(unboxed, i, boxing)
-            case RamTerm.LoadLatVar(index) =>
+            case RamTerm.LoadLatVar(index, _) =>
                 let (_, _, _, latEnv) = env;
                 Array.get(index, latEnv)
             case RamTerm.Meet(cap, lhs, rhs, _) =>
-                let boxed1 = evalBoxedTerm(env, boxing, lhs);
-                let boxed2 = evalBoxedTerm(env, boxing, rhs);
+                let boxed1 = evalT(lhs);
+                let boxed2 = evalT(rhs);
                 boxed1 `cap` boxed2
             case RamTerm.App0(f, _) => f()
             case RamTerm.App1(f, t, _, _) =>
@@ -394,11 +406,12 @@ mod Fixpoint.Interpreter {
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) =>
                 let (_, _, tupleEnv, _) = env;
                 Array.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
-            case RamTerm.LoadLatVar(_) => 
-                bug!("In Interpreter.evalTerm: unreachable code")
+            case RamTerm.LoadLatVar(index, boxingPos) => 
+                let (_, _, _, latEnv) = env;
+                unboxWith(Array.get(index, latEnv), boxingPos, boxing)
             case RamTerm.Meet(cap, lhs, rhs, i) =>
-                let boxed1 = boxWith(evalTerm(env, boxing, lhs), i, boxing);
-                let boxed2 = boxWith(evalTerm(env, boxing, rhs), i, boxing);
+                let boxed1 = boxWith(evalT(lhs), i, boxing);
+                let boxed2 = boxWith(evalT(rhs), i, boxing);
                 unboxWith(boxed1 `cap` boxed2, i, boxing)
             case RamTerm.App0(f, i) =>
                 unboxWith(f(), i, boxing)

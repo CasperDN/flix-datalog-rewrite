@@ -47,18 +47,6 @@ mod BPlusTree {
         let minLeaf = Node.leftMostChild(tree->search, tree->root);
         Node.traverseRightUnconditional(f, 0, tree->search, minLeaf)
 
-    pub def forEachOp(
-            rc: Region[r],
-            tuplePos: Int32,
-            ctxt: Fixpoint.Interpreter.Context[r],
-            writes: Vector[(Int32, Int32, Int32)],
-            body: Fixpoint.Ast.ExecutableRam.RelOp,
-            tree: BPlusTree[r]): Unit \ r =
-        let minLeaf = Node.leftMostChild(tree->search, tree->root);
-        let (_, env, _) = ctxt;
-        let (minEnv, maxEnv, tupleEnv, _) = env;
-        Node.traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, 0, tree->search, minLeaf)
-
     pub def containsPair(key: Array[Int64, r], val: Boxed, tree: BPlusTree[r]): Bool \ r =
         let leaf = BPlusTree.findLeaf(key, tree);
         let res = Node.leafContainsPair(key, val, tree->search, leaf);
@@ -266,33 +254,6 @@ mod BPlusTree {
                 traverseRightUnconditional(f, index + 1, search, node)
             } else match node->next {
                 case Some(next) => traverseRightUnconditional(f, 0, search, next)
-                case None => ()
-            }
-
-        pub def traverseRightUnconditionalOp(
-            rc: Region[r],
-            tuplePos: Int32,
-            minEnv: Vector[Array[Int64, r]],
-            maxEnv: Vector[Array[Int64, r]],
-            tupleEnv: Array[Array[Int64, r], r],
-            ctxt: Fixpoint.Interpreter.Context[r],
-            writes: Vector[(Int32, Int32, Int32)],
-            body: Fixpoint.Ast.ExecutableRam.RelOp,
-            index: Int32,
-            search: Search,
-            node: Node[r]
-        ): Unit \ r =
-            if(index < node->size) {
-                let k = Array.get(index, node->keys);
-                Array.put(k, tuplePos, tupleEnv);
-                writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                    Array.put(Array.get(srcIndex, k), dstIndex, Vector.get(dst, minEnv));
-                    Array.put(Array.get(srcIndex, k), dstIndex, Vector.get(dst, maxEnv))
-                });
-                Fixpoint.Interpreter.evalOp(rc, ctxt, body);
-                traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, index + 1, search, node)
-            } else match node->next {
-                case Some(next) => traverseRightUnconditionalOp(rc, tuplePos, minEnv, maxEnv, tupleEnv, ctxt, writes, body, 0, search, next)
                 case None => ()
             }
 

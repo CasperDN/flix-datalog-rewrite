@@ -4,14 +4,14 @@ Purpose: We need to make more predicates (at most 3 times as many) than there ar
 Solution: The first n are the full relations, the next n are the delta relations, the last n are the temporary delta' relations.
 Problem: Assuming that the relations are currently named 0 to n seems restrictive
 Solution: Start by creating a map from old relation-numbers to new.
-    Advantage: If we were to change this later we would only have to change the module PredTrack. All other code does not need to care for the implementation.
+    Advantage: If we were to change this later we would only have to change the module Predicates. All other code does not need to care for the implementation.
  */
 
 // Purpose: We need to make more predicates than there are 
-mod PredTrack {
-    use PredTrack.idToPredType
-    use PredTrack.allFullRelSyms
-    use PredTrack.PredType
+mod Fixpoint.Predicates {
+        use Fixpoint.Predicates.idToPredType
+        use Fixpoint.Predicates.allFullRelSyms
+        use Fixpoint.Predicates.PredType
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Ast.Shared.PredSym.PredSym
         use Fixpoint.Ast.Datalog.Datalog.Datalog
@@ -31,7 +31,6 @@ mod PredTrack {
         }
         pub def initialize(program: Datalog): PredSymMapInternal = 
             let (max, forwardMap) = remapAllPredicates(program);
-            // let backMap = MutMap.empty(rc);
             let backMap = Map.mapWithKey(id -> v -> 
                 match v {
                     case RelSym.Symbol(PredSym(name, _), _, _) => PredSym(name, id)
@@ -39,15 +38,6 @@ mod PredTrack {
             , forwardMap);
             (max, forwardMap, backMap)
         
-        // pub def allRelSyms(predTrack: PredSymMapInternal): List[RelSym] =
-        //     let (max, forwardMap, _) = predTrack;
-        //     Map.foldLeftWithKey(acc -> _ -> relSym -> match relSym {
-        //         case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => 
-        //             List.foldLeft(acc1 -> counter -> 
-        //                 RelSym.Symbol(PredSym.PredSym(name, id + counter), arity, den) :: acc1
-        //             , acc, 0i64 :: max :: max * 2i64 :: Nil)
-        //     }, Nil, forwardMap)
-
         pub def allFullRelSyms(predTrack: PredSymMapInternal): List[RelSym] =
             let (_, forwardMap, _) = predTrack;
             Map.foldLeftWithKey(acc -> _ -> relSym -> 
@@ -112,18 +102,9 @@ mod PredTrack {
                 case PredType.Delta => id + max
                 case PredType.New => id + max * 2i64
             }
-            // if(id <= max) {
-            //     id
-            // } else if (id <= max * 2i64) {
-            //     id - max
-            // } else {
-            //     id - 2i64 * max
-            // }
-
 
         ///
         /// Collect all predicate symbols in a map
-
         ///
         def remapAllPredicates(program: Datalog): (Int64, Map[Int64, RelSym]) = match program {
             case Datalog(facts, rules) =>
@@ -145,7 +126,6 @@ mod PredTrack {
                         case BodyAtom(PredSym(bodyName, bodyPred), bodyDen, _, _, bodyTerms) => (Map.insert(bodyPred, RelSym.Symbol(PredSym(bodyName, bodyPred), Vector.length(bodyTerms), bodyDen), mapBody), maxBody)
                         case _ => (mapBody, maxBody)
                     }, (mapWithHead, Int64.max(headID, max)), body)
-                // (map, max)
             }}, (Map#{}, 0i64), constraints)
         pub def getNewID(self: PredSymMapInternal, predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
             case PredSym(_, id) => id
@@ -153,11 +133,6 @@ mod PredTrack {
 
         pub def getNewPred(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym =
             oldPredSymToPredSym(self, predSym, t) 
-
-
-        // pub def oldIDSymToPredSym(self: PredSymMapInternal, id: Int64, t: PredType): PredSym = match oldIDSymToRelSym(self, id, t) {
-        //     case RelSym.Symbol(pred, _, _) => pred
-        // }
 
         def oldPredSymToPredSym(self: PredSymMapInternal, predSym: PredSym, t: PredType): PredSym = match getNewRel(self, predSym, t) {
                 case RelSym.Symbol(pred, _, _) => pred

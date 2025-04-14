@@ -33,7 +33,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
     use Fixpoint.Interpreter.DatabaseExternal
-    use PredTrack.PredSymMapInternal
+    use Fixpoint.Predicates.PredSymMapInternal
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -770,7 +770,7 @@ mod Fixpoint.Solver {
         let fst = MutMap.toMap(db); 
         let snd = Map.map(MutMap.toMap, fst);
         let thrd = Map.filterWithKey(k -> _ -> match k {
-            case RelSym.Symbol(PredSym(_, id), _, _) => PredTrack.isFullID(meta, id)
+            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicates.isFullID(meta, id)
         }, snd);
         // Map.foldLeftWithKey(map -> k -> v -> match k {
         //     case RelSym.Symbol(PredSym(name, _), arity, den) => Map.insert(RelSym.Symbol(PredSym(name, 0i64), arity, den), v, map)

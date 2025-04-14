@@ -37,7 +37,15 @@ mod Fixpoint.Phase.Stratifier {
         let predSyms = Array.empty(rc, numberOfPredSyms);
         collectPredSym(predSyms, d);
         let result = MutMap.empty(rc);
-        List.forEachWithIndex(i -> match(SCC(set)) -> Set.forEach(x -> MutMap.put(PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x)), i, result), set), scc);
+        scc |> List.forEachWithIndex(i -> match(SCC(set)) -> 
+            set |>
+            Set.forEach(x ->
+                result |>
+                MutMap.put(
+                    PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x)), i
+                )
+            )
+        );
         MutMap.toMap(result)
     }
 

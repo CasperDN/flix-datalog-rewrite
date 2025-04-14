@@ -85,7 +85,7 @@ mod Fixpoint.Phase.Simplifier {
             simplifyHelper(newStratum, body) |>
             Option.map(newBody -> RamStmt.Until(test, newBody))
         case RamStmt.Comment(_) => Some(stmt)
-        case RamStmt.Par(xs) => ???
+        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper(stratum), xs)))
     }
 
     def simplifyOp(stratum: Set[RelSym], op: RelOp): Option[RelOp] = match op {

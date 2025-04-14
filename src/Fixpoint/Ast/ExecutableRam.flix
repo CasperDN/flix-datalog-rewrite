@@ -89,12 +89,12 @@ mod Fixpoint.Ast.ExecutableRam {
                     }, " ∧ ", writes);
                     "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.SearchLattice(var, relSym, _, _, _, body) =>
-                    "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
+                    "searchLat ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.QueryLattice(var, ramSym, _, _, writes, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", writes);
-                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "queryLat {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(id, _, terms, _, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _, _, _, _) =>
@@ -160,7 +160,7 @@ mod Fixpoint.Ast.ExecutableRam {
         case Lit(Int64, Boxed)
         // case LoadIndex(IndexInMemory)
         case LoadFromTuple(Int32, Int32, IntToBox)
-        case LoadLatVar(Int32)
+        case LoadLatVar(Int32, IntToBox)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
         // The first indices are the input. The last is the output
         case App0(Unit -> Boxed, IntToBox)
@@ -175,7 +175,7 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(term: RamTerm): String = match term {
             case RamTerm.Lit(v, _) => "%{v}"
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) => "$LoadT[${tupleIndex}][${indexInTuple}]"
-            case RamTerm.LoadLatVar(i) => "$LoadLatVar[${i}]"
+            case RamTerm.LoadLatVar(i, _) => "$LoadLatVar[${i}]"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _, _) => "<clo>(${v})"
@@ -197,8 +197,11 @@ mod Fixpoint.Ast.ExecutableRam {
 
     // RamProgram consisting of the the ExecutableRam program/statements, the starting database/facts and information about which indices should be used.
     pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation, Arities, Fixpoint.Boxing.RamIdToMarshal)
+        case Program(RamStmt, Facts, PredicateState, IndexInformation, (Arities, ConstWrites), Fixpoint.Boxing.RamIdToMarshal)
     }
+
+    // (id1, id2, val): minEnv[id1][id2] = val and maxEnv[id1][id2] = val
+    pub type alias ConstWrites = Vector[(Int32, Int32, Int64)]
 
     type alias Arities = Vector[Int32]
 

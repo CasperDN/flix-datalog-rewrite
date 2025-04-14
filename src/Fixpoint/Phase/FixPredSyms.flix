@@ -2,7 +2,6 @@
 Purpose of file:
 Apparently the rest of the Flix compiler does not use the int part of PredSym's at all
 Therefore remap all PredSym's such the int part can be used as an identifier, instead of the string.
-Also: Why does it even have it, if it is not used and why use strings internally as identifiers?
 */
 
 mod Fixpoint.Phase.FixPredSyms {
@@ -21,8 +20,8 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Shared.isRelational
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
-    use PredTrack.{PredSymMapInternal}
-    use PredTrack.PredType.{Full, Delta, New}
+    use Fixpoint.Predicates.{PredSymMapInternal}
+    use Fixpoint.Predicates.PredType.{Full, Delta, New}
     use Fixpoint.UniqueInts.{IndexState, ReverseState}
     use Fixpoint.Helpers.unwrap
 

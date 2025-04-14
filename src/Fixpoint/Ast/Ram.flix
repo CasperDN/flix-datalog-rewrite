@@ -16,7 +16,7 @@
 
 mod Fixpoint.Ast.Ram {
     use Fixpoint.Boxed;
-    use PredTrack.PredSymMapInternal
+    use Fixpoint.Predicates.PredSymMapInternal
     // use Fixpoint.Ast.Ram.RamStmt
     // use Fixpoint.Ast.Ram.IndexInformation
     // use Fixpoint.Ast.Ram.Facts
@@ -51,7 +51,7 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Insert(op) => ToString.toString(op)
                 case RamStmt.Merge(src, dst) => "merge ${src} into ${dst}"
                 case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
-                case RamStmt.Purge(ramSym) => "purge ${ramSym}"
+                case RamStmt.Purge(relSym) => "purge ${relSym}"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" && ");
@@ -82,17 +82,17 @@ mod Fixpoint.Ast.Ram {
         pub def toString(op: RelOp): String =
             let nl = String.lineSeparator();
             match op {
-                case RelOp.Search(var, ramSym, body) =>
-                    "search ${var} ∈ ${ramSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Query(var, ramSym, prefixQuery, _, body) =>
+                case RelOp.Search(var, relSym, body) =>
+                    "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Query(var, relSym, prefixQuery, _, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
-                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "query {${var} ∈ ${relSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(RowVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
                     "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Project(terms, ramSym) =>
-                    "project (${terms |> Vector.join(", ")}) into ${ramSym}"
+                case RelOp.Project(terms, relSym) =>
+                    "project (${terms |> Vector.join(", ")}) into ${relSym}"
                 case RelOp.If(test, then) =>
                     let tst = test |> Vector.join(" ∧ ");
                     "if(${tst}) then${nl}${String.indent(4, "${then}")}end"
@@ -119,8 +119,8 @@ mod Fixpoint.Ast.Ram {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
-                case BoolExp.IsEmpty(ramSym) => "${ramSym} == {}"
-                case BoolExp.NotMemberOf(terms, ramSym) => "(${terms |> Vector.join(", ")}) not in ${ramSym}"
+                case BoolExp.IsEmpty(relSym) => "${relSym} == {}"
+                case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) not in ${relSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
                 // case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
@@ -230,35 +230,43 @@ mod Fixpoint.Ast.Ram {
     }
 
     instance ToString[RelSym] {
-        pub def toString(ramSym: RelSym): String = match ramSym {
+        pub def toString(relSym: RelSym): String = match relSym {
             case RelSym.Symbol(sym, _, _)    => "${sym}"
         }
     }
 
     @Internal
-    pub def toPredID(ramSym: RelSym): Int64 = match ramSym {
+    pub def toPredID(relSym: RelSym): Int64 = match relSym {
         case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
     }
 
     @Internal
-    pub def arityOf(ramSym: RelSym): Int32 = match ramSym {
+    pub def arityOf(relSym: RelSym): Int32 = match relSym {
         case RelSym.Symbol(_, arity, _) => arity
     }
 
     @Internal
-    pub def toDenotation(ramSym: RelSym): Denotation = match ramSym {
+    pub def arityOfNonLat(relSym: RelSym): Int32 = match relSym {
+        case RelSym.Symbol(_, arity, den) => match den {
+            case Denotation.Relational => arity
+            case _ => arity - 1
+        }
+    }
+
+    @Internal
+    pub def toDenotation(relSym: RelSym): Denotation = match relSym {
         case RelSym.Symbol(_, _, den) => den
     }
 
     @Internal
-    pub def toId(ramSym: RelSym): Int64 = match ramSym {
+    pub def toId(relSym: RelSym): Int64 = match relSym {
         case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
     }
 
     @Internal
     pub def collectRelSym(program: RamProgram): List[RelSym] = region _rc { match program {
         case RamProgram.Program(_, _, predState, _) =>
-            PredTrack.allRelSyms(predState)
+            Fixpoint.Predicates.allRelSyms(predState)
             // let seen = MutSet.empty(rc);
             // collectRelSymStmt(seen, stmt);
             // Map.forEach(k -> _ -> MutSet.add(k, seen), facts);
@@ -313,29 +321,29 @@ mod Fixpoint.Ast.Ram {
 
 
     @Internal
-    pub def collectTpvArity(program: RamProgram): List[(RowVar, Int32)] = match program {
+    pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = match program {
         case RamProgram.Program(stmt, _, _, _) =>
-            collectTpvArityStmt(stmt)
+            collectRowVarArityStmt(stmt)
     }
 
     @Internal
-    pub def collectTpvArityStmt(stmt: RamStmt): List[(RowVar, Int32)] \ r = match stmt {
-        case RamStmt.Insert(op) => collectTpvArityOp(op)
+    pub def collectRowVarArityStmt(stmt: RamStmt): List[(RowVar, Int32)] \ r = match stmt {
+        case RamStmt.Insert(op) => collectRowVarArityOp(op)
         case RamStmt.Merge(_, _) => Nil
         case RamStmt.Swap(_, _) => Nil
         case RamStmt.Purge(_) => Nil
-        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectTpvArityStmt(x), acc), Nil, stmts)
-        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectTpvArityStmt(x), acc), Nil, stmts)
-        case RamStmt.Until(_, rest) => collectTpvArityStmt(rest)
+        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarArityStmt(x), acc), Nil, stmts)
+        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarArityStmt(x), acc), Nil, stmts)
+        case RamStmt.Until(_, rest) => collectRowVarArityStmt(rest)
         case RamStmt.Comment(_) => Nil
     }
 
-    def collectTpvArityOp(op: RelOp): List[(RowVar, Int32)] \ r = match op {
-        case RelOp.Search(tpv, RelSym.Symbol(_, arity, _), rest) => (tpv, arity) :: collectTpvArityOp(rest)
-        case RelOp.Query(tpv, RelSym.Symbol(_, arity, _), _, _, rest) => (tpv, arity) :: collectTpvArityOp(rest)
-        case RelOp.Functional(tpv, _, terms, rest, _) =>  (tpv, Vector.length(terms)) :: collectTpvArityOp(rest)
+    def collectRowVarArityOp(op: RelOp): List[(RowVar, Int32)] \ r = match op {
+        case RelOp.Search(rv, RelSym.Symbol(_, arity, _), rest) => (rv, arity) :: collectRowVarArityOp(rest)
+        case RelOp.Query(rv, RelSym.Symbol(_, arity, _), _, _, rest) => (rv, arity) :: collectRowVarArityOp(rest)
+        case RelOp.Functional(rv, _, terms, rest, _) =>  (rv, Vector.length(terms)) :: collectRowVarArityOp(rest)
         case RelOp.Project(_, _) => Nil
-        case RelOp.If(_, rest) => collectTpvArityOp(rest)
+        case RelOp.If(_, rest) => collectRowVarArityOp(rest)
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -442,7 +450,7 @@ mod Fixpoint.Ast.Ram {
         case Program(RamStmt, Facts, PredicateState, IndexInformation)
     }
 
-    pub type alias PredicateState = PredTrack.PredSymMapInternal
+    pub type alias PredicateState = Fixpoint.Predicates.PredSymMapInternal
 
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
 
