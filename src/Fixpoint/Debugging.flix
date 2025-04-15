@@ -25,16 +25,14 @@ mod Fixpoint.Debugging {
         if (Fixpoint.Options.enableDebugToFile()) {
             let res = 
                 if (overwrite) 
-                    FileWrite.runWithIO(() -> FileWrite.write(str = s, debugFileName()))
+                    FileWrite.runWithIO(() -> FileWrite.write(str = s, Fixpoint.Options.debugFileName()))
                 else 
-                    FileWrite.runWithIO(() -> FileWrite.append(str = s, debugFileName()));
+                    FileWrite.runWithIO(() -> FileWrite.append(str = s, Fixpoint.Options.debugFileName()));
             match res {
                 case Ok(_) => ()
                 case Err(e) => println(e)
             } 
         } else println(s)
-
-    def debugFileName(): String = ".fixpoint_debug.txt" 
 
     def concatRev(s1: String, s2: String): String = String.concat("${s2}\n", s1)
 

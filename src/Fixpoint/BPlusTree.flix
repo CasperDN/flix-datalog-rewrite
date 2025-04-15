@@ -239,6 +239,7 @@ mod BPlusTree {
             } else{
                 let v1 = Array.get(index, node->values);
                 Array.put(f(val, v1), index, node->values);
+                Lock.unlock(node->lock);
                 None
             }
 

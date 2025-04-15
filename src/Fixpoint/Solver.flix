@@ -54,7 +54,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (RamProgram, Boxing[rc]) \ rc= {
+        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (RamProgram, Boxing[rc]) \ rc = {
             Fixpoint.Phase.Compiler.compile(cs, db, stf)
             |> Fixpoint.Debugging.notifyPreLowering("Compiler")
             |> Fixpoint.Phase.Simplifier.simplifyProgram
@@ -70,7 +70,8 @@ mod Fixpoint.Solver {
                 compiler(d, Map.empty()) |>  
                 Fixpoint.Interpreter.interpret(rc) |> 
                 toModelWithRenaming
-            case Model(_) => d
+            case Model(_) => 
+                d
             case Join(Model(m), cs) => 
                 compiler(cs, m) |> 
                 Fixpoint.Interpreter.interpret(rc) |> 

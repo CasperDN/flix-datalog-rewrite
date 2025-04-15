@@ -41,7 +41,6 @@ mod Fixpoint.PrecedenceGraph {
             else MutMap.put(u, v :: neighbors, g->adjList)
         }
 
-
         ///
         /// Returns `true` if `g` contains the edge `(u, v)`.
         ///
@@ -145,6 +144,9 @@ mod Fixpoint.PrecedenceGraph {
             MutList.push(u, sorted)
         }
         
+        ///
+        /// Returns a `List` of the strongly conected components of `g`.
+        ///
         pub def stronglyConnectedComponents(g: MutGraph[r]): List[StronglyConnectedComponent] \ r = region rc {
             let n = getSize(g);
             let disc = Array.repeat(rc, n, -1);
@@ -165,6 +167,9 @@ mod Fixpoint.PrecedenceGraph {
             components |> MutList.toList
         }
 
+        ///
+        /// Returns a `List` of the neighbors of `u` in `g`.
+        ///
         def getNeighbors(u: Vertex, g: MutGraph[r]): List[Vertex] \ r = 
             MutMap.getWithDefault(u, List.empty(), g->adjList) 
 

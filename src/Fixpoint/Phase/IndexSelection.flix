@@ -1,9 +1,9 @@
 mod Fixpoint.Phase.IndexSelection {
     use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType}
-    use AutomaticIndexSelection.{minIndex}
     use Fixpoint.UniqueInts
     use Fixpoint.UniqueInts.IndexState
     use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, RowVar, collectRelSym, arityOf, arityOfNonLat};
+    
     type alias Indexes[r: Eff] = MutMap[RelSym, List[Search], r]
     type alias Load = (RowVar, Int32)
 
@@ -16,7 +16,7 @@ mod Fixpoint.Phase.IndexSelection {
                 let newIndexes =
                     indexes |>
                     MutMap.toMap |> 
-                    Map.map(minIndex) |>
+                    Map.map(AutomaticIndexSelection.minIndex) |>
                     Map.map(List.toVector);
                 (newIndexes, collectedStmt)
             };

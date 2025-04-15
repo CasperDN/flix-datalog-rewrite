@@ -20,11 +20,16 @@ mod Fixpoint.Options {
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal
-    pub def enableDebugging(): Bool = true
+    pub def enableDebugging(): Bool = false
     
     ///
-    /// Prints the debug output to a file ".debug.txt".
+    /// Prints the debug output to the file given by `debugFileName`.
     ///
     pub def enableDebugToFile(): Bool = true
+
+    ///
+    /// Returns the name of the debug file.
+    ///
+    pub def debugFileName(): String = "fixpoint_debug.txt" 
 
 }

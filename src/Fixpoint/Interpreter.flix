@@ -98,7 +98,7 @@ mod Fixpoint.Interpreter {
         interpretWithDatabase(rc, indexes, boxing, program)
 
     @Internal
-    pub def interpretWithDatabase(
+    def interpretWithDatabase(
         rc: Region[r], 
         db: Indexes[r], 
         boxing: Boxing[r], 
@@ -144,7 +144,6 @@ mod Fixpoint.Interpreter {
             evalOp(rc, ctxt, relOp)
         case RamStmt.Merge(srcIndex, dstIndex, lub, index) =>
             let (db, _, _) = ctxt;
-            // let dst = Array.get(dstSym, db);
             let src = Array.get(srcIndex, db);
             let dst = Array.get(dstIndex, db);
             if (index == -1) {
@@ -161,7 +160,8 @@ mod Fixpoint.Interpreter {
             let oldIndex = Array.get(index, db);
             let newIndex = BPlusTree.empty(rc, BPlusTree.getSearch(oldIndex));
             Array.put(newIndex, index, db)
-        case RamStmt.Seq(stmts) => Vector.forEach(evalStmt(rc, ctxt), stmts)
+        case RamStmt.Seq(stmts) => 
+            Vector.forEach(evalStmt(rc, ctxt), stmts)
         case RamStmt.Until(test, body) =>
             if (evalBoolExp(rc, ctxt, test)) {
                 ()
@@ -169,7 +169,8 @@ mod Fixpoint.Interpreter {
                 evalStmt(rc, ctxt, body);
                 evalStmt(rc, ctxt, stmt)
             }
-        case RamStmt.Comment(_) => ()
+        case RamStmt.Comment(_) => 
+            ()
         case RamStmt.Par(stmts) => region rc2 {
             let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
             stmts |> Vector.forEach(innerStmt -> unchecked_cast({
@@ -299,6 +300,7 @@ mod Fixpoint.Interpreter {
     def evalBoolExp(rc: Region[r], ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
         let (db, env, boxing) = ctxt;
         let evalT = evalTerm(env, boxing);
+        let evalBoxedT = evalBoxedTerm(env, boxing);
         exps |> Vector.forAll(exp -> match exp {
             case BoolExp.IsEmpty(rel) => BPlusTree.isEmptyThreadUnsafe(Array.get(rel, db))
             case BoolExp.NotMemberOf(terms, rel, leq, index) =>
@@ -318,45 +320,30 @@ mod Fixpoint.Interpreter {
                 }
             case BoolExp.Eq(lhs, rhs) => evalTerm(env, boxing, lhs) == evalTerm(env, boxing, rhs)
             case BoolExp.Guard0(f) => f()
-            case BoolExp.Guard1(f, t, i) =>
-                let v = evalT(t);
-                let boxed = boxWith(v, i, boxing);
-                f(boxed)
-            case BoolExp.Guard2(f, t1, t2, i1, i2) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
+            case BoolExp.Guard1(f, t1) =>
+                let boxed1 = evalBoxedT(t1);
+                f(boxed1)
+            case BoolExp.Guard2(f, t1, t2) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
                 f(boxed1)(boxed2)
-            case BoolExp.Guard3(f, t1, t2, t3, i1, i2, i3) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
+            case BoolExp.Guard3(f, t1, t2, t3) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
                 f(boxed1)(boxed2)(boxed3)
-            case BoolExp.Guard4(f, t1, t2, t3, t4, i1, i2, i3, i4) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let v4 = evalT(t4);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
-                let boxed4 = boxWith(v4, i4, boxing);
+            case BoolExp.Guard4(f, t1, t2, t3, t4) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
+                let boxed4 = evalBoxedT(t4);
                 f(boxed1)(boxed2)(boxed3)(boxed4)
-            case BoolExp.Guard5(f, t1, t2, t3, t4, t5, i1, i2, i3, i4, i5) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let v4 = evalT(t4);
-                let v5 = evalT(t5);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
-                let boxed4 = boxWith(v4, i4, boxing);
-                let boxed5 = boxWith(v5, i5, boxing);
+            case BoolExp.Guard5(f, t1, t2, t3, t4, t5) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
+                let boxed4 = evalBoxedT(t4);
+                let boxed5 = evalBoxedT(t5);
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
         })
 
@@ -366,7 +353,7 @@ mod Fixpoint.Interpreter {
             case RamTerm.Lit(_, b) => b
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, i) => 
                 let (_, _, tupleEnv, _) = env;
-                let unboxed = Array.get(tupleIndex, Array.get(indexInTuple, tupleEnv));
+                let unboxed = Array.get(indexInTuple, Array.get(tupleIndex, tupleEnv));
                 boxWith(unboxed, i, boxing)
             case RamTerm.LoadLatVar(index, _) =>
                 let (_, _, _, latEnv) = env;
@@ -376,25 +363,25 @@ mod Fixpoint.Interpreter {
                 let boxed2 = evalT(rhs);
                 boxed1 `cap` boxed2
             case RamTerm.App0(f, _) => f()
-            case RamTerm.App1(f, t, _, _) =>
-                let v1 = evalT(t); // Could make an eval that returns Boxed. Would be slightly more performant.
+            case RamTerm.App1(f, t, _) =>
+                let v1 = evalT(t);
                 f(v1)
-            case RamTerm.App2(f, t1, t2, _, _, _) =>
+            case RamTerm.App2(f, t1, t2, _) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 f(v1)(v2)
-            case RamTerm.App3(f, t1, t2, t3, _, _, _, _) =>
+            case RamTerm.App3(f, t1, t2, t3, _) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
                 f(v1)(v2)(v3)
-            case RamTerm.App4(f, t1, t2, t3, t4, _, _, _, _, _) =>
+            case RamTerm.App4(f, t1, t2, t3, t4, _) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
                 let v4 = evalT(t4);
                 f(v1)(v2)(v3)(v4)
-            case RamTerm.App5(f, t1, t2, t3, t4, t5, _, _, _, _, _, _) =>
+            case RamTerm.App5(f, t1, t2, t3, t4, t5, _) =>
                 let v1 = evalT(t1);
                 let v2 = evalT(t2);
                 let v3 = evalT(t3);
@@ -404,7 +391,7 @@ mod Fixpoint.Interpreter {
         }
 
     def evalTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Int64 \ {r} = 
-        let evalT = evalTerm(env, boxing);
+        let evalBoxedT = evalBoxedTerm(env, boxing);
         match term {
             case RamTerm.Lit(v, _) => v
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) =>
@@ -414,50 +401,35 @@ mod Fixpoint.Interpreter {
                 let (_, _, _, latEnv) = env;
                 unboxWith(Array.get(index, latEnv), boxingPos, boxing)
             case RamTerm.Meet(cap, lhs, rhs, i) =>
-                let boxed1 = boxWith(evalT(lhs), i, boxing);
-                let boxed2 = boxWith(evalT(rhs), i, boxing);
+                let boxed1 = evalBoxedT(lhs);
+                let boxed2 = evalBoxedT(rhs);
                 unboxWith(boxed1 `cap` boxed2, i, boxing)
             case RamTerm.App0(f, i) =>
                 unboxWith(f(), i, boxing)
-            case RamTerm.App1(f, t, i1, i) =>
-                let v = evalT(t); // Could make an eval that returns Boxed. Would be slightly more performant.
-                let boxed1 = boxWith(v, i1, boxing);
-                unboxWith(f(boxed1), i, boxing)
-            case RamTerm.App2(f, t1, t2, i1, i2, i) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
+            case RamTerm.App1(f, t, i) =>
+                let boxed = evalBoxedT(t);
+                unboxWith(f(boxed), i, boxing)
+            case RamTerm.App2(f, t1, t2, i) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
                 unboxWith(f(boxed1)(boxed2), i, boxing)
-            case RamTerm.App3(f, t1, t2, t3, i1, i2, i3, i) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
+            case RamTerm.App3(f, t1, t2, t3, i) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
                 unboxWith(f(boxed1)(boxed2)(boxed3), i, boxing)
-            case RamTerm.App4(f, t1, t2, t3, t4, i1, i2, i3, i4, i) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let v4 = evalT(t4);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
-                let boxed4 = boxWith(v4, i4, boxing);
+            case RamTerm.App4(f, t1, t2, t3, t4, i) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
+                let boxed4 = evalBoxedT(t4);
                 unboxWith(f(boxed1)(boxed2)(boxed3)(boxed4), i, boxing)
-            case RamTerm.App5(f, t1, t2, t3, t4, t5, i1, i2, i3, i4, i5, i) =>
-                let v1 = evalT(t1);
-                let v2 = evalT(t2);
-                let v3 = evalT(t3);
-                let v4 = evalT(t4);
-                let v5 = evalT(t5);
-                let boxed1 = boxWith(v1, i1, boxing);
-                let boxed2 = boxWith(v2, i2, boxing);
-                let boxed3 = boxWith(v3, i3, boxing);
-                let boxed4 = boxWith(v4, i4, boxing);
-                let boxed5 = boxWith(v5, i5, boxing);
+            case RamTerm.App5(f, t1, t2, t3, t4, t5, i) =>
+                let boxed1 = evalBoxedT(t1);
+                let boxed2 = evalBoxedT(t2);
+                let boxed3 = evalBoxedT(t3);
+                let boxed4 = evalBoxedT(t4);
+                let boxed5 = evalBoxedT(t5);
                 unboxWith(f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5), i, boxing)
         }
 }

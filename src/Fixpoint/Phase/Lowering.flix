@@ -35,9 +35,7 @@ mod Fixpoint.Phase.Lowering {
 
     // Maps RowVars to their memory-position.
     type alias IdToIndex[r: Region] = UniqueInts.IndexState[RowVar, r]
-
     type alias WriteTos[r: Region] = MutMap[RowVar, List[WriteTuple], r]
-
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
 
     def relSymToDenId(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
@@ -270,7 +268,6 @@ mod Fixpoint.Phase.Lowering {
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
         let (idToMarshall, marshall) = marshalling;
         let termToM = t -> unwrap(Map.get(getTermRamId(t), idToMarshall));
-        let idToMarhsalled = id -> unwrap(Map.get(id, idToMarshall));
         match term {
             case ALit(val, id) => ELit(Boxing.unboxWith(val, unwrap(Map.get(id, idToMarshall)), marshall), val)
             case ARowLoad(rv, index, RelSym.Symbol(_, arity, den)) => 
@@ -284,17 +281,16 @@ mod Fixpoint.Phase.Lowering {
                         }
                 }
             case AMeet(_, _, _, id)                 => ELoadLatVar(unwrap(Map.get(id, idToMarshall)), termToM(term))
-            case AApp0(f, id)                       => EApp0(f, idToMarhsalled(id))
-            case AApp1(f, t1, id)                   => EApp1(f, lowerT(t1), termToM(t1), idToMarhsalled(id))
-            case AApp2(f, t1, t2, id)               => EApp2(f, lowerT(t1), lowerT(t2), termToM(t1), termToM(t2), idToMarhsalled(id))
-            case AApp3(f, t1, t2, t3, id)           => EApp3(f, lowerT(t1), lowerT(t2), lowerT(t3), termToM(t1), termToM(t2), termToM(t3), idToMarhsalled(id))
-            case AApp4(f, t1, t2, t3, t4, id)       => EApp4(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), termToM(t1), termToM(t2), termToM(t3), termToM(t4), idToMarhsalled(id))
-            case AApp5(f, t1, t2, t3, t4, t5, id)   => EApp5(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), lowerT(t5), termToM(t1), termToM(t2), termToM(t3), termToM(t4), termToM(t5), idToMarhsalled(id))
+            case AApp0(f, _)                       => EApp0(f, termToM(term))
+            case AApp1(f, t1, _)                   => EApp1(f, lowerT(t1), termToM(term))
+            case AApp2(f, t1, t2, _)               => EApp2(f, lowerT(t1), lowerT(t2), termToM(term))
+            case AApp3(f, t1, t2, t3, _)           => EApp3(f, lowerT(t1), lowerT(t2), lowerT(t3), termToM(term))
+            case AApp4(f, t1, t2, t3, t4, _)       => EApp4(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), termToM(term))
+            case AApp5(f, t1, t2, t3, t4, t5, _)   => EApp5(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), lowerT(t5), termToM(term))
         }
 
     def lowerBool(bool: ABoolExp, map: IdToIndex[r], marshalling: (RamIdToMarshal, Boxing[r]), indexInfo: IndexInformation, meetWithMap: MutMap[Int32, Int32, r]): EBoolExp \ r = 
         let idToMarshall = fst(marshalling);
-        let termToIndex = term -> unwrap(Map.get(getTermRamId(term), idToMarshall));
         let lowerT = x -> lowerTerm(x, map, marshalling, meetWithMap);
         match bool {
             case AIsEmpty(s) =>
@@ -312,11 +308,11 @@ mod Fixpoint.Phase.Lowering {
             case AEq(term1, term2) => 
                 EEq(lowerT(term1), lowerT(term2))
             case AGuard0(f) => EGuard0(f)
-            case AGuard1(f, term1) => EGuard1(f, lowerT(term1), termToIndex(term1))
-            case AGuard2(f, term1, term2) => EGuard2(f, lowerT(term1), lowerT(term2), termToIndex(term1), termToIndex(term2))
-            case AGuard3(f, term1, term2, term3) => EGuard3(f, lowerT(term1), lowerT(term2), lowerT(term3), termToIndex(term1), termToIndex(term2), termToIndex(term3))
-            case AGuard4(f, term1, term2, term3, term4) => EGuard4(f, lowerT(term1), lowerT(term2), lowerT(term3), lowerT(term4), termToIndex(term1), termToIndex(term2), termToIndex(term3), termToIndex(term4))
-            case AGuard5(f, term1, term2, term3, term4, term5) => EGuard5(f, lowerT(term1), lowerT(term2), lowerT(term3), lowerT(term4), lowerT(term5), termToIndex(term1), termToIndex(term2), termToIndex(term3), termToIndex(term4), termToIndex(term5))
+            case AGuard1(f, term1) => EGuard1(f, lowerT(term1))
+            case AGuard2(f, term1, term2) => EGuard2(f, lowerT(term1), lowerT(term2))
+            case AGuard3(f, term1, term2, term3) => EGuard3(f, lowerT(term1), lowerT(term2), lowerT(term3))
+            case AGuard4(f, term1, term2, term3, term4) => EGuard4(f, lowerT(term1), lowerT(term2), lowerT(term3), lowerT(term4))
+            case AGuard5(f, term1, term2, term3, term4, term5) => EGuard5(f, lowerT(term1), lowerT(term2), lowerT(term3), lowerT(term4), lowerT(term5))
         }
 
     def lowerRowVar(rowVar: RowVar, idToIndex: IdToIndex[r]): Int32 \ r = 

@@ -1,7 +1,7 @@
 ///
 /// The purpose of this file is to map boxed constants to Int64 
 /// since the indices on relations work on Int64 due to the lower
-/// complexity of working with integers
+/// complexity of working with integers.
 ///
 mod Fixpoint.Boxing {
     use Fixpoint.Boxed
@@ -16,7 +16,36 @@ mod Fixpoint.Boxing {
     use RelSymTypeInfo.{setType, getType, RealType}
     import java.lang.{Float, Double, Object, Character}
 
-    // Could just as well be a list
+    import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
+
+    @Internal
+    enum Lock[_: Region](JReadWriteLock)
+
+    mod Lock {
+        import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
+        use Fixpoint.Boxing.Lock
+
+        pub def mkLock(_: Region[r]): Lock[r] \ r =
+            Lock(unchecked_cast((new JReadWriteLock(): _ \ IO) as _ \ r))
+
+        pub def readLock(lock: Lock[r]): Unit \ r =
+            let Lock(l) = lock;
+            unchecked_cast((l.readLock().lock(): _ \ IO) as _ \ r)
+
+        pub def writeLock(lock: Lock[r]): Unit \ r =
+            let Lock(l) = lock;
+            unchecked_cast((l.writeLock().lock(): _ \ IO) as _ \ r)
+
+        pub def unlockRead(lock: Lock[r]): Unit \ r =
+            let Lock(l) = lock;
+            unchecked_cast((l.readLock().unlock(): _ \ IO) as _ \ r)
+
+        pub def unlockWrite(lock: Lock[r]): Unit \ r =
+            let Lock(l) = lock;
+            unchecked_cast((l.writeLock().unlock(): _ \ IO) as _ \ r)
+    }
+
+
     mod RelSymTypeInfo {
         pub enum RealType {
             case Unknown
@@ -38,11 +67,11 @@ mod Fixpoint.Boxing {
         pub def getType(index: Int32, symInfo: RelSymTypeInfo[r]): RealType \ r = Array.get(index, symInfo)
     }
 
-    // It would be nice if MutMap could take a comparison
     pub type alias Boxing[r: Region] = (
         Vector[MutList[Boxed, r]], // List of Boxed objects 
         Vector[MutMap[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
-        RelSymTypeInfo.RelSymTypeInfo[r] // mapping fram RelSym and index to RealType
+        RelSymTypeInfo.RelSymTypeInfo[r], // Mapping from RelSym and index to RealType
+        Vector[Lock[r]], // Locks on the MutList/MutMap.
     )
 
     pub type alias RamIdToMarshal = Map[RamId, Int32]
@@ -55,8 +84,9 @@ mod Fixpoint.Boxing {
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
+        let locks = Vector.init(_ -> Lock.mkLock(rc), max);
         let posToIndex = Array.empty(rc, max);
-        let info = (intToBox, boxToInt, posToIndex);
+        let info = (intToBox, boxToInt, posToIndex, locks);
         let relSyms = Ram.collectRelSym(program);
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
@@ -65,37 +95,43 @@ mod Fixpoint.Boxing {
                     unboxWith(bot, unwrap(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
-        (intToBox, boxToInt, posToIndex)
+        (intToBox, boxToInt, posToIndex, locks)
 
     def deMarshalObject(value: Int64, index: Int32, info: Boxing[r]): Boxed \ r = {
-        let (objectList, _, _) = info;
-        // TODO: remove nth.
-        unwrap(MutList.nth(unwrap(Int64.tryToInt32(value)), Vector.get(index, objectList)))
+        let (objectList, _, _, locks) = info;
+        let lock = Vector.get(index, locks);
+        Lock.readLock(lock);
+        let res = unwrap(MutList.nth(unwrap(Int64.tryToInt32(value)), Vector.get(index, objectList)));
+        Lock.unlockRead(lock);
+        res
     }
 
     // We could Box the object and thus have a Boxed as input and be able to sort them?
     def marshallObject(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r = {
-        let (objectLists, vecObjectMap, _) = info;
+        let (objectLists, vecObjectMap, _, locks) = info;
         let objectList = Vector.get(index, objectLists);
         let objectMap = Vector.get(index, vecObjectMap);
+        let lock = Vector.get(index, locks);
+        Lock.readLock(lock);
         match MutMap.get(box, objectMap) {
             case Some(id) => id
-            case None => 
-                let id = getNextIndex(objectList); // TODO: Not thread safe
+            case None =>
+                Lock.unlockRead(lock);
+                Lock.writeLock(lock);
+                let id = getNextIndex(objectList);
                 MutList.insert(box, id, objectList);
                 MutMap.put(box, Int32.toInt64(id), objectMap);
+                Lock.unlockWrite(lock);
                 Int32.toInt64(id)
         }
     }
 
-    // TODO: Not thread safe. Apply locking (or use an AtomicInteger). Locking is needed for MutList anyway.
-    def getNextIndex(objectList: MutList[Boxed, r]): Int32 \ r = {
-        MutList.length(objectList)
+    def getNextIndex(list: MutList[Boxed, r]): Int32 \ r = {
+        MutList.size(list)
     }
 
-
     pub def unboxWith(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
-        let (_, _, symInfo) = info;
+        let (_, _, symInfo, _) = info;
         match box {
             case BoxedBool(x)       => setType(RealType.Bool, index, symInfo); if (x) 1i64 else 0i64
             case BoxedChar(x)       => setType(RealType.Char, index, symInfo); Int32.toInt64(Char.toBmpCodePoint(x))
@@ -110,7 +146,7 @@ mod Fixpoint.Boxing {
         }
 
     pub def boxWith(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
-        let (_, _, symInfo) = info;
+        let (_, _, symInfo, _) = info;
         match getType(index, symInfo) {
             case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
             case RealType.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(unwrap(Int64.tryToInt32(v)))) as _ \ {}))
@@ -181,12 +217,18 @@ mod Fixpoint.Boxing {
                 unifyPredTypes(predSym, arity, predTrack, set);
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, _) => // equality on the input should be handled elsewhere.
+            case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, arity) =>
                 Vector.forEachWithIndex(i -> curTerm -> {
                     let termID = Ram.getTermRamId(curTerm);
-                    MutDisjointSets.union(RamId.InID(id, i), termID, set);
+                    MutDisjointSets.makeSet(RamId.InId(id, i), set);
+                    MutDisjointSets.makeSet(termID, set);
+                    MutDisjointSets.union(RamId.InId(id, i), termID, set);
                     computeDisjointTerm(curTerm, predTrack, set)
                 }, inputTerms);
+                Vector.range(0, arity) |>
+                Vector.forEach(i -> 
+                    MutDisjointSets.makeSet(RamId.TuplePos(id, i), set)
+                );
                 computeDisjointOp(rest, predTrack, set)
             case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
                 unifyPredTypes(predSym, arity, predTrack, set);
@@ -288,8 +330,8 @@ mod Fixpoint.Boxing {
                 computeDisjointTerm(t1, predTrack, set);
                 let id1 = Ram.getTermRamId(t1);
                 MutDisjointSets.makeSet(id1, set);
-                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set)
+                MutDisjointSets.makeSet(RamId.InId(id, 0), set);
+                MutDisjointSets.union(id1, RamId.InId(id, 0), set)
             case RamTerm.App2(_, t1, t2, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
@@ -297,10 +339,10 @@ mod Fixpoint.Boxing {
                 let id2 = Ram.getTermRamId(t2);
                 MutDisjointSets.makeSet(id1, set);
                 MutDisjointSets.makeSet(id2, set);
-                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set);
-                MutDisjointSets.union(id2, RamId.InID(id, 1), set)
+                MutDisjointSets.makeSet(RamId.InId(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 1), set);
+                MutDisjointSets.union(id1, RamId.InId(id, 0), set);
+                MutDisjointSets.union(id2, RamId.InId(id, 1), set)
             case RamTerm.App3(_, t1, t2, t3, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
@@ -311,12 +353,12 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.makeSet(id1, set);
                 MutDisjointSets.makeSet(id2, set);
                 MutDisjointSets.makeSet(id3, set);
-                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set);
-                MutDisjointSets.union(id2, RamId.InID(id, 1), set);
-                MutDisjointSets.union(id3, RamId.InID(id, 2), set)
+                MutDisjointSets.makeSet(RamId.InId(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 2), set);
+                MutDisjointSets.union(id1, RamId.InId(id, 0), set);
+                MutDisjointSets.union(id2, RamId.InId(id, 1), set);
+                MutDisjointSets.union(id3, RamId.InId(id, 2), set)
             case RamTerm.App4(_, t1, t2, t3, t4, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
@@ -330,14 +372,14 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.makeSet(id2, set);
                 MutDisjointSets.makeSet(id3, set);
                 MutDisjointSets.makeSet(id4, set);
-                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 3), set);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set);
-                MutDisjointSets.union(id2, RamId.InID(id, 1), set);
-                MutDisjointSets.union(id3, RamId.InID(id, 2), set);
-                MutDisjointSets.union(id4, RamId.InID(id, 3), set)
+                MutDisjointSets.makeSet(RamId.InId(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 2), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 3), set);
+                MutDisjointSets.union(id1, RamId.InId(id, 0), set);
+                MutDisjointSets.union(id2, RamId.InId(id, 1), set);
+                MutDisjointSets.union(id3, RamId.InId(id, 2), set);
+                MutDisjointSets.union(id4, RamId.InId(id, 3), set)
             case RamTerm.App5(_, t1, t2, t3, t4, t5, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 computeDisjointTerm(t2, predTrack, set);
@@ -354,16 +396,16 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.makeSet(id3, set);
                 MutDisjointSets.makeSet(id4, set);
                 MutDisjointSets.makeSet(id5, set);
-                MutDisjointSets.makeSet(RamId.InID(id, 0), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 1), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 2), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 3), set);
-                MutDisjointSets.makeSet(RamId.InID(id, 4), set);
-                MutDisjointSets.union(id1, RamId.InID(id, 0), set);
-                MutDisjointSets.union(id2, RamId.InID(id, 1), set);
-                MutDisjointSets.union(id3, RamId.InID(id, 2), set);
-                MutDisjointSets.union(id4, RamId.InID(id, 3), set);
-                MutDisjointSets.union(id5, RamId.InID(id, 4), set)
+                MutDisjointSets.makeSet(RamId.InId(id, 0), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 1), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 2), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 3), set);
+                MutDisjointSets.makeSet(RamId.InId(id, 4), set);
+                MutDisjointSets.union(id1, RamId.InId(id, 0), set);
+                MutDisjointSets.union(id2, RamId.InId(id, 1), set);
+                MutDisjointSets.union(id3, RamId.InId(id, 2), set);
+                MutDisjointSets.union(id4, RamId.InId(id, 3), set);
+                MutDisjointSets.union(id5, RamId.InId(id, 4), set)
             case _ => bug!("Unreachable")
         }
 
@@ -383,130 +425,141 @@ mod Fixpoint.Boxing {
 
 
         def computeMappingOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
-        let recurse = x -> computeMappingOp(x, predTrack, set, map, counter);
-        let insert = x -> insertIndex(x, set, map, counter);
-        match s {
-            case RelOp.Search(_, _, rest) => recurse(rest)
-            case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
-                Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
-                Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
-                Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
-                recurse(rest)
-            case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
-                Vector.forEach(i -> insert(RamId.InID(id, i)), Vector.range(0, arity));
-                Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, Vector.length(inputTerms)));
-                Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), inputTerms);
-                recurse(rest)
-            case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
-                Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
-                Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), terms)
-            case RelOp.If(bools, rest) =>
-                recurse(rest);
-                Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
-        }
+            let recurse = x -> computeMappingOp(x, predTrack, set, map, counter);
+            let insert = x -> insertIndex(x, set, map, counter);
+            match s {
+                case RelOp.Search(_, _, rest) => recurse(rest)
+                case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
+                    Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
+                    recurse(rest)
+                case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
+                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                    Vector.forEach(i -> insert(RamId.InId(id, i)), Vector.range(0, Vector.length(inputTerms)));
+                    Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), inputTerms);
+                    recurse(rest)
+                case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
+                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
+                    Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), terms)
+                case RelOp.If(bools, rest) =>
+                    recurse(rest);
+                    Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
+            }
 
+        def computeMappingTerm(
+            s: RamTerm, 
+            predicates: PredSymMapInternal, 
+            set: MutDisjointSets[RamId, r], 
+            map: MutMap[RamId, Int32, r], 
+            counter: Counter[r]
+        ): Unit \ r = 
+            let insert = x -> insertIndex(x, set, map, counter);
+            let computeMappingTermRec = x -> computeMappingTerm(x, predicates, set, map, counter);
+            match s {
+                case RamTerm.Lit(_, id) => insert(id)
+                case RamTerm.RowLoad(_, _, _) => insert(getTermRamId(s))
+                case RamTerm.Meet(_, t1, t2, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    insert(RamId.Id(id))
+                case RamTerm.App0(_, id) => insert(id)
+                case RamTerm.App1(_, t1, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    insert(RamId.Id(id));
+                    insert(RamId.InId(id, 0))
+                case RamTerm.App2(_, t1, t2, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    insert(RamId.Id(id));
+                    insert(RamId.InId(id, 0));
+                    insert(RamId.InId(id, 1))
+                case RamTerm.App3(_, t1, t2, t3, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3);
+                    insert(RamId.Id(id));
+                    insert(RamId.InId(id, 0));
+                    insert(RamId.InId(id, 1));
+                    insert(RamId.InId(id, 2))
+                case RamTerm.App4(_, t1, t2, t3, t4, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3);
+                    computeMappingTermRec(t4);
+                    insert(RamId.Id(id));
+                    insert(RamId.InId(id, 0));
+                    insert(RamId.InId(id, 1));
+                    insert(RamId.InId(id, 2));
+                    insert(RamId.InId(id, 3))
+                case RamTerm.App5(_, t1, t2, t3, t4, t5, RamId.Id(id)) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3);
+                    computeMappingTermRec(t4);
+                    computeMappingTermRec(t5);
+                    insert(RamId.Id(id));
+                    insert(RamId.InId(id, 0));
+                    insert(RamId.InId(id, 1));
+                    insert(RamId.InId(id, 2));
+                    insert(RamId.InId(id, 3));
+                    insert(RamId.InId(id, 4))
+                case _ => bug!("Unreachable")
+            }
 
-        def computeMappingTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
-        let insert = x -> insertIndex(x, set, map, counter);
-        let recurse = x -> computeMappingTerm(x, predTrack, set, map, counter);
-        match s {
-            case RamTerm.Lit(_, id) => insert(id)
-            case RamTerm.RowLoad(_, _, _) => insert(getTermRamId(s))
-            case RamTerm.Meet(_, t1, t2, RamId.Id(id)) =>
-                recurse(t1);
-                recurse(t2);
-                insert(RamId.Id(id))
-            case RamTerm.App0(_, id) => insert(id)
-            case RamTerm.App1(_, t1, RamId.Id(id)) =>
-                recurse(t1);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0))
-            case RamTerm.App2(_, t1, t2, RamId.Id(id)) =>
-                recurse(t1);
-                recurse(t2);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0));
-                insert(RamId.InID(id, 1))
-            case RamTerm.App3(_, t1, t2, t3, RamId.Id(id)) =>
-                recurse(t1);
-                recurse(t2);
-                recurse(t3);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0));
-                insert(RamId.InID(id, 1));
-                insert(RamId.InID(id, 2))
-            case RamTerm.App4(_, t1, t2, t3, t4, RamId.Id(id)) =>
-                recurse(t1);
-                recurse(t2);
-                recurse(t3);
-                recurse(t4);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0));
-                insert(RamId.InID(id, 1));
-                insert(RamId.InID(id, 2));
-                insert(RamId.InID(id, 3))
-            case RamTerm.App5(_, t1, t2, t3, t4, t5, RamId.Id(id)) =>
-                recurse(t1);
-                recurse(t2);
-                recurse(t3);
-                recurse(t4);
-                recurse(t5);
-                insert(RamId.Id(id));
-                insert(RamId.InID(id, 0));
-                insert(RamId.InID(id, 1));
-                insert(RamId.InID(id, 2));
-                insert(RamId.InID(id, 3));
-                insert(RamId.InID(id, 4))
-            case _ => bug!("Unreachable")
-        }
-
-        def computeMappingBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
-        let insert = x -> insertIndex(x, set, map, counter);
-        let recurseOnTerm = x -> computeMappingTerm(x, predTrack, set, map, counter);
-        match s {
-            case BoolExp.IsEmpty(_) => ()
-            case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
-                Vector.forEach(x -> recurseOnTerm(x), terms);
-                Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity))
-            case BoolExp.Eq(t1, t2) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2)
-            case BoolExp.Guard0(_) => ()
-            case BoolExp.Guard1(_, t1) =>
-                recurseOnTerm(t1)
-            case BoolExp.Guard2(_, t1, t2) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2)
-            case BoolExp.Guard3(_, t1, t2, t3) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2);
-                recurseOnTerm(t3)
-            case BoolExp.Guard4(_, t1, t2, t3, t4) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2);
-                recurseOnTerm(t3);
-                recurseOnTerm(t4)
-            case BoolExp.Guard5(_, t1, t2, t3, t4, t5) =>
-                recurseOnTerm(t1);
-                recurseOnTerm(t2);
-                recurseOnTerm(t3);
-                recurseOnTerm(t4);
-                recurseOnTerm(t5)
-
-        }
+        def computeMappingBool(
+            s: BoolExp, 
+            predicates: PredSymMapInternal, 
+            set: MutDisjointSets[RamId, r], 
+            map: MutMap[RamId, Int32, r], 
+            counter: Counter[r]
+        ): Unit \ r = 
+            let insert = x -> insertIndex(x, set, map, counter);
+            let computeMappingTermRec = x -> computeMappingTerm(x, predicates, set, map, counter);
+            match s {
+                case BoolExp.IsEmpty(_) => ()
+                case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
+                    Vector.forEach(x -> computeMappingTermRec(x), terms);
+                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity))
+                case BoolExp.Eq(t1, t2) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2)
+                case BoolExp.Guard0(_) => ()
+                case BoolExp.Guard1(_, t1) =>
+                    computeMappingTermRec(t1)
+                case BoolExp.Guard2(_, t1, t2) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2)
+                case BoolExp.Guard3(_, t1, t2, t3) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3)
+                case BoolExp.Guard4(_, t1, t2, t3, t4) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3);
+                    computeMappingTermRec(t4)
+                case BoolExp.Guard5(_, t1, t2, t3, t4, t5) =>
+                    computeMappingTermRec(t1);
+                    computeMappingTermRec(t2);
+                    computeMappingTermRec(t3);
+                    computeMappingTermRec(t4);
+                    computeMappingTermRec(t5)
+            }
 
         def insertIndex(id: RamId, disjoint: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
             def unwrap(v: Option[RamId]): RamId = match v {
                 case Some(x) => x
-                case None => bug!("Primitive value somehow exceeded the size it should fit into: ${id}\n")
+                case None => bug!("RamID not in disjoint datastructure: ${id}\n")
             };
-            let repID = unwrap(MutDisjointSets.find(id, disjoint)); match MutMap.get(repID, map) {
-            case Some(v) => MutMap.put(id, v, map)
-            case None => 
-                let newID = Counter.getNewID(counter);
-                MutMap.put(id, newID, map);
-                MutMap.put(repID, newID, map)
-        }
+            let repID = unwrap(MutDisjointSets.find(id, disjoint)); 
+            match MutMap.get(repID, map) {
+                case Some(v) => MutMap.put(id, v, map)
+                case None => 
+                    let newID = Counter.getNewID(counter);
+                    MutMap.put(id, newID, map);
+                    MutMap.put(repID, newID, map)
+            }
     }
 
 

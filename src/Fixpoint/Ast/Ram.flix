@@ -17,20 +17,30 @@
 mod Fixpoint.Ast.Ram {
     use Fixpoint.Boxed;
     use Fixpoint.Predicates.PredSymMapInternal
-    // use Fixpoint.Ast.Ram.RamStmt
-    // use Fixpoint.Ast.Ram.IndexInformation
-    // use Fixpoint.Ast.Ram.Facts
-
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
-    // RamStmt                                                                 //
+    // RamProgram                                                              //
     /////////////////////////////////////////////////////////////////////////////
 
-    // TODO: Add 'exit' at some point, when stuff starts to work.
+    // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
+    pub enum RamProgram {
+        case Program(RamStmt, Facts, PredicateState, IndexInformation)
+    }
+
+    pub type alias PredicateState = Fixpoint.Predicates.PredSymMapInternal
+    pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
+    pub type alias Search = Vector[Int32]
+    pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
+    // The first is a list of the indices that should be made. The second is a map describing where they are suppoesed to be saved at runtime.
+    pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
+
+    /////////////////////////////////////////////////////////////////////////////
+    // RamStmt                                                                 //
+    /////////////////////////////////////////////////////////////////////////////
 
     @Internal
     pub enum RamStmt {
@@ -67,13 +77,11 @@ mod Fixpoint.Ast.Ram {
     
     @Internal
     pub enum RelOp {
-        case Search(RowVar, RelSym, RelOp) // Loop through RelSym, saving values in RowVar with body of loop RelOp.
-        // case Query(RowVar, RelSym, Vector[(Int32, RowVar)], RelOp) // Loop through RelSym saving values in RowVar 
-
-        // TODO: Add extra field describing which index to use. Could use a simple int32.
+        // Loop through RelSym, saving values in RowVar with body of loop RelOp.
+        case Search(RowVar, RelSym, RelOp) 
         case Query(RowVar, RelSym, Vector[BoolExp], Int32, RelOp)
-        // case Query(RowVar, RelSym, Vector[QueryExp], RelOp)
-        case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) // The last is the arity
+        // The last is the arity
+        case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) 
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
     }
@@ -89,8 +97,8 @@ mod Fixpoint.Ast.Ram {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "query {${var} ∈ ${relSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(RowVar.Named(id), _, terms, body, _) => // TODO: Get correct id?
-                    "loop(${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Functional(RowVar.Named(id), _, terms, body, _) => 
+                    "loop(x${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, relSym) =>
                     "project (${terms |> Vector.join(", ")}) into ${relSym}"
                 case RelOp.If(test, then) =>
@@ -119,10 +127,9 @@ mod Fixpoint.Ast.Ram {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
-                case BoolExp.IsEmpty(relSym) => "${relSym} == {}"
-                case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) not in ${relSym}"
-                case BoolExp.Eq(lhs, rhs) => "${lhs} == ${rhs}"
-                // case BoolExp.Leq(_, lhs, rhs) => "${lhs} <= ${rhs}"
+                case BoolExp.IsEmpty(relSym) => "${relSym} = ∅"
+                case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
+                case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
@@ -201,14 +208,12 @@ mod Fixpoint.Ast.Ram {
         case Symbol(PredSym, Int32, Denotation)
     }
 
-    // TODO: Implement equality for PredSym using only int id.
     instance Eq[RelSym] {
         pub def eq(a: RelSym, b: RelSym): Bool = match (a, b) {
             case (RelSym.Symbol(s1, _, _),  RelSym.Symbol(s2, _, _))  => s1 == s2
         }
     }
 
-    // TODO: Implement order for PredSym using only int id.
     instance Order[RelSym] {
         pub def compare(a: RelSym, b: RelSym): Comparison = match (a, b) {
             case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) =>  s1 <=> s2
@@ -264,15 +269,12 @@ mod Fixpoint.Ast.Ram {
     }
 
     @Internal
-    pub def collectRelSym(program: RamProgram): List[RelSym] = region _rc { match program {
-        case RamProgram.Program(_, _, predState, _) =>
-            Fixpoint.Predicates.allRelSyms(predState)
-            // let seen = MutSet.empty(rc);
-            // collectRelSymStmt(seen, stmt);
-            // Map.forEach(k -> _ -> MutSet.add(k, seen), facts);
-            // MutSet.forEach(relSym -> (), seen);
-            // MutSet.toList(seen)
-    }}
+    pub def collectRelSym(program: RamProgram): List[RelSym] = region _rc { 
+        match program {
+            case RamProgram.Program(_, _, predState, _) =>
+                Fixpoint.Predicates.allRelSyms(predState)
+        }
+    }
 
     @Internal
     pub def collectRelSymStmt(soFar: MutSet[RelSym, r], stmt: RamStmt): Unit \ r = match stmt {
@@ -298,7 +300,6 @@ mod Fixpoint.Ast.Ram {
         case BoolExp.IsEmpty(r1) => MutSet.add(r1, soFar)
         case BoolExp.NotMemberOf(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
         case BoolExp.Eq(t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
-        // case BoolExp.Leq(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
         case BoolExp.Guard0(_) => ()
         case BoolExp.Guard1(_, t1) => collectRelSymTerm(soFar, t1)
         case BoolExp.Guard2(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
@@ -318,7 +319,6 @@ mod Fixpoint.Ast.Ram {
         case RamTerm.App4(_, _, _, _, _, _) => ()
         case RamTerm.App5(_, _, _, _, _, _, _) => ()
     }
-
 
     @Internal
     pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = match program {
@@ -347,7 +347,7 @@ mod Fixpoint.Ast.Ram {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // RowVar                                                                //
+    // RowVar                                                                  //
     /////////////////////////////////////////////////////////////////////////////
 
     /**
@@ -364,54 +364,48 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub enum RowVar with Eq {
         case Named(Int32)
-        //case Index(Int32)
     }
 
     instance ToString[RowVar] {
         pub def toString(var: RowVar): String = match var {
             case RowVar.Named(id) => "x${id}"
-        //    case RowVar.Index(i) => "${i}$"
         }
     }
 
     instance Order[RowVar] {
         pub def compare(a: RowVar, b: RowVar): Comparison = match (a, b) {
             case (RowVar.Named(i1), RowVar.Named(i2)) => i1 <=> i2
-        //    case (RowVar.Index(i1), RowVar.Index(i2)) => i1 <=> i2
-            case _ => ?bug
         }
     }
+    
+    /////////////////////////////////////////////////////////////////////////////
+    // RamId                                                                   //
+    /////////////////////////////////////////////////////////////////////////////
 
     // A RamId is is either an identifier on a RAM-instruction, or an index in a RelSym.
     // Identifiers should be <0 for RamId.Id. Might be avoidable
     pub enum RamId {
         case Id(Int32) // (ID)
-        // case InID(Int32, Int32) // (ID, index)
-        case InID(Int32, Int32) // (OutID, index)
+        case InId(Int32, Int32) // (OutID, index)
         case TuplePos(Int32, Int32) // (RowVar, index)
         case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for Boxing.
     }
 
     instance ToString[RamId] {
-    
         pub def toString(x: RamId): String = match x {
-            case (RamId.Id(i1)) => "ID[${i1}]"
-            case (RamId.InID(i0, i1)) => "InID[${i0}, ${i1}]"
+            case (RamId.Id(i1)) => "Id[${i1}]"
+            case (RamId.InId(i0, i1)) => "InId[${i0}, ${i1}]"
             case (RamId.TuplePos(i0, i1)) => "TuplePos[${i0}, ${i1}]"
             case (RamId.RelPos(i0, i1)) => "RelPos[${i0}, ${i1}]"
         }
-    
     }
     
-
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {
             case (RamId.Id(i1), RamId.Id(i2)) => i1 == i2
-            // case (RamId.InID(id1, index1), RamId.InID(id2, index2)) => id1 == id2 and index1 == index2
-            case (RamId.InID(id1, index1), RamId.InID(id2, index2)) => id1 == id2 and index1 == index2
+            case (RamId.InId(id1, index1), RamId.InId(id2, index2)) => id1 == id2 and index1 == index2
             case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
             case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) => i0 == j0 and i1 == j1
-        //    case (RowVar.Index(i1), RowVar.Index(i2)) => i1 <=> i2
             case _ => false
         }
     }
@@ -419,14 +413,13 @@ mod Fixpoint.Ast.Ram {
     instance Order[RamId] {
         pub def compare(a: RamId, b: RamId): Comparison = match (a, b) {
             case (RamId.Id(i1), RamId.Id(i2)) => i1 <=> i2
-            // case (RamId.)
             case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
-            case (RamId.InID(i0, i1), RamId.InID(j0, j1)) =>
+            case (RamId.InId(i0, i1), RamId.InId(j0, j1)) =>
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
@@ -435,32 +428,9 @@ mod Fixpoint.Ast.Ram {
             case (_, RamId.RelPos(_, _)) => Comparison.GreaterThan
             case (RamId.Id(_), _) => Comparison.LessThan
             case (_, RamId.Id(_)) => Comparison.GreaterThan
-            case (RamId.InID(_, _), _) => Comparison.LessThan
-            case (_, RamId.InID(_, _)) => Comparison.GreaterThan
-
-
-            // case (RamId.Id(_), _) => Comparison.LessThan
-            // case (RamId.InID(_, _), _) => Comparison.GreaterThan
-            // case _ => ???
+            case (RamId.InId(_, _), _) => Comparison.LessThan
+            case (_, RamId.InId(_, _)) => Comparison.GreaterThan
         }
     }
-
-    // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
-    pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation)
-    }
-
-    pub type alias PredicateState = Fixpoint.Predicates.PredSymMapInternal
-
-    pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
-
-    pub type alias Search = Vector[Int32]
-
-    
-    pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
-
-    //The first is a list of the indices that should be made. The second is a map describing where they are suppoesed to be saved at runtime.
-    pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
-
 
 }

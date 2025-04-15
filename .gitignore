@@ -4,3 +4,4 @@ artifact
 build
 compiler.log
 .fixpoint_debug.txt
+fixpoint_debug.txt

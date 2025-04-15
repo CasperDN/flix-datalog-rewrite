@@ -16,7 +16,7 @@
 
 mod Fixpoint.Phase.Compiler {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram, RamId}
-    use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
+    use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, Fixity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
@@ -63,9 +63,7 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Collect all facts by their predicate
     ///
-    // TODO: Can we at this point compute the facts directly/reduce to literals by calling the functions?
     def compileFacts(facts: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]], predSymMaps: PredSymMapInternal): Facts =
-        // TODO: This is stupid. Just keep it as a map?
         let startingPoint = Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match isRelational(den) {
             case true => Map.foldWithKey(acc -> k -> _ -> k :: acc, Nil, values)
             case false => Map.foldWithKey(acc -> k -> v -> Vector.append(k, Vector#{v}) :: acc, Nil, values)
@@ -291,9 +289,8 @@ mod Fixpoint.Phase.Compiler {
                 MutList.push(insert, stmts)
             };
 
-            // TODO: Could possible require Fixity to be loose. Rigid should be of previous stratum.
             let positiveIDBAtoms = Vector.mapWithIndex(i -> atom -> match atom {
-                case BodyAtom(PredSym(_, id), _, Polarity.Positive, _, _) =>
+                case BodyAtom(PredSym(_, id), _, Polarity.Positive, Fixity.Loose, _) =>
                     if(Set.memberOf(id, idbSet)) {
                         i
                     } else {

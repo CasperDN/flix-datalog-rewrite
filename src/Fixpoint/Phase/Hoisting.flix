@@ -9,7 +9,6 @@ mod Fixpoint.Phase.Hoisting {
     type alias Load = (RowVar, Int32)
 
     // Hoist if-constructions as far as possible and merge into Query when possible/relevant.
-    // TODO: We could use a disjoin set datastructure to move up and minimize the number of equalities needed
     @Internal
     pub def hoistProgram(program: RamProgram): RamProgram = match program { 
         case RamProgram.Program(stmt, facts, meta, index) => region rc {
@@ -139,8 +138,6 @@ mod Fixpoint.Phase.Hoisting {
                             else Search(rowVar, relSym, hoistedBody);
                         Some(newOp)
                 }
-
-            // TODO: Do we want to extend behavior?
             case Functional(RowVar.Named(id), func, terms, body, arity) => match hoistOpRec(body) {
                 case None => None
                 case Some(v) => Some(Functional(RowVar.Named(id), func, terms, v, arity))
@@ -241,7 +238,7 @@ mod Fixpoint.Phase.Hoisting {
     ): Bool \ r =
         let termGround = isTermGround(termMap, equalitySets);
         match bool {
-            case IsEmpty(_) => true // Should not happen. TODO: Perhaps throw an error?
+            case IsEmpty(_) => unreachable!()
             case NotMemberOf(terms, _) => Vector.forAll(termGround, terms)
             case Eq(term1, term2) => termGround(term1) and termGround(term2)
             case Guard0(_) => true
