@@ -113,7 +113,9 @@ mod Fixpoint.Boxing {
         let lock = Vector.get(index, locks);
         Lock.readLock(lock);
         match MutMap.get(box, objectMap) {
-            case Some(id) => id
+            case Some(id) => 
+                Lock.unlockRead(lock);
+                id
             case None =>
                 Lock.unlockRead(lock);
                 Lock.writeLock(lock);
