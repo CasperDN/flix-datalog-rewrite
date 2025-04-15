@@ -106,7 +106,6 @@ mod Fixpoint.Boxing {
         res
     }
 
-    // We could Box the object and thus have a Boxed as input and be able to sort them?
     def marshallObject(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r = {
         let (objectLists, vecObjectMap, _, locks) = info;
         let objectList = Vector.get(index, objectLists);
