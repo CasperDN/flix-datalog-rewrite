@@ -212,9 +212,6 @@ mod Fixpoint.Phase.Lowering {
                     case Denotation.Latticenal(bot, leq, lub, _) => (bot, leq, lub)
                 };
                 let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
-                unchecked_cast(println("LOWERING") as _ \ r);
-                unchecked_cast(println(s) as _ \ r);
-                unchecked_cast(println(relSymToDenId(s, idToMarshall)) as _ \ r);
                 EProject(
                     loweredTerms, newRelPos, bot, leq, lub, relSymToDenId(s, idToMarshall)
                 )

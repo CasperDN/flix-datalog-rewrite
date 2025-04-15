@@ -81,13 +81,13 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(op: RelOp): String =
             let nl = String.lineSeparator();
             match op {
-                case RelOp.Search(var, relSym, _, body) =>
-                    "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
+                case RelOp.Search(var, relSym, writes, body) =>
+                    "search ${var} ∈ ${relSym} | ${writes} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Query(var, ramSym, writes, body) =>
-                    let qry = Vector.joinWith(match term -> {
+                    let writeString = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", writes);
-                    "query {${var} ∈ ${ramSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
+                    "query {${var} ∈ ${ramSym} | ${writeString}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.SearchLattice(var, relSym, _, _, _, body) =>
                     "searchLat ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.QueryLattice(var, ramSym, _, _, writes, body) =>

@@ -17,7 +17,6 @@ mod Fixpoint.PrecedenceGraph {
     }
 
     mod MutGraph {
-        use KeyNotFound.keyNotFound
         use Fixpoint.PrecedenceGraph.MutGraph.stronglyConnectedComponents
         use Fixpoint.Counter
         use Fixpoint.Counter.{Counter}
@@ -31,6 +30,9 @@ mod Fixpoint.PrecedenceGraph {
             case Black
         }
 
+        ///
+        /// Adds the edge `(u, v)` to `g`.
+        ///
         pub def addEdge(u: Vertex, v: Vertex, g: MutGraph[r]): Unit \ r = {
             MutSet.add(v, g->vertices);
             MutSet.add(u, g->vertices);
@@ -38,14 +40,30 @@ mod Fixpoint.PrecedenceGraph {
             if (List.memberOf(v, neighbors)) ()
             else MutMap.put(u, v :: neighbors, g->adjList)
         }
-        
+
+
+        ///
+        /// Returns `true` if `g` contains the edge `(u, v)`.
+        ///
         pub def hasEdge(u: Vertex, v: Vertex, g: MutGraph[r]): Bool \ r = 
             g->adjList |> MutMap.getWithDefault(u, List.empty()) |> List.memberOf(v)
         
+        ///
+        /// Returns the vertices of `g`.
+        ///
         pub def getVertices(g: MutGraph[r]): MutSet[Vertex, r] = g->vertices
 
-        pub def getSize(g: MutGraph[r]): Int32 \ r = MutSet.size(g->vertices)
+        ///
+        /// Returns the number of vertices in `g`. MutGraphs should start with vertex 0.
+        ///
+        pub def getSize(g: MutGraph[r]): Int32 \ r = match MutSet.maximum(g->vertices) {
+            case Some(v) => v + 1
+            case None => 0
+        }
 
+        ///
+        /// Returns a fresh  MutGraph.
+        ///
         pub def empty(rc: Region[r]): MutGraph[r] \ r = 
             new MutGraph @ rc {
                 vertices = MutSet.empty(rc),
@@ -58,6 +76,9 @@ mod Fixpoint.PrecedenceGraph {
             println(toString(g))
         }
 
+        ///
+        /// Returns the string representation of `g`.
+        ///
         pub def toString(g: MutGraph[r]): String \ r = 
             let edges = MutMap.joinWith(u -> v -> "\n  ${u} -> ${v}", ",", g->adjList);
             "MutGraph(${edges})"
@@ -90,8 +111,11 @@ mod Fixpoint.PrecedenceGraph {
             topologicalSort(contractedGraph) |> List.map(u -> unwrap(MutMap.get(unwrap(MutMap.get(u, inverseRootMap)), componentMap)))
         }
 
+        ///
+        /// Return a `List` of the vertices of `g` i
+        ///
         pub def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
-            let sorted = MutList.empty(rc);
+            let sorted = MutList.empty(rc);           
             let colors = Array.repeat(rc, getSize(g), Color.White);
             getVertices(g) |>
             MutSet.forEach(u -> {

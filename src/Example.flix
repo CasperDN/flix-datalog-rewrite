@@ -73,7 +73,7 @@ def ex1__04(): Unit \ IO =
         Road("Odense", "Nyborg").
         Road("Helsingør", "København").
         Road("Helsingborg", "Malmø").
-        //Road("Korsør", "Nyborg"). // Mistake? Korsør -> Nyborg requires crossing Storebælt?
+        // Road("Korsør", "Nyborg"). // Mistake? Korsør -> Nyborg requires crossing Storebælt?
         Road("Korsør", "Roskilde").
         Road("København", "Roskilde").
         Road("Rønne", "Nexø").
@@ -112,7 +112,8 @@ def ex1__04(): Unit \ IO =
     println("\nIs it possible to travel from Nexø to Aalborg?");
     not Vector.isEmpty(query facts, rules select true from Reachable("Nexø", "Aalborg")) |> println;
     println("\nIs it possible to travel from Aalborg to Nexø?");
-    not Vector.isEmpty(query facts, rules select true from Reachable("Aalborg", "Nexø"))|> println
+    not Vector.isEmpty(query facts, rules select true from Reachable("Aalborg", "Nexø"))|> println;
+    ()
 
 def ex1_12(): Unit \ IO = 
     let facts = #{

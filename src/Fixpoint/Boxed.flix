@@ -81,7 +81,7 @@ mod Fixpoint {
             case Boxed.BoxedFloat32(v)   => ToString.toString(v)
             case Boxed.BoxedFloat64(v)   => ToString.toString(v)
             case Boxed.BoxedObject(v, _) => Debug.stringify(v)
-            case Boxed.None => "None box"
+            case Boxed.None              => "Boxed.None"
         }
     }
 }

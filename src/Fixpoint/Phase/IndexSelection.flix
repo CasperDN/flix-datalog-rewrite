@@ -13,7 +13,6 @@ mod Fixpoint.Phase.IndexSelection {
             let (newIndexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = region rc {
                 let indexes = MutMap.empty(rc);
                 let collectedStmt = collectSearchesStmt(indexes, rc, stmt);
-                unchecked_cast(println(MutMap.toString(indexes)) as _ \ rc);
                 let newIndexes =
                     indexes |>
                     MutMap.toMap |> 

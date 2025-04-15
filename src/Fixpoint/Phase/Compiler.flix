@@ -261,17 +261,18 @@ mod Fixpoint.Phase.Compiler {
 
     def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, idbSet: Set[Int64], predSymMaps: PredSymMapInternal, counter: Counter.Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(HeadAtom(headSym, _, headTerms), body) =>
-            let augBody = augmentBody(body, counter);
-            let env = unifyVars(predSymMaps, counter, augBody);
-            let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
-            let projection = RelOp.Project(ramTerms, Predicates.getNewRel(predSymMaps, headSym, New));
-            let join = compileBody(env, augBody, predSymMaps, counter);
-            let relSym = Predicates.getNewRel(predSymMaps, headSym, Full);
-            let loopBody = RelOp.If(
-                Vector.append(Vector#{BoolExp.NotMemberOf(ramTerms, relSym)}, join), 
-                projection
-            );
-            let compileSomething = delta -> { // `delta` designates the focused atom.
+            let compileSomething = deltaIndex -> { // `delta` designates the focused atom.
+                let augBody = augmentBody(body, counter);
+                let delta = snd(Vector.get(deltaIndex, augBody));
+                let env = unifyVars(predSymMaps, counter, augBody);
+                let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
+                let projection = RelOp.Project(ramTerms, Predicates.getNewRel(predSymMaps, headSym, New));
+                let join = compileBody(env, augBody, predSymMaps, counter);
+                let relSym = Predicates.getNewRel(predSymMaps, headSym, Full);
+                let loopBody = RelOp.If(
+                    Vector.append(Vector#{BoolExp.NotMemberOf(ramTerms, relSym)}, join), 
+                    projection
+                );
                 let insert =
                     Vector.foldRight(match (atom, rowVar) -> acc -> match atom {
                         case BodyAtom(bodySym, den, Polarity.Positive, _, _) =>
@@ -290,16 +291,24 @@ mod Fixpoint.Phase.Compiler {
                 MutList.push(insert, stmts)
             };
 
-            let positiveIDBAtoms = Vector.filter(match (atom, _) -> match atom {
-                case BodyAtom(PredSym(_, id), _, Polarity.Positive, _, _) => Set.memberOf(id, idbSet)
-                case _ => false
-            }, augBody);
+            // TODO: Could possible require Fixity to be loose. Rigid should be of previous stratum.
+            let positiveIDBAtoms = Vector.mapWithIndex(i -> atom -> match atom {
+                case BodyAtom(PredSym(_, id), _, Polarity.Positive, _, _) =>
+                    if(Set.memberOf(id, idbSet)) {
+                        i
+                    } else {
+                        -1
+                    }
+                case _ => -1
+            }, body) |> 
+            Vector.filter(i -> i != -1);
+
             if (Fixpoint.Options.enableDebugging()) {
                 let comment = RamStmt.Comment(ToString.toString(rule));
                 MutList.push(comment, stmts);
-                Vector.forEach(match (_, rowVar) -> compileSomething(rowVar), positiveIDBAtoms)
+                Vector.forEach(match rowVar -> compileSomething(rowVar), positiveIDBAtoms)
             } else {
-                Vector.forEach(match (_, rowVar) -> compileSomething(rowVar), positiveIDBAtoms)
+                Vector.forEach(match rowVar -> compileSomething(rowVar), positiveIDBAtoms)
             }
     }
 

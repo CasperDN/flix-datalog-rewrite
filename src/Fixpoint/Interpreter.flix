@@ -77,7 +77,11 @@ mod Fixpoint.Interpreter {
         let (program, boxing) = input;
         let indexes = match program {
             case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) => 
-                let indexes = Array.empty(rc, snd(unwrap(Map.maximumValue(posMap))) + 1);
+                let indexNum = match Map.maximumValue(posMap) {
+                    case None => 0
+                    case Some((_, v)) => v + 1
+                };
+                let indexes = Array.empty(rc, indexNum);
                 indexMap |>
                 Map.forEach(relSym -> searches -> {
                     let tuples = Map.getWithDefault(relSym, Vector#{}, facts);
@@ -308,7 +312,7 @@ mod Fixpoint.Interpreter {
                     let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
                     let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.None, relIndex);
                     if(curLatVal == Boxed.None)
-                        false
+                        true
                     else
                         not (latVal `leq` curLatVal)
                 }
