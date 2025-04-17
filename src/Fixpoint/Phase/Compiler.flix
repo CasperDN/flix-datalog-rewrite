@@ -32,7 +32,7 @@ mod Fixpoint.Phase.Compiler {
     use Fixpoint.Predicates.PredType.{Full, Delta, New}
 
     // This should (hopefully) be fine. The symbol should not be used for anything.
-    def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Denotation.Relational)
+    pub def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Denotation.Relational)
     ///
     /// Compile the given Datalog program `d` to RAM.
     /// First compile all facts in `d` to project-statements.

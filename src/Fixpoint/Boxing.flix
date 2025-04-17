@@ -429,7 +429,10 @@ mod Fixpoint.Boxing {
             let recurse = x -> computeMappingOp(x, predTrack, set, map, counter);
             let insert = x -> insertIndex(x, set, map, counter);
             match s {
-                case RelOp.Search(_, _, rest) => recurse(rest)
+                case RelOp.Search(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
+                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
+                    recurse(rest)
                 case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
                     Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
                     Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));

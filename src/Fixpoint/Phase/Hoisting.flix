@@ -105,6 +105,8 @@ mod Fixpoint.Phase.Hoisting {
                 }, Vector.range(0, arity));
                 let optHoistedBody = hoistOpRec(body);
                 match optHoistedBody {
+                    // TODO: Logical error. We should also remove us from ground here.
+                    // Will probably not matter in reality as this will always make everything None
                     case None => None
                     case Some(hoistedBody) =>
                         let relevant = List.filter(isBoolGround(termMap, equalitySets), MutList.toList(MutMap.getWithDefault(id, MutList.empty(rc), idToBool)));
@@ -138,10 +140,42 @@ mod Fixpoint.Phase.Hoisting {
                             else Search(rowVar, relSym, hoistedBody);
                         Some(newOp)
                 }
-            case Functional(RowVar.Named(id), func, terms, body, arity) => match hoistOpRec(body) {
-                case None => None
-                case Some(v) => Some(Functional(RowVar.Named(id), func, terms, v, arity))
-            }
+            case Functional(rowVar, func, terms, body, arity) =>
+                let RowVar.Named(id) = rowVar;
+                Vector.forEach(i -> {
+                    match MutDisjointSets.find((rowVar, i), equalitySets) {
+                        case Some(rep) => MutMap.putWith(_ -> v -> v, rep, RamTerm.RowLoad(rowVar, i, Fixpoint.Phase.Compiler.functionalRelSym(arity)), termMap)
+                        case None => bug!("In Fixpoint.Hoisting: Everything should be in the equalitySet")
+                    }
+                }, Vector.range(0, arity));
+
+
+
+                match hoistOpRec(body) {
+                    // TODO: Logical error. We should also remove us from ground here.
+                    // Will probably not matter in reality as this will always make everything None
+                    case None => None
+                    case Some(v) => {
+                        let relevant = List.filter(isBoolGround(termMap, equalitySets), MutList.toList(MutMap.getWithDefault(id, MutList.empty(rc), idToBool)));
+    
+                        Vector.forEach(i -> {
+                            match MutDisjointSets.find((rowVar, i), equalitySets) {
+                                case Some(rep) => MutMap.remove(rep, termMap)
+                                case None => bug!("In Fixpoint.Hoisting: Everything should be in the equalitySet")
+                            }
+                        }, Vector.range(0, arity));
+
+                        let hoistedToHere =
+                            List.filter(x -> not isBoolGround(termMap, equalitySets, x), relevant) |>
+                            List.map(simplifyLoadsBool(termMap, equalitySets));
+
+                        if (List.nonEmpty(hoistedToHere)) {
+                            Some(Functional(RowVar.Named(id), func, terms, If(List.toVector(hoistedToHere), v), arity))
+                        } else {
+                            Some(Functional(RowVar.Named(id), func, terms, v, arity))
+                        }
+                    }
+                }
             case Project(_, _) => Some(op)
             case If(boolExps, body) => 
                 Vector.forEach(b -> {
