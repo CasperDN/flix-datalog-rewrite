@@ -52,6 +52,8 @@ mod Fixpoint.Ast.Ram {
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
         case Comment(String)
+        // (RelSym, index, position to save result, search)
+        case EstimateJoinSize(RelSym, Int32, Int32, Vector[Int32])
     }
 
     instance ToString[RamStmt] {
@@ -68,6 +70,8 @@ mod Fixpoint.Ast.Ram {
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
+                case RamStmt.EstimateJoinSize(relSym, index, writeTo, attr) => 
+                    "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"
             }
     }
 
@@ -286,6 +290,7 @@ mod Fixpoint.Ast.Ram {
         case RamStmt.Par(stmts) => Vector.forEach(x -> collectRelSymStmt(soFar, x), stmts)
         case RamStmt.Until(bools, rest) => collectRelSymStmt(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
         case RamStmt.Comment(_) => ()
+        case RamStmt.EstimateJoinSize(r1, _, _, _) => MutSet.add(r1, soFar)
     }
 
     def collectRelSymOp(soFar: MutSet[RelSym, r], op: RelOp): Unit \ r = match op {
@@ -336,6 +341,7 @@ mod Fixpoint.Ast.Ram {
         case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarArityStmt(x), acc), Nil, stmts)
         case RamStmt.Until(_, rest) => collectRowVarArityStmt(rest)
         case RamStmt.Comment(_) => Nil
+        case RamStmt.EstimateJoinSize(_, _, _, _) => Nil
     }
 
     def collectRowVarArityOp(op: RelOp): List[(RowVar, Int32)] \ r = match op {

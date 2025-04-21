@@ -54,6 +54,7 @@ mod Fixpoint.Ast.ExecutableRam {
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
         case Comment(String)
+        case EstimateJoinSize(Int32, Int32, Vector[Int32])
     }
 
     instance ToString[RamStmt] {
@@ -70,6 +71,8 @@ mod Fixpoint.Ast.ExecutableRam {
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
+                case RamStmt.EstimateJoinSize(index, writeTo, attr) => 
+                    "EstimateJoinSize(<optimized out>, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"
             }
     }
 

@@ -76,6 +76,7 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
+        case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
     }
 
     /// Takes the relative operator, op, region rc, and tuple-vars defined so far, seenRowVars 
@@ -183,7 +184,7 @@ mod Fixpoint.Phase.Hoisting {
                     if (Set.size(vars) == 0)
                         MutList.push(b, independentBool) 
                     else
-                    // Don't collect Eq's. They are handled separately to ensure we refer to the earliest evaluated expression.
+                        // Don't collect Eq's. They are handled separately to ensure we refer to the earliest evaluated expression.
                         Set.forEach(v -> match b {
                             case Eq(_, _) => ()
                             case _ => let boolList = MutMap.getOrElsePut(v, MutList.empty(rc), idToBool);
@@ -321,6 +322,7 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()
+        case RamStmt.EstimateJoinSize(_, _, _, _) => ()
     }
 
     def unifyBoolExp(
@@ -338,7 +340,8 @@ mod Fixpoint.Phase.Hoisting {
         case _ => ()
     }
 
-    def unifyEqualitiesOp(
+    @Internal
+    pub def unifyEqualitiesOp(
         equalitySets: MutDisjointSets[Load, r], 
         constEqualities: MutMap[Load, List[(Boxed, RamId)], r],
         op: RelOp

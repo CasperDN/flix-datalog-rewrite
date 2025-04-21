@@ -24,6 +24,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Helpers.{unwrap}
+    use Fixpoint.Phase.JoinProfiler
 
     type alias Tuple[r: Region] = Array[Int64, r]
 
@@ -71,6 +72,18 @@ mod Fixpoint.Interpreter {
             }, tuples);
             index
         }
+
+    @Internal
+    pub def interpretWithJoinProfiler(rc: Region[r], input: (RamProgram, Boxing[r])): Unit \ r = 
+        let (program, boxing) = input;
+        let profilerInfo = match program {
+            case RamProgram.Program(_, _, _, _, (arities, _), _) => 
+                let numOfRels = Vector.length(arities);
+                let expectedJoinSize: Array[MutList[Int32, r], r] = Array.empty(rc, numOfRels);
+                let tuplesFromJoin = Array.empty(rc, numOfRels);
+                ???
+        };
+        ???
 
     @Internal
     pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
@@ -169,8 +182,7 @@ mod Fixpoint.Interpreter {
                 evalStmt(rc, ctxt, body);
                 evalStmt(rc, ctxt, stmt)
             }
-        case RamStmt.Comment(_) => 
-            ()
+        case RamStmt.Comment(_) => ()
         case RamStmt.Par(stmts) => region rc2 {
             let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
             stmts |> Vector.forEach(innerStmt -> unchecked_cast({
@@ -186,6 +198,7 @@ mod Fixpoint.Interpreter {
                 ()
             } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
         }
+        case RamStmt.EstimateJoinSize(relIndex, _, attr) => JoinProfiler.estimateJoinSize(relIndex, attr)
     }
 
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 

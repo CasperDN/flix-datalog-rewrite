@@ -54,6 +54,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
+        // Some of this code is duplicated in `runJoinProfilerWithStratification`.
         def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (RamProgram, Boxing[rc]) \ rc = {
             Fixpoint.Phase.Compiler.compile(cs, db, stf)
             |> Fixpoint.Debugging.notifyPreLowering("Compiler")
@@ -81,6 +82,16 @@ mod Fixpoint.Solver {
         let m = Fixpoint.Debugging.notifyPostSolve(model);
         m
     }
+
+    @Internal
+    def runJoinProfilerWithStratification(program: RamProgram): Vector[_] = region rc {
+        program |> 
+        Fixpoint.Phase.Hoisting.hoistProgram |> 
+        Fixpoint.Phase.IndexSelection.indexProgram |> 
+        Fixpoint.Phase.Lowering.lowerProgram(rc) |>
+        Fixpoint.Interpreter.interpretWithJoinProfiler(rc)
+    }
+
 
     ///
     /// Returns the pairwise union of `d1` and `d2`.
