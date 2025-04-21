@@ -95,7 +95,7 @@ mod Fixpoint.Phase.JoinProfiler {
         collectLoop((Nil, Nil), false, mainStmt)
     }
     
-    pub def estimateJoinSize(rc: Region[r], _rel: RelSym, attr: Vector[Int32]): Int32 \ r = 
+    pub def estimateJoinSize(rc: Region[r], relIndex: Int32, attr: Vector[Int32]): Int32 \ r = 
         let index = ???;
         let prevRef = Ref.fresh(rc, None);
         let dupRef = Counter.fresh(rc);

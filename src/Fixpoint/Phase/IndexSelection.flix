@@ -80,7 +80,7 @@ mod Fixpoint.Phase.IndexSelection {
         case Some(indexes) =>
             // We want to be able to search on a `search` of length `k`.
             // If we have a search `[3, 5, 2]` and an index `[X,Y,Z,...]`
-            // we need to heck that 3, 5 and 2 are in the first 3 positions
+            // we need to check that 3, 5 and 2 are in the first 3 positions
             // of the proposed index.
             // In other words some permutation of `search` must be a prefix of
             // index for the index to be usable.

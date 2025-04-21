@@ -85,11 +85,13 @@ mod Fixpoint.Solver {
 
     @Internal
     def runJoinProfilerWithStratification(program: RamProgram): Vector[_] = region rc {
-        program |> 
-        Fixpoint.Phase.Hoisting.hoistProgram |> 
-        Fixpoint.Phase.IndexSelection.indexProgram |> 
-        Fixpoint.Phase.Lowering.lowerProgram(rc) |>
-        Fixpoint.Interpreter.interpretWithJoinProfiler(rc)
+        let _ = 
+            program |> 
+            Fixpoint.Phase.Hoisting.hoistProgram |> 
+            Fixpoint.Phase.IndexSelection.indexProgram |> 
+            Fixpoint.Phase.Lowering.lowerProgram(rc) |>
+            Fixpoint.Interpreter.interpretWithJoinProfiler(rc);
+        ???
     }
 
 

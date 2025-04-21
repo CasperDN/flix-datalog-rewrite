@@ -198,7 +198,9 @@ mod Fixpoint.Interpreter {
                 ()
             } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
         }
-        case RamStmt.EstimateJoinSize(relIndex, _, attr) => JoinProfiler.estimateJoinSize(relIndex, attr)
+        case RamStmt.EstimateJoinSize(relIndex, _, attr) =>  
+            let _ = JoinProfiler.estimateJoinSize(rc, relIndex, attr);
+            ???
     }
 
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 

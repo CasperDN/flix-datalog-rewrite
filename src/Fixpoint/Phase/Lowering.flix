@@ -148,7 +148,8 @@ mod Fixpoint.Phase.Lowering {
                     ERamStmt.Seq(purges)
                 }
             case ARamStmt.Comment(s) => ERamStmt.Comment(s)
-            case ARamStmt.EstimateJoinSize(relSym, attr) => ERamStmt.EstimateJoinSize(???, attr)
+            case ARamStmt.EstimateJoinSize(relSym, _, _, attr) => 
+                ERamStmt.EstimateJoinSize(???, ???, attr)
     }
 
     @Internal
