@@ -1,11 +1,10 @@
 mod Fixpoint.Phase.IndexSelection {
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, RowVar, collectRelSym, arityOf, arityOfNonLat};
     use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType}
     use Fixpoint.UniqueInts
     use Fixpoint.UniqueInts.IndexState
-    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, RowVar, collectRelSym, arityOf, arityOfNonLat};
     
     type alias Indexes[r: Eff] = MutMap[RelSym, List[Search], r]
-    type alias Load = (RowVar, Int32)
 
     pub def indexProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, meta, _) => 
@@ -68,8 +67,8 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
         case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, constructedIndexes, indexState))
         case RamStmt.Comment(_) => stmt 
-        case RamStmt.EstimateJoinSize(relSym, _, search) => 
-            RamStmt.EstimateJoinSize(relSym, lookupIndex(relSym, search, constructedIndexes), search)
+        case RamStmt.EstimateJoinSize(relSym, _, writeTo, search) => 
+            RamStmt.EstimateJoinSize(relSym, lookupIndex(relSym, search, constructedIndexes), writeTo, search)
     }
 
     def lookupIndex(
@@ -94,13 +93,13 @@ mod Fixpoint.Phase.IndexSelection {
             }
         case None => 
             bug!("In IndexSelection.indexOp: ${relSym} has no index!")
-    };
+    }
 
     def indexOp(op: RelOp, constructedIndexes: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RelOp \ r = match op {
         case RelOp.Search(rowVar, relSym, body) =>
             RelOp.Search(rowVar, relSym, indexOp(body, constructedIndexes, indexState))
         case RelOp.Query(rowVar, relSym, boolExps, _, body) =>
-            let search = 
+            let search =
                 Vector.foldLeft(acc -> exp -> match exp {
                     case BoolExp.Eq(RamTerm.RowLoad(_, i, _), _) => i :: acc
                     case BoolExp.Eq(_, RamTerm.RowLoad(_, i, _)) => i :: acc
@@ -126,7 +125,9 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Until(boolExps, body) => 
             RamStmt.Until(boolExps, collectSearchesStmt(indexes, rc, body))
         case RamStmt.Comment(_) => stmt 
-        case RamStmt.EstimateJoinSize(relSym, search) => collectSearch(relSym, search, indexes)
+        case RamStmt.EstimateJoinSize(relSym, _, _, search) => 
+            collectSearch(relSym, search, indexes);
+            stmt
     }
 
     def collectSearchesOp(
@@ -185,7 +186,7 @@ mod Fixpoint.Phase.IndexSelection {
             if (not List.memberOf(search, searches))
                 MutMap.put(relSym, search :: searches, indexes)
             else ()
-        } else ();
+        } else ()
 
     def isTermGround(term: RamTerm, seenTuples: MutSet[RowVar, r]): Bool \ r = match term {
         case RamTerm.RowLoad(rowVar, _, _) =>

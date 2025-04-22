@@ -17,15 +17,15 @@
 mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Helpers.unwrap
 
-    use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
-    use Fixpoint.Ast.Datalog.Constraint.Constraint
-    use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.BodyAtom
+    use Fixpoint.Ast.Datalog.Constraint.Constraint
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
+    use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
+    use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.PrecedenceGraph
     use Fixpoint.PrecedenceGraph.MutGraph
     use Fixpoint.PrecedenceGraph.StronglyConnectedComponent.SCC
-    use Fixpoint.Ast.Shared.PredSym
 
 
     @Internal

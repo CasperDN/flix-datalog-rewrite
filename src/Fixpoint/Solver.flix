@@ -25,7 +25,8 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Ram.RelSym
-    use Fixpoint.Ast.ExecutableRam.RamProgram
+    use Fixpoint.Ast.Ram.{RamProgram => ARamProgram}
+    use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.PredSym
@@ -55,7 +56,7 @@ mod Fixpoint.Solver {
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfilerWithStratification`.
-        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (RamProgram, Boxing[rc]) \ rc = {
+        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
             Fixpoint.Phase.Compiler.compile(cs, db, stf)
             |> Fixpoint.Debugging.notifyPreLowering("Compiler")
             |> Fixpoint.Phase.Simplifier.simplifyProgram
@@ -84,14 +85,14 @@ mod Fixpoint.Solver {
     }
 
     @Internal
-    def runJoinProfilerWithStratification(program: RamProgram): Vector[_] = region rc {
-        let _ = 
+    def runJoinProfiler(program: ARamProgram): Vector[Vector[(Int32, Int32)]] = region rc {
+        let expectedJoinSize = 
             program |> 
             Fixpoint.Phase.Hoisting.hoistProgram |> 
             Fixpoint.Phase.IndexSelection.indexProgram |> 
             Fixpoint.Phase.Lowering.lowerProgram(rc) |>
-            Fixpoint.Interpreter.interpretWithJoinProfiler(rc);
-        ???
+            Fixpoint.Interpreter.estimateJoinSizes(rc);
+        expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector
     }
 
 

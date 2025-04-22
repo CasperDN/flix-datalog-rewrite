@@ -202,6 +202,7 @@ mod Fixpoint.Boxing {
             case RamStmt.Par(stmts) => Vector.forEach(x -> computeDisjointStmt(x, predTrack, set), stmts)
             case RamStmt.Until(bools, stmt) => computeDisjointStmt(stmt, predTrack, set); Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools)
             case RamStmt.Comment(_) => ()
+            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
         def computeDisjointOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
@@ -422,6 +423,7 @@ mod Fixpoint.Boxing {
                 computeMappingStmt(stmt, predTrack, set, map, counter); 
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
             case RamStmt.Comment(_) => ()
+            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
 

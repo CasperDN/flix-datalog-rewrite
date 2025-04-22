@@ -15,16 +15,15 @@
  */
 
 mod Fixpoint.Interpreter {
-    use Fixpoint.Ast.Ram.RamId
-    use Fixpoint.Boxing
-    use Fixpoint.Boxing.{Boxing, boxWith, unboxWith}
-    use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
-    use Fixpoint.Boxed
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
-    use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId}
+    use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId, RamId}
     use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Boxed
+    use Fixpoint.Boxing.{Boxing, boxWith, unboxWith, RamIdToMarshal}
+    use Fixpoint.Counter
     use Fixpoint.Helpers.{unwrap}
     use Fixpoint.Phase.JoinProfiler
+    use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
 
     type alias Tuple[r: Region] = Array[Int64, r]
 
@@ -74,19 +73,26 @@ mod Fixpoint.Interpreter {
         }
 
     @Internal
-    pub def interpretWithJoinProfiler(rc: Region[r], input: (RamProgram, Boxing[r])): Unit \ r = 
-        let (program, boxing) = input;
-        let profilerInfo = match program {
+    pub def estimateJoinSizes(rc: Region[r], input: (RamProgram, Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
+        let expectedJoinSize = match fst(input) {
             case RamProgram.Program(_, _, _, _, (arities, _), _) => 
                 let numOfRels = Vector.length(arities);
-                let expectedJoinSize: Array[MutList[Int32, r], r] = Array.empty(rc, numOfRels);
-                let tuplesFromJoin = Array.empty(rc, numOfRels);
-                ???
+                Array.empty(rc, numOfRels)
         };
-        ???
+        expectedJoinSize |> Array.transform(_ -> MutList.empty(rc));
+        let _ = interpretWithInput(rc, Some(expectedJoinSize), input);
+        expectedJoinSize        
 
     @Internal
-    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r =
+    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
+        interpretWithInput(rc, None, input)
+
+    @Internal
+    pub def interpretWithInput(
+        rc: Region[r], 
+        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        input: (RamProgram, Boxing[r])
+    ): (DatabaseExternal[r], PredSymMapInternal) \ r =
         let (program, boxing) = input;
         let indexes = match program {
             case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) => 
@@ -108,13 +114,14 @@ mod Fixpoint.Interpreter {
                 });
                 indexes
         };
-        interpretWithDatabase(rc, indexes, boxing, program)
+        interpretWithDatabase(rc, indexes, boxing, expectedJoinSize, program)
 
     @Internal
     def interpretWithDatabase(
         rc: Region[r], 
         db: Indexes[r], 
         boxing: Boxing[r], 
+        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         program: RamProgram
     ): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
@@ -128,12 +135,12 @@ mod Fixpoint.Interpreter {
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
             let ctxt = (db, env, boxing);
-            evalStmt(rc, ctxt, stmt);
+            evalStmt(rc, ctxt, expectedJoinSize, stmt);
             (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
     }
 
 
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: PredSymMapInternal, boxingIndexes: Fixpoint.Boxing.RamIdToMarshal): DatabaseExternal[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: PredSymMapInternal, boxingIndexes: RamIdToMarshal): DatabaseExternal[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
@@ -151,8 +158,12 @@ mod Fixpoint.Interpreter {
         });
         res
 
-
-    def evalStmt(rc: Region[r], ctxt: Context[r], stmt: RamStmt): Unit \ r = match stmt {
+    def evalStmt(
+        rc: Region[r], 
+        ctxt: Context[r], 
+        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        stmt: RamStmt
+    ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, relOp)
         case RamStmt.Merge(srcIndex, dstIndex, lub, index) =>
@@ -174,13 +185,13 @@ mod Fixpoint.Interpreter {
             let newIndex = BPlusTree.empty(rc, BPlusTree.getSearch(oldIndex));
             Array.put(newIndex, index, db)
         case RamStmt.Seq(stmts) => 
-            Vector.forEach(evalStmt(rc, ctxt), stmts)
+            Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize), stmts)
         case RamStmt.Until(test, body) =>
             if (evalBoolExp(rc, ctxt, test)) {
                 ()
             } else {
-                evalStmt(rc, ctxt, body);
-                evalStmt(rc, ctxt, stmt)
+                evalStmt(rc, ctxt, expectedJoinSize, body);
+                evalStmt(rc, ctxt, expectedJoinSize, stmt)
             }
         case RamStmt.Comment(_) => ()
         case RamStmt.Par(stmts) => region rc2 {
@@ -193,14 +204,30 @@ mod Fixpoint.Interpreter {
                     let threadLatEnv = latEnv |> Array.map(rc, x -> x); 
                     let threadEnv = (threadMinEnv, threadMaxEnv, threadTupleEnv, threadLatEnv);
                     let threadCtxt = (db, threadEnv, boxing);
-                    evalStmt(rc, threadCtxt, innerStmt)
+                    evalStmt(rc, threadCtxt, expectedJoinSize, innerStmt)
                 } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
                 ()
             } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
         }
-        case RamStmt.EstimateJoinSize(relIndex, _, attr) =>  
-            let _ = JoinProfiler.estimateJoinSize(rc, relIndex, attr);
-            ???
+        case RamStmt.EstimateJoinSize(relIndex, writeTo, attr) =>  
+            let prevRef = Ref.fresh(rc, None);
+            let dupRef = Counter.fresh(rc);
+            let sizeRef = Counter.fresh(rc);
+            relIndex |> BPlusTree.forEach(curr -> _ -> {
+                let isDup = 
+                    Ref.get(prevRef) |> 
+                    Option.exists(prev -> 
+                        attr |> Vector.forAll(i -> Array.get(i, prev) == Array.get(i, curr))
+                    );
+                if (isDup) {
+                    Counter.increment(dupRef)
+                } else ();
+                Ref.put(Some(curr), prevRef);
+                Counter.increment(sizeRef)
+            });
+            let size = Counter.peek(sizeRef);
+            let dup = Counter.peek(dupRef);
+            MutList.push((size, dup), Array.get(writeTo, unwrap(expectedJoinSize)))
     }
 
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 

@@ -15,10 +15,10 @@
  */
 
 mod Fixpoint.Ast.Ram {
-    use Fixpoint.Boxed;
-    use Fixpoint.Predicates.PredSymMapInternal
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Boxed;
+    use Fixpoint.Predicates.PredSymMapInternal
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
 
@@ -26,7 +26,8 @@ mod Fixpoint.Ast.Ram {
     // RamProgram                                                              //
     /////////////////////////////////////////////////////////////////////////////
 
-    // RamProgram consisting of the the Ram program/statements, the starting database/facts and information about which indices should be used.
+    // A program consists of statements, the EDB, predicate renaming information,
+    // and a set of indices to be constructed.
     pub enum RamProgram {
         case Program(RamStmt, Facts, PredicateState, IndexInformation)
     }
@@ -35,7 +36,8 @@ mod Fixpoint.Ast.Ram {
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
     pub type alias Search = Vector[Int32]
     pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
-    // The first is a list of the indices that should be made. The second is a map describing where they are suppoesed to be saved at runtime.
+    // The first is a list of the indices that should be made. The second is a map 
+    // describing where they are suppoesed to be saved at runtime.
     pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
 
     /////////////////////////////////////////////////////////////////////////////

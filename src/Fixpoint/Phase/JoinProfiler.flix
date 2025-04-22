@@ -1,14 +1,17 @@
 mod Fixpoint.Phase.JoinProfiler {
-    use Fixpoint.Counter
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar}
     use Fixpoint.Ast.Ram.RamProgram.Program
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar}
     use Fixpoint.Helpers.unwrap
     use Fixpoint.Phase.Hoisting.unifyEqualitiesOp
+
+    pub enum JoinProfile {
+        case Profile(Map[RowVar, Vector[Int32]], Map[(RowVar, Vector[Int32]), Vector[Int32]])
+    }
 
     // (non-recursive, recursive rules)
     type alias Rules = (List[RelOp], List[RelOp])
 
-    pub def joinOptimize(program: RamProgram): RamProgram = {
+    pub def profileProgram(program: RamProgram): JoinProfile = {
         
         ???
     }
@@ -17,18 +20,30 @@ mod Fixpoint.Phase.JoinProfiler {
         let rules = collectRules(program);
         let (nonRecRules, recRules) = rules;
         let _ = nonRecRules |>
-        List.forEach(_ -> ());
+        List.forEach(rule -> collectBoundVars(collectRowVarRelSyms(Nil, rule), rule));
         ???
     }
 
-    def collectBoundVars(rule: RelOp, vars: Set[(RowVar, RelSym)]): Unit = region rc {
+    def collectRowVarRelSyms(collected: List[(RowVar, RelSym)], op: RelOp): List[(RowVar, RelSym)] = match op {
+        case RelOp.Search(rowVar, relSym, body) => collectRowVarRelSyms((rowVar, relSym) :: collected, body)
+        case RelOp.Query(_, _, _, _, _) => bug!("Bug in Fixpoint.Phase.JoinProfiler: Query should not exist at the current point")
+        case RelOp.If(_, body) => collectRowVarRelSyms(collected, body)
+        // We do not currently handle functional predicates. Estimating their join size cannot be done in the same way as for normal relations.
+        // Functional predicates must always be fully bound. The only question then whether it is cheaper to evaluate the functional predicate few times
+        // or evaluate the potential query/search it could be reordered with few times.
+        case RelOp.Functional(_, _, _, body, _) => collectRowVarRelSyms(collected, body)
+        case RelOp.Project(_, _) => collected
+
+    }
+
+    def collectBoundVars(vars: List[(RowVar, RelSym)], rule: RelOp): Map[RowVar, List[List[Int32]]] = region rc {
         let equalities =  MutDisjointSets.empty(rc);
         let constEqualities =  MutMap.empty(rc);
         unifyEqualitiesOp(equalities, constEqualities, rule);
-        // equivalentMap is basically a graph.
+        // equivalentMap is basically a SIP-graph.
         let equivalentMap = MutMap.empty(rc);
         vars |>
-        Set.forEach(match (rv, RelSym.Symbol(_, arity, _)) -> {
+        List.forEach(match (rv, RelSym.Symbol(_, arity, _)) -> {
             Vector.range(0, arity) |>
             Vector.forEach(i -> 
                 let load = (rv, arity);
@@ -40,80 +55,72 @@ mod Fixpoint.Phase.JoinProfiler {
                 }
             )
         });
-
-        let _ = vars |> Set.forEach(ai ->
+        let attributesForRelSym = MutMap.empty(rc);
+        let _ = vars |> List.forEach(match (rvi, relSym) ->{
             let boundForI = MutSet.empty(rc);
             vars |>
-            Set.forEach(aj ->
+            List.forEach(aj ->
                 let (rvj, RelSym.Symbol(_, arity, _)) = aj;
                 let boundByJ = MutSet.empty(rc);
                 Vector.range(0, arity) |>
                 Vector.forEach(i ->
                     unwrap(MutMap.get((rvj, i), equivalentMap)) |>
                     List.forEach(match (rv, index) -> 
-                        if(rv == rvj)
+                        if(rv == rvi)
                             MutSet.add(index, boundByJ)
                         else ()
                     )
                 );
                 MutSet.add(MutSet.toList(boundByJ), boundForI)
-            )
-        );
-        ???
+            );
+            let result = MutSet.empty(rc);
+            powerSetForEach(List.toVector(MutSet.toList(boundForI)), result);
+            let collectedSoFar = MutMap.getOrElsePut(relSym, MutSet.empty(rc), attributesForRelSym);
+            MutSet.addAll(MutSet.toSet(result), collectedSoFar)
+        });
+        attributesForRelSym |> MutMap.map(MutSet.toList) |> MutMap.toMap
     }
 
-    def powerSetForEach(values: Vector[Int32], val: Set[Int32]): Unit  =
+    def powerSetForEach(values: Vector[List[Int32]], setForJ: MutSet[List[Int32], r]): Unit \ r =
         def loop(index, val) = 
-            if(Vector.length(values) == index) 
-                ???
-                // val
-            else
-                foreach(nextIndex <- Vector.range(index + 1, Vector.length(values)))
-                    loop(nextIndex, Set.insert(Vector.get(index, values), val));
-                    // yield Set.union(List.toSet(x), y);
+            if(Vector.size(values) == index) {
+                let toInsert = Set.foldRight(boundVar -> acc -> boundVar :: acc, Nil, val);
+                MutSet.add(toInsert, setForJ)
+            } else {
+                Vector.range(index + 1, Vector.length(values) + 1) |> 
+                Vector.forEach(nextIndex -> {
+                    let newVal = List.foldLeft(acc -> boundVar -> Set.insert(boundVar, acc), val, Vector.get(index, values));     
+                    // let newVal = ???;
+                    loop(nextIndex, newVal)
+                })
+            };
         loop(0, Set.empty())
 
 
-    def collectRules(program: RamProgram): Rules = {
-        def collectLoop(rules: Rules, inUntil: Bool, s: RamStmt): Rules = match s {
+    def instrumentProgram(program: RamProgram, counter: Counter[r]): RamProgram \ r = {
+        def instrumentStmt(s: RamStmt): RamStmt = match s {
             case RamStmt.Insert(op) => 
-                let (nonRecursive, recursive) = rules;
-                if (inUntil) 
-                    (nonRecursive, op :: recursive)
-                else 
-                    (op :: nonRecursive, recursive)
-            case RamStmt.Merge(_, _) => rules
-            case RamStmt.Swap(_, _) => rules
-            case RamStmt.Purge(_) => rules
-            case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> collectLoop(acc, inUntil), rules, stmts)
-            case RamStmt.Par(stmts) => Vector.foldLeft(acc -> collectLoop(acc, inUntil), rules, stmts)
-            case RamStmt.Until(_, body) => collectLoop(rules, true, body)
-            case RamStmt.Comment(_) => rules
-            case RamStmt.EstimateJoinSize(_, _, _, _) => rules
+            // We estimate the size immediately before the insert-loop
+            let toEstimate = collectBoundVars(collectRowVarRelSyms(Nil, op), op);
+            // TODO: Make a map from (relSym, search) to the counter-position.
+            Map.forEach(relSym -> val -> {
+                val |> List.forEach(search ->
+                RamStmt.EsitmateJoinSize(relSym, -1, Counter.getNewID(counter), List.toVector(search)))
+            });
+            ???
+            case RamStmt.Merge(_, _) => s
+            case RamStmt.Swap(_, _) => s
+            case RamStmt.Purge(_) => s
+            case RamStmt.Seq(stmts) => Vector.map(instrumentStmt, stmts) |> RamStmt.Seq
+            case RamStmt.Par(stmts) => Vector.map(instrumentStmt, stmts) |> RamStmt.Par
+            case RamStmt.Until(conditions, body) => RamStmt.Until(conditions, instrumentStmt(body))
+            case RamStmt.Comment(_) => s
+            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: EstimateJoinSize should not exist at this point")
         };
         let Program(mainStmt, _, _, _) = program;
-        collectLoop((Nil, Nil), false, mainStmt)
+        instrumentStmt((Nil, Nil), false, mainStmt)
     }
     
-    pub def estimateJoinSize(rc: Region[r], relIndex: Int32, attr: Vector[Int32]): Int32 \ r = 
-        let index = ???;
-        let prevRef = Ref.fresh(rc, None);
-        let dupRef = Counter.fresh(rc);
-        let sizeRef = Counter.fresh(rc);
-        index |> BPlusTree.forEach(curr -> _ -> {
-            let isDup = 
-                Ref.get(prevRef) |> 
-                Option.exists(prev -> 
-                    attr |> Vector.forAll(i -> Array.get(i, prev) == Array.get(i, curr))
-                );
-            if (isDup) {
-                Counter.increment(dupRef)
-            } else ();
-            Ref.put(Some(curr), prevRef);
-            Counter.increment(sizeRef)
-        });
-        let size = Counter.peek(sizeRef);
-        let dup = Counter.peek(dupRef);
-        size / (size - dup)
+    
 
 }
