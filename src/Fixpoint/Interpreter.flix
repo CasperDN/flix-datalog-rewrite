@@ -213,7 +213,9 @@ mod Fixpoint.Interpreter {
             let prevRef = Ref.fresh(rc, None);
             let dupRef = Counter.fresh(rc);
             let sizeRef = Counter.fresh(rc);
-            relIndex |> BPlusTree.forEach(curr -> _ -> {
+            let (db, _, _) = ctxt;
+            let relevantTree = Array.get(relIndex, db);
+            relevantTree |> BPlusTree.forEach(curr -> _ -> {
                 let isDup = 
                     Ref.get(prevRef) |> 
                     Option.exists(prev -> 
