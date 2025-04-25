@@ -27,10 +27,9 @@ mod Fixpoint.Phase.JoinProfiler {
         // or evaluate the potential query/search it could be reordered with few times.
         case RelOp.Functional(_, _, _, body, _) => collectRowVarRelSyms(collected, body)
         case RelOp.Project(_, _) => collected
-
     }
 
-    def collectBoundVars(vars: List[(RowVar, RelSym)], rule: RelOp): Map[(RowVar, RelSym), List[Vector[Int32]]] = region rc {
+    def collectBoundVars(rc: Region[r], vars: List[(RowVar, RelSym)], attributeMap: MutMap[RowVar, MutMap[RowVar, MutSet[Int32, r], r], r], rule: RelOp): Map[(RowVar, RelSym), List[Vector[Int32]]] \ r =
         let equalities =  MutDisjointSets.empty(rc);
         let constEqualities =  MutMap.empty(rc);
         unifyEqualitiesOp(equalities, constEqualities, rule);
@@ -51,6 +50,7 @@ mod Fixpoint.Phase.JoinProfiler {
         });
         let attributesForRelSym = MutMap.empty(rc);
         let _ = vars |> List.forEach(match (rvi, relSym) ->{
+            let mapForI = MutMap.getOrElsePut(rvi, MutMap.empty(rc), attributeMap);
             let boundForI = MutSet.empty(rc);
             vars |>
             List.forEach(aj ->
@@ -65,6 +65,9 @@ mod Fixpoint.Phase.JoinProfiler {
                         else ()
                     )
                 );
+                // We should never encounter rvj again with rvi.
+                MutMap.put(rvj, boundByJ, mapForI);
+                // MutMap.putWith(_ -> old -> MutSet.add(boundByJ, old), rvj, boundByJ, mapForI);
                 MutSet.add(MutSet.toList(boundByJ), boundForI)
             );
             let result = MutSet.empty(rc);
@@ -73,7 +76,6 @@ mod Fixpoint.Phase.JoinProfiler {
             MutSet.addAll(MutSet.toSet(result), collectedSoFar)
         });
         attributesForRelSym |> MutMap.toMap |> Map.map(x -> x |> MutSet.toList |> List.map(List.toVector))
-    }
 
     def powerSetForEach(values: Vector[List[Int32]], setForJ: MutSet[List[Int32], r]): Unit \ r =
         def loop(index, val) = 
@@ -84,7 +86,6 @@ mod Fixpoint.Phase.JoinProfiler {
                 Vector.range(index + 1, Vector.length(values) + 1) |> 
                 Vector.forEach(nextIndex -> {
                     let newVal = List.foldLeft(acc -> boundVar -> Set.insert(boundVar, acc), val, Vector.get(index, values));     
-                    // let newVal = ???;
                     loop(nextIndex, newVal)
                 })
             };
@@ -105,21 +106,26 @@ mod Fixpoint.Phase.JoinProfiler {
             RamStmt.EstimateJoinSize(relSym, -1, savePos, search) :: acc
         }, Nil)
 
-    def instrumentProgram(rc: Region[r], program: RamProgram): RamProgram \ r = {
+    def combineStatemntWithEstimate(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r], s: RamStmt): RamStmt \ r = {
+        let estimateStmts = collectedToEstimateStmts(counter, rowVarToPos, collectFor);
+        if(List.isEmpty(estimateStmts)) {
+            s
+        } else {
+            List.reverse(s :: estimateStmts) |> 
+            List.toVector |>
+            RamStmt.Par
+        }
+    }
+
+
+    def instrumentProgram(rc: Region[r], program: RamProgram): (RamProgram, Map[RowVar, Map[RowVar, Set[Int32]]]) \ r = {
         let counter = Counter.fresh(rc);
         let rowVarToPos = MutMap.empty(rc);
+        let attributeMap = MutMap.empty(rc);
         def collectUntilBody(collectFor, s) = match s {
             case RamStmt.Insert(op) =>
-                let toEstimate = collectBoundVars(collectRowVarRelSyms(Nil, op), op);
+                let toEstimate = collectBoundVars(rc, collectRowVarRelSyms(Nil, op), attributeMap, op);
                 estimateToCollect(rc, toEstimate, collectFor)
-                // Map.forEach(match (rowVar, relSym) -> val -> {
-                //     val |> List.forEach(search ->
-                //         MutMap.getOrElsePut((relSym, search), MutSet.empty(rc), collectFor) |>
-                //         MutSet.add(rowVar)
-                //         // let positionInArr =
-                //         // RamStmt.EstimateJoinSize(relSym, -1, UniqueInts.getIndex(rowVar, rowVarToPos), List.toVector(search))
-                //     )
-                // }, toEstimate)
             case RamStmt.Merge(_, _) => ()
             case RamStmt.Swap(_, _) => ()
             case RamStmt.Purge(_) => ()
@@ -138,32 +144,33 @@ mod Fixpoint.Phase.JoinProfiler {
         def instrumentStmt(s: RamStmt): RamStmt = match s {
             case RamStmt.Insert(op) =>
                 // We estimate the size immediately before the insert-loop
-                let toEstimate = collectBoundVars(collectRowVarRelSyms(Nil, op), op);
+                let toEstimate = collectBoundVars(rc, collectRowVarRelSyms(Nil, op), attributeMap, op);
                 // Collect information for RelSym with search and save it for RowVar.
                 let collectFor = MutMap.empty(rc);
                 estimateToCollect(rc, toEstimate, collectFor);
-                let estimateStmts = collectedToEstimateStmts(counter, rowVarToPos, collectFor);
-                if(List.isEmpty(estimateStmts)) {
-                    s
-                } else {
-                    List.reverse(s :: estimateStmts) |> 
-                    List.toVector |>
-                    RamStmt.Par
-                }
+                combineStatemntWithEstimate(counter, rowVarToPos, collectFor, s)
             case RamStmt.Merge(_, _) => s
             case RamStmt.Swap(_, _) => s
             case RamStmt.Purge(_) => s
             case RamStmt.Seq(stmts) => Vector.map(instrumentStmt, stmts) |> RamStmt.Seq
             case RamStmt.Par(stmts) => Vector.map(instrumentStmt, stmts) |> RamStmt.Par
-            case RamStmt.Until(conditions, body) => RamStmt.Until(conditions, instrumentStmt(body))
+            case RamStmt.Until(conditions, body) => 
+                let collectFor = MutMap.empty(rc);
+                collectUntilBody(collectFor, body);
+                let newBody = combineStatemntWithEstimate(counter, rowVarToPos, collectFor, s);
+                RamStmt.Until(conditions, newBody)
             case RamStmt.Comment(_) => s
             case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: EstimateJoinSize should not exist at this point")
         };
         let Program(mainStmt, facts, predState, indexes) = program;
         // This should be perhaps 0.1%-10% of the original facts.
         let newFacts = ???;
+        let instrumented = instrumentStmt(mainStmt);
+        let collectedAttributeMap = attributeMap |> MutMap.map(rc, 
+            innerMap -> innerMap |> MutMap.map(rc, MutSet.toSet) |> MutMap.toMap
+        ) |> MutMap.toMap;
 
-        Program(instrumentStmt(mainStmt), newFacts, predState, indexes)
+        (Program(instrumented, newFacts, predState, indexes), collectedAttributeMap)
     }
     
     
