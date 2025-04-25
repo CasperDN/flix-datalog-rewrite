@@ -44,7 +44,34 @@ mod Fixpoint.Phase.JoinOptimizer {
             Vector.foldLeft(acc -> match (x, y) -> acc + x * y, 0i64);
         costToJoinPrev + arity * sum
     
-    def powerSetOfSize(size: Int32): List[List[RowVar]] = ???
+    def powerSetOfSize(size: Int32, relations: List[RowVar]): List[List[RowVar]] = region rc {
+        let len = List.length(relations);
+        if (size > len) {
+            bug!("Size greater than len")
+        } else if (size == 1) {
+            relations |> List.map(rel -> rel :: Nil)
+        } else if (size == len) { 
+            relations :: Nil
+        } else {
+            let list = MutList.empty(rc);
+            def forEach(tail) = match tail {
+                case x :: xs => 
+                    def loop(j, sizeSoFar, soFar) = {
+                        if (sizeSoFar == size) {
+                            MutList.push(soFar |> List.reverse, list)
+                        } else {
+                            List.slice(start = j, end = len, xs) |>
+                            List.forEachWithIndex(i -> next -> loop(j + i + 1, sizeSoFar + 1, next :: soFar))
+                        }
+                    };
+                    loop(0, 1, x :: Nil);
+                    forEach(xs)
+                case Nil => ()
+            };
+            forEach(relations);
+            list |> MutList.toList
+        }
+    }
 
     def getOptimalJoin(relations: List[RowVar], profile: JoinProfile): List[RowVar] = match profile {
         case JoinProfile.Profile(_, _) => region rc {
@@ -54,7 +81,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             def loop(num) = {
                 if (num >= max) ()
                 else {
-                    powerSetOfSize(num) |>
+                    powerSetOfSize(num, relations) |>
                     List.forEach(s -> {
                         let opt = s |> List.mapWithIndex(i -> attr -> {
                             let (ls, right) = List.splitAt(i, s);
