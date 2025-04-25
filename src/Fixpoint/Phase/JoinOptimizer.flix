@@ -83,17 +83,14 @@ mod Fixpoint.Phase.JoinOptimizer {
             ps ::: List.map(ss -> x :: ss, ps)
     }
 
-    pub def testPowerSet(): Unit \ IO = 
-        List.range(0, 16) |> 
-        List.forEach(k -> {
+    @Test
+    pub def testPowerSet(): Bool = 
+        List.range(2, 20) |> 
+        List.forAll(k -> {
             let set = List.range(0, k);
             let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == k - 1) |> List.sort;
             let ps2 = powerSetOfSize(k - 1, set);
-            println("ps1");
-            ps1 |> List.forEach(println);
-            println("ps2");
-            ps2 |> List.forEach(println);
-            println(ps1 == ps2)
+            ps1 == ps2
         })
 
     def getOptimalJoin(relations: List[RowVar], profile: JoinProfile): List[RowVar] = match profile {
