@@ -87,8 +87,8 @@ mod Fixpoint.Phase.JoinOptimizer {
         List.range(0, 16) |> 
         List.forEach(k -> {
             let set = List.range(0, k);
-            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == k) |> List.sort;
-            let ps2 = powerSetOfSize(k, set);
+            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == k - 1) |> List.sort;
+            let ps2 = powerSetOfSize(k - 1, set);
             println("ps1");
             ps1 |> List.forEach(println);
             println("ps2");
