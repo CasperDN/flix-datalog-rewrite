@@ -44,7 +44,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             Vector.foldLeft(acc -> match (x, y) -> acc + x * y, 0i64);
         costToJoinPrev + arity * sum
     
-    def powerSetOfSize(size: Int32, relations: List[RowVar]): List[List[RowVar]] = region rc {
+    def powerSetOfSize(size: Int32, relations: List[a]): List[List[a]] = region rc {
         let len = List.length(relations);
         if (size > len) {
             bug!("Size greater than len")
@@ -55,23 +55,46 @@ mod Fixpoint.Phase.JoinOptimizer {
         } else {
             let list = MutList.empty(rc);
             def forEach(tail) = match tail {
-                case x :: xs => 
+                case x :: xs if (List.length(xs) >= size - 1) => 
                     def loop(j, sizeSoFar, soFar) = {
                         if (sizeSoFar == size) {
                             MutList.push(soFar |> List.reverse, list)
                         } else {
-                            List.slice(start = j, end = len, xs) |>
+                            let slice = List.slice(start = j, end = len, xs);
+                            if (List.length(slice) < size - sizeSoFar) ()
+                            else
+                            slice |>
                             List.forEachWithIndex(i -> next -> loop(j + i + 1, sizeSoFar + 1, next :: soFar))
                         }
                     };
                     loop(0, 1, x :: Nil);
                     forEach(xs)
-                case Nil => ()
+                case _ => ()
             };
             forEach(relations);
             list |> MutList.toList
         }
     }
+
+    def powerSet(list: List[a]): List[List[a]] = match list {
+        case Nil => Nil :: Nil
+        case x :: xs => 
+            let ps = powerSet(xs);
+            ps ::: List.map(ss -> x :: ss, ps)
+    }
+
+    pub def testPowerSet(): Unit \ IO = 
+        List.range(0, 16) |> 
+        List.forEach(k -> {
+            let set = List.range(0, k);
+            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == k) |> List.sort;
+            let ps2 = powerSetOfSize(k, set);
+            println("ps1");
+            ps1 |> List.forEach(println);
+            println("ps2");
+            ps2 |> List.forEach(println);
+            println(ps1 == ps2)
+        })
 
     def getOptimalJoin(relations: List[RowVar], profile: JoinProfile): List[RowVar] = match profile {
         case JoinProfile.Profile(_, _) => region rc {
