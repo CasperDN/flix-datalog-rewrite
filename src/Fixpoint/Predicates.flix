@@ -20,6 +20,7 @@ mod Fixpoint.Predicates {
         use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
         use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
         use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram}
+        use Fixpoint.Boxed
 
         // (max+1, map from old index to RelSym, map from new index to old PredSym)
         pub type alias PredSymMapInternal = (Int64, Map[Int64, RelSym], Map[Int64, PredSym])
@@ -29,8 +30,8 @@ mod Fixpoint.Predicates {
             case Delta,
             case New
         }
-        pub def initialize(program: Datalog): PredSymMapInternal = 
-            let (max, forwardMap) = remapAllPredicates(program);
+        pub def initialize(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): PredSymMapInternal = 
+            let (max, forwardMap) = remapAllPredicates(program, db);
             let backMap = Map.mapWithKey(id -> v -> 
                 match v {
                     case RelSym.Symbol(PredSym(name, _), _, _) => PredSym(name, id)
@@ -106,20 +107,28 @@ mod Fixpoint.Predicates {
         ///
         /// Collect all predicate symbols in a map
         ///
-        def remapAllPredicates(program: Datalog): (Int64, Map[Int64, RelSym]) = match program {
+        def remapAllPredicates(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (Int64, Map[Int64, RelSym]) = match program {
             case Datalog(facts, rules) =>
                 let (map1, max1) = collectPredicates(rules);
                 let (map2, max2) = collectPredicates(facts);
-                (Int64.max(max1, max2) + 1i64, Map.union(map1, map2))
+                let (map3, max3) = collectDbPredicates(db);
+                let max = (max1 `Int64.max` max2) `Int64.max` max3;
+                let map = (map1 `Map.union` map2) `Map.union` map3;
+                (max + 1i64, map)
             case _ => bug!("Datalog Boxing bug")
         }
-        def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) = 
-            // Missing Java's computeIfAbsent...
 
+        def collectDbPredicates(db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (Map[Int64, RelSym], Int64) =
+            Map.foldLeftWithKey(mapMax -> relSym -> _ -> {
+                let (map, max) = mapMax;
+                let RelSym.Symbol(PredSym.PredSym(_, id), _, _) = relSym;
+                (Map.insert(id, relSym, map), Int64.max(max, id))
+            }, (Map#{}, 0i64), db)
+
+        def collectPredicates(constraints: Vector[Constraint]): (Map[Int64, RelSym], Int64) =
             Vector.foldLeft(mapMax -> constraint -> {match constraint { case Constraint(HeadAtom(PredSym(headName, headID), den, terms), body) =>
                 let (map, max) = mapMax;
                 let mapWithHead = Map.insert(headID, RelSym.Symbol(PredSym(headName, headID), Vector.length(terms), den), map);
-                // (mapWithHead, max)
                 Vector.foldLeft(mapMaxBody -> bodyConstraint -> 
                     let (mapBody, maxBody) = mapMaxBody;
                     match bodyConstraint {
@@ -127,6 +136,7 @@ mod Fixpoint.Predicates {
                         case _ => (mapBody, maxBody)
                     }, (mapWithHead, Int64.max(headID, max)), body)
             }}, (Map#{}, 0i64), constraints)
+
         pub def getNewID(self: PredSymMapInternal, predSym: PredSym, t: PredType): Int64 = match oldPredSymToPredSym(self, predSym, t) {
             case PredSym(_, id) => id
         }

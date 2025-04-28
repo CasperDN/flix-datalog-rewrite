@@ -44,7 +44,7 @@ mod Fixpoint.Phase.Compiler {
     @Internal
     pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, Int32]): RamProgram = match d {
         case Datalog(facts, rules) => region rc {
-            let predSymMaps = Predicates.initialize(d);
+            let predSymMaps = Predicates.initialize(d, db);
             let stmts = MutList.empty(rc);
             let compiledFacts = compileFacts(facts, db, predSymMaps);
             // Create map of stratum to list of rules in stratum

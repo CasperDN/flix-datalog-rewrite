@@ -60,8 +60,9 @@ mod Fixpoint.Phase.Lowering {
                     Vector.map(vec -> match den {
                         case Denotation.Relational =>
                             let tuple = vec |>
-                                Vector.mapWithIndex(i -> v ->{
-                                    Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)});
+                                Vector.mapWithIndex(i -> v -> {
+                                    Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
+                                });
                             (tuple, Boxed.None)
                         case Denotation.Latticenal(_, _, _ ,_) =>
                             let len = Vector.length(vec);
