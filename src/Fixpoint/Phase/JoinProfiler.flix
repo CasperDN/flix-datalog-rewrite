@@ -7,15 +7,22 @@ mod Fixpoint.Phase.JoinProfiler {
     use Fixpoint.Counter.Counter
 
     pub enum JoinProfile {
-        case Profile(Map[RowVar, Vector[Int32]], Map[(RowVar, Vector[Int32]), Vector[Int32]])
+        case Profile(
+            Map[RowVar, RelSym],
+            Map[RowVar, Vector[Int64]], 
+            Map[(RowVar, Vector[Int32]), Vector[Int64]]
+        )
     }
 
     // (non-recursive, recursive rules)
     type alias Rules = (List[RelOp], List[RelOp])
 
-    pub def profileProgram(program: RamProgram): JoinProfile = {
-        
-        ???
+    pub def profileProgram(program: RamProgram): (JoinProfile, Map[RowVar, Map[RowVar, Set[Int32]]]) = {
+        region rc {
+            let (instrumentedProgram, _) = instrumentProgram(rc, program); 
+            let _ = Fixpoint.Debugging.notifyPreLowering(rc, instrumentedProgram);
+            ???
+        }
     }
 
     def collectRowVarRelSyms(collected: List[(RowVar, RelSym)], op: RelOp): List[(RowVar, RelSym)] = match op {
@@ -172,7 +179,5 @@ mod Fixpoint.Phase.JoinProfiler {
 
         (Program(instrumented, newFacts, predState, indexes), collectedAttributeMap)
     }
-    
-    
 
 }

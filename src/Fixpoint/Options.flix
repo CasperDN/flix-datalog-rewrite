@@ -17,6 +17,18 @@
 mod Fixpoint.Options {
     
     ///
+    /// Returns the minimum number of facts required for running join optimization
+    ///
+    @Internal
+    pub def profilerFactMinimum(): Int32 = 100
+
+    ///
+    /// Returns the fraction of facts used in the join profiling stage
+    ///
+    @Internal
+    pub def profilerDiscrimination(): Float64 = 0.10
+
+    ///
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal

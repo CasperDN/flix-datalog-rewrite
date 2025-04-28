@@ -1,6 +1,6 @@
 mod Fixpoint.Phase.Hoisting {
     use MutDisjointSets.MutDisjointSets
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, collectRowVarArity}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
     use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
@@ -48,10 +48,18 @@ mod Fixpoint.Phase.Hoisting {
             match optNewOp {
                 case None => None 
                 case Some(newOp) => 
-                    if (MutList.size(independent) == 0) 
-                        Some(RamStmt.Insert(newOp)) 
-                    else Some(RamStmt.Insert(If(MutList.toVector(independent), newOp)))
-
+                    let isEmptyBools = 
+                        collectRelSymsStmt(stmt) |> 
+                        List.map(relSym -> IsEmpty(relSym)) |>
+                        List.toVector;
+                    let newStmt = 
+                        if (MutList.size(independent) == 0) {
+                            RamStmt.Insert(RelOp.If(isEmptyBools, newOp))
+                        } else {
+                            let bools = MutList.toVector(independent) `Vector.append` isEmptyBools;
+                            RamStmt.Insert(If(bools, newOp))
+                        };
+                    Some(newStmt)
             }
         case RamStmt.Seq(xs) =>
             let children =
@@ -77,6 +85,19 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
         case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
+    }
+
+    def collectRelSymsStmt(stmt: RamStmt): List[RelSym] \ r = match stmt {
+        case RamStmt.Insert(op) => collectRelSymsOp(op)
+        case _ => unreachable!()
+    }
+
+    def collectRelSymsOp(op: RelOp): List[RelSym] \ r = match op {
+        case RelOp.Search(_, relSym, body) => relSym :: collectRelSymsOp(body)
+        case RelOp.Query(_, relSym, _, _, body) => relSym :: collectRelSymsOp(body)
+        case RelOp.Functional(_, _, _, body, _) => collectRelSymsOp(body)
+        case RelOp.Project(_, _) => Nil
+        case RelOp.If(_, body) => collectRelSymsOp(body)
     }
 
     /// Takes the relative operator, op, region rc, and tuple-vars defined so far, seenRowVars 

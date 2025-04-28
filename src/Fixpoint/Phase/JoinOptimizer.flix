@@ -1,7 +1,7 @@
 /**
 How should functional be handled?
-Simple: For every input they are called with record it. The estimated size of a join is then the average size
-over the seen values. Like everything else this relies somewhat on a uniformity assumption which is likely
+Simple: For every input they are called with, record it. The estimated size of a join is then the average size
+over the seen values. Like everything else, this relies somewhat on a uniformity assumption which is likely
 to not be true in practice, but it is better than nothing.
 
 Join algorithm should be Selinger's algorithm. Cost computed as on page 12.
@@ -13,11 +13,10 @@ leading to choosing an unsound join order.
 
 
 mod Fixpoint.Phase.JoinOptimizer {
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp}
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
     use Fixpoint.Phase.JoinProfiler
     use Fixpoint.Phase.JoinProfiler.JoinProfile
     use Fixpoint.Helpers.unwrap
-
 
     def costToJoin(
         relations: List[RowVar], 
@@ -25,7 +24,7 @@ mod Fixpoint.Phase.JoinOptimizer {
         tuplesFromJoin: MutMap[List[RowVar], Vector[Int64], r],
         expectedJoinSize: Map[(RowVar, Vector[Int32]), Vector[Int64]],
         attributeMap: Map[RowVar, Map[RowVar, Set[Int32]]],
-        arity: Int64,
+        arity: Int32,
         s: RowVar
     ): Int64 \ r =
         let map = Map.get(s, attributeMap) |> unwrap;
@@ -36,22 +35,24 @@ mod Fixpoint.Phase.JoinOptimizer {
             Set.toList |>
             List.toVector;
         let (costToJoinPrev, _) = MutMap.get(relations, optimal) |> unwrap;
-        let sum = 
+        let ith = // TODO: Maybe multiply by arity
             Vector.zip(
                 MutMap.get(relations, tuplesFromJoin) |> unwrap, 
                 Map.get((s, attr), expectedJoinSize) |> unwrap
             ) |>
-            Vector.foldLeft(acc -> match (x, y) -> acc + x * y, 0i64);
-        costToJoinPrev + arity * sum
+            Vector.map(match (x, y) -> x * y);
+        MutMap.put(s :: relations, ith, tuplesFromJoin);
+        let sum = ith |> Vector.foldLeft(acc -> val -> acc + val, 0i64);
+        costToJoinPrev + Int32.toInt64(arity) * sum
     
-    def powerSetOfSize(size: Int32, relations: List[a]): List[List[a]] = region rc {
-        let len = List.length(relations);
+    def powerSetOfSize(size: Int32, set: List[a]): List[List[a]] = region rc {
+        let len = List.length(set);
         if (size > len) {
             bug!("Size greater than len")
         } else if (size == 1) {
-            relations |> List.map(rel -> rel :: Nil)
+            set |> List.map(x -> x :: Nil)
         } else if (size == len) { 
-            relations :: Nil
+            set :: Nil
         } else {
             let list = MutList.empty(rc);
             def forEach(tail) = match tail {
@@ -60,18 +61,17 @@ mod Fixpoint.Phase.JoinOptimizer {
                         if (sizeSoFar == size) {
                             MutList.push(soFar |> List.reverse, list)
                         } else {
-                            let slice = List.slice(start = j, end = len, xs);
-                            if (List.length(slice) < size - sizeSoFar) ()
+                            if (len - j < size - sizeSoFar) ()
                             else
-                            slice |>
-                            List.forEachWithIndex(i -> next -> loop(j + i + 1, sizeSoFar + 1, next :: soFar))
+                                List.slice(start = j, end = len, xs) |>
+                                List.forEachWithIndex(i -> next -> loop(j + i + 1, sizeSoFar + 1, next :: soFar))
                         }
                     };
                     loop(0, 1, x :: Nil);
                     forEach(xs)
                 case _ => ()
             };
-            forEach(relations);
+            forEach(set);
             list |> MutList.toList
         }
     }
@@ -85,70 +85,117 @@ mod Fixpoint.Phase.JoinOptimizer {
 
     @Test
     pub def testPowerSet(): Bool = 
-        List.range(2, 20) |> 
-        List.forAll(k -> {
-            let set = List.range(0, k);
-            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == k - 1) |> List.sort;
-            let ps2 = powerSetOfSize(k - 1, set);
+        let k = 17;
+        List.range(2,k) |> 
+        List.forAll(i -> 
+            let set = List.range(0, i);
+            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == i) |> List.sort;
+            let ps2 = powerSetOfSize(i, set);
             ps1 == ps2
-        })
+        )
 
-    def getOptimalJoin(relations: List[RowVar], profile: JoinProfile): List[RowVar] = match profile {
-        case JoinProfile.Profile(_, _) => region rc {
-            let optimal: MutMap[List[RowVar], (Int64, List[RowVar]), rc] = MutMap.empty(rc);
-            List.forEach(rel -> MutMap.put(rel :: Nil, (0i64, rel :: Nil), optimal), relations);
-            let max = List.length(relations);
-            def loop(num) = {
-                if (num >= max) ()
-                else {
-                    powerSetOfSize(num, relations) |>
-                    List.forEach(s -> {
-                        let opt = s |> List.mapWithIndex(i -> attr -> {
-                            let (ls, right) = List.splitAt(i, s);
-                            let rs = List.drop(1, right);
-                            let withoutAttr = ls ::: rs;
-                            let prevJoin = snd(MutMap.get(withoutAttr, optimal) |> unwrap);
-                            let optJoin = attr :: prevJoin;
-                            (costToJoin(withoutAttr, optimal, ???, ???, ???, ???, attr), optJoin)
-                        }) |> List.minimumBy(x -> y -> fst(x) <=> fst(y)) |> unwrap;
-                        MutMap.put(s, opt, optimal)
-                    });
-                    loop(num + 1)
-                }
-            };
-            loop(2);
-            MutMap.get(relations, optimal) |> unwrap |> snd
-        }
+    def getOptimalJoinWith(
+        expectedJoinSize: Map[(RowVar, Vector[Int32]), Vector[Int64]],
+        sizePerIter: Map[RowVar, Vector[Int64]],
+        attributeMap: Map[RowVar, Map[RowVar, Set[Int32]]],
+        arities: Map[RowVar, Int32],
+        relations: List[RowVar]
+    ): List[RowVar] = region rc {
+        let optimal: MutMap[List[RowVar], (Int64, List[RowVar]), rc] = MutMap.empty(rc);
+        let tuplesFromJoin: MutMap[List[RowVar], Vector[Int64], rc] = MutMap.empty(rc);
+        relations |> List.forEach(rel -> {
+            MutMap.put(rel :: Nil, (0i64, rel :: Nil), optimal);
+            let sizePerIterForRel = Map.get(rel, sizePerIter) |> unwrap;
+            MutMap.put(rel :: Nil, sizePerIterForRel, tuplesFromJoin)
+        });
+        let max = List.length(relations);
+        def loop(num) = {
+            if (num >= max) ()
+            else {
+                powerSetOfSize(num, relations) |>
+                List.forEach(set -> {
+                    let opt = set |> List.mapWithIndex(i -> attr -> {
+                        let (ls, right) = List.splitAt(i, set);
+                        let rs = List.drop(1, right);
+                        let withoutAttr = ls ::: rs;
+                        let prevJoin = MutMap.get(withoutAttr, optimal) |> unwrap |> snd;
+                        let optJoin = attr :: prevJoin;
+                        let arity = Map.get(attr, arities) |> unwrap;
+                        let cost = costToJoin(
+                            withoutAttr, optimal, tuplesFromJoin, expectedJoinSize, attributeMap, arity, attr
+                        );
+                        (cost, optJoin)
+                    }) |> List.minimumBy(x -> y -> fst(x) <=> fst(y)) |> unwrap;
+                    MutMap.put(set, opt, optimal)
+                });
+                loop(num + 1)
+            }
+        };
+        loop(2);
+        MutMap.get(relations, optimal) |> unwrap |> snd
     }
 
     def scheduleProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predState, indexInfo) => 
-            match JoinProfiler.profileProgram(program) {
-                case JoinProfile.Profile(sizePerIter, attrToSize) => 
-
-                    ???
+            
+            let (profile, attributeMap) = JoinProfiler.profileProgram(program);
+            match profile {
+                case JoinProfile.Profile(rowVarToRel, sizePerIter, expectedJoinSize) => 
+                    let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
+                    let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
+                    let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);
+                    RamProgram.Program(scheduledStmt, facts, predState, indexInfo)
             }
     }
 
-    def scheduleStmt(stmt: RamStmt): RamStmt = match stmt {
-        case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(op))
+    def scheduleStmt(getOptimalJoin: List[RowVar] -> List[RowVar], stmt: RamStmt): RamStmt = match stmt {
+        case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(getOptimalJoin, Nil, Nil, Nil, op))
         case RamStmt.Merge(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
-        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt, xs))
-        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(scheduleStmt, xs))
-        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, scheduleStmt(body))
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt(getOptimalJoin), xs))
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(scheduleStmt(getOptimalJoin), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, scheduleStmt(getOptimalJoin, body))
         case RamStmt.Comment(_) => stmt
         case RamStmt.EstimateJoinSize(_, _, _, _) => unreachable!()
     }
 
-    def scheduleOp(op: RelOp): RelOp = match op {
-        case RelOp.Search(rowVar, relSym, body) => ???
-        case RelOp.Query(rowVar, relSym, boolExps, _, body) => ???
-        case RelOp.Functional(_, _, _, body, _) => scheduleOp(body)
-        case RelOp.Project(_, _) => op
-        case RelOp.If(_, body) => scheduleOp(body)
+    def scheduleOp(
+        getOptimalJoin: List[RowVar] -> List[RowVar], 
+        independent: List[RelOp], 
+        ops: List[RelOp], 
+        rowVars: List[RowVar], 
+        op: RelOp
+    ): RelOp = match op {
+        case RelOp.Search(rowVar, _, body) => 
+            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
+        case RelOp.Query(rowVar, _, _, _, body) => 
+            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
+        case RelOp.Functional(_, _, _, body, _) => 
+            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
+        case RelOp.Project(_, _) => 
+            let joinOrder = List.reverse(rowVars) |> getOptimalJoin;
+            let opsAsVec = List.toVector(ops);
+            let opsInJoinOrder = region rc {
+                let asArr = Array.empty(rc, List.length(ops));
+                List.forEachWithIndex(i -> _ -> Array.put(Vector.get(i, opsAsVec), i, asArr), joinOrder);
+                Vector.toList(unchecked_cast(asArr as Vector[RelOp]))
+            };
+            let base = independent |> 
+                List.foldLeft(acc -> independentOp -> match independentOp {
+                    case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
+                    case RelOp.If(bools, _) => RelOp.If(bools, acc)
+                    case _ => unreachable!()
+                }, op);
+            opsInJoinOrder |> List.foldLeft(acc -> opInOrder -> match opInOrder {
+                case RelOp.Search(f1, f2, _) => RelOp.Search(f1, f2, acc)
+                case RelOp.Query(f1, f2, f3, f4, _) => RelOp.Query(f1, f2, f3, f4, acc)
+                case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
+                case RelOp.Project(_, _) => opInOrder
+                case RelOp.If(f1, _) => RelOp.If(f1, acc)
+            }, base)
+        case RelOp.If(_, body) => 
+            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
     }
-
-
+    
 }
