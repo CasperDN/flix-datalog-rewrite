@@ -17,7 +17,7 @@
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
     use Fixpoint.Ast.Ram.{PredicateState, RelSym, Search, IndexInformation}
-    use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Ast.Shared.{PredSym, Denotation}
     use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
@@ -82,11 +82,11 @@ mod Fixpoint.Ast.ExecutableRam {
         // (RowVar, searchIndex, writeTuple, body)
         case Search(Int32, Int32, Vector[WriteTuple], RelOp)
         // (RowVar, searchIndex, meetWith, meet, writeTuple, body)
-        case SearchLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
+        case SearchLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // (RowVar: EnvPos, searchIndex, body)
         case Query(Int32, Int32, Vector[WriteTuple], RelOp)
-        // (RowVar: EnvPos, searchIndex, meetWith, meet, writeLatticeTo, body)
-        case QueryLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, meetWith, Denotation, writeLatticeTo, body)
+        case QueryLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox])
         // The Boxed is Bot. The first Boxed -> Boxed -> Boxed is leq and the second is lub.

@@ -20,7 +20,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Boxing.{Boxing, boxWith, unboxWith}
     use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
     use Fixpoint.Boxed
-    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
+    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
     use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Helpers.{unwrap}
@@ -217,33 +217,16 @@ mod Fixpoint.Interpreter {
                     Vector.get(tuplePos, minEnv),
                     Vector.get(tuplePos, maxEnv)
                 )
-            case RelOp.SearchLattice(tuplePos, searchIndex, meetWith, glb, writes, body) => 
-                let (minEnv, maxEnv, tupleEnv, latEnv) = env;
+            case RelOp.SearchLattice(tuplePos, searchIndex, meetWith, Denotation.Latticenal(bot, leq, _, glb), writes, body) => 
+                let (minEnv, maxEnv, _, _) = env;
                 Array.get(searchIndex, db) |> 
-                BPlusTree.forEach(t -> l -> {
-                    Array.put(t, tuplePos, tupleEnv);
-                    if (meetWith == tuplePos) Array.put(l, tuplePos, latEnv)
-                    else Array.put(l `glb` Array.get(meetWith, latEnv), tuplePos, latEnv);
-                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
-                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
-                    });
-                    evalOp(rc, ctxt, body)
-                })
-            case RelOp.QueryLattice(tuplePos, searchIndex, meetWith, glb, writes, body) => 
-                let (minEnv, maxEnv, tupleEnv, latEnv) = env;
+                BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
+            case RelOp.QueryLattice(tuplePos, searchIndex, meetWith, Denotation.Latticenal(bot, leq, _, glb), writes, body) => 
+                let (minEnv, maxEnv, _, _) = env;
                 Array.get(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
-                    t -> l -> {
-                        Array.put(t, tuplePos, tupleEnv);
-                        if (meetWith == tuplePos) Array.put(l, tuplePos, latEnv) 
-                        else Array.put(l `glb` Array.get(meetWith, latEnv), tuplePos, latEnv);
-                        writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
-                            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
-                        });
-                        evalOp(rc, ctxt, body)
-                    },
+                    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt),
+                    // latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt),
                     Vector.get(tuplePos, minEnv),
                     Vector.get(tuplePos, maxEnv)
                 )
@@ -282,7 +265,50 @@ mod Fixpoint.Interpreter {
                     evalOp(rc, ctxt, then)
                 else
                     ()
-                
+            case _ => ???
+        }
+
+    def handleWriteTuples(
+        t: Tuple[r],
+        writes: Vector[WriteTuple],
+        minEnv: Vector[SearchTuple[r]],
+        maxEnv: Vector[SearchTuple[r]],
+        tuplePos: Int32,
+        tupleEnv: Array[Array[Int64, r], r]
+    ): Unit \ r =
+        writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
+            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
+            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
+        });
+        Array.put(t, tuplePos, tupleEnv)
+
+    def latticeHandlingBodyFunc(
+        rc: Region[r],
+        tuplePos: Int32,
+        meetWith: Int32,
+        glb: Boxed -> Boxed -> Boxed,
+        leq: Boxed -> Boxed -> Bool,
+        bot: Boxed,
+        writes: Vector[WriteTuple],
+        body: RelOp,
+        ctxt: Context[r],
+        t: Array[Int64, r],
+        l: Boxed
+    ): Unit \ r =
+        let (_, env, _) = ctxt;
+        let (minEnv, maxEnv, tupleEnv, latEnv) = env;
+        handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
+        // Recurse only if the meet is not bottom
+        if (meetWith == tuplePos) {
+            Array.put(l, tuplePos, latEnv);
+            evalOp(rc, ctxt, body)
+        } else {
+            let meet = l `glb` Array.get(meetWith, latEnv);
+            if (meet `leq` bot) ()
+            else {
+                Array.put(meet, tuplePos, latEnv);
+                evalOp(rc, ctxt, body)
+            }
         }
 
     def evalTermsWithLat(rc: Region[r], ctxt: Context[r], terms: Vector[RamTerm]): Array[Int64, r] \ r =

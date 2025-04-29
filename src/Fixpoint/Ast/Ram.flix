@@ -115,6 +115,8 @@ mod Fixpoint.Ast.Ram {
     pub enum BoolExp {
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
+        // (term, leq, bot). term must be a Meet or RowLoad of a lattice var.
+        case NotBot(RamTerm, Boxed -> Boxed -> Bool, Boxed)
         case Eq(RamTerm, RamTerm)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed ->Bool, RamTerm)
@@ -129,6 +131,7 @@ mod Fixpoint.Ast.Ram {
             match exp {
                 case BoolExp.IsEmpty(relSym) => "${relSym} = ∅"
                 case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
+                case BoolExp.NotBot(term, _, _) => "(${term}) ≠ ⊥"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
@@ -157,7 +160,7 @@ mod Fixpoint.Ast.Ram {
     pub enum RamTerm {
         case Lit(Boxed, RamId)
         case RowLoad(RowVar, Int32, RelSym)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamId)
+        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, (RowVar, RelSym), RamId)
         case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
         case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
@@ -177,6 +180,12 @@ mod Fixpoint.Ast.Ram {
         case RamTerm.App4(_, _, _, _, _, id) => id
         case RamTerm.App5(_, _, _, _, _, _, id) => id
     }
+
+    pub def getLatVarRamId(rv: RowVar, relSym: RelSym): RamId =
+        let arity = arityOfNonLat(relSym);
+        let RowVar.Named(id) = rv;
+        RamId.TuplePos(id, arity)
+
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {

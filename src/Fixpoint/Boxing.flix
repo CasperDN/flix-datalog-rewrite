@@ -7,11 +7,10 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxed
     use Fixpoint.Boxable
     use Fixpoint.Ast.Ram
-    use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym}
+    use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym, RamProgram, arityOfNonLat}
     use Fixpoint.Ast.Datalog.{Datalog}
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.Boxing.Boxing
-    use Fixpoint.Ast.Ram.{RelSym, RamProgram}
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use RelSymTypeInfo.{setType, getType, RealType}
     import java.lang.{Float, Double, Object, Character}
@@ -255,6 +254,7 @@ mod Fixpoint.Boxing {
                     MutDisjointSets.makeSet(RamId.RelPos(id, i), set);
                     MutDisjointSets.union(Ram.getTermRamId(term), RamId.RelPos(id, i), set)
                 }, terms)
+            case BoolExp.NotBot(term, _, _) => computeDisjointTerm(term, predTrack, set)
             case BoolExp.Eq(term1, term2) =>
                 computeDisjointTerm(term1, predTrack, set);
                 computeDisjointTerm(term2, predTrack, set);
@@ -316,11 +316,10 @@ mod Fixpoint.Boxing {
         def computeDisjointTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamTerm.Lit(_, _) => ()
             case RamTerm.RowLoad(_, _, _) => ()
-            case RamTerm.Meet(_, t1, t2, id) => 
+            case RamTerm.Meet(_, t1, (rv, relSym), id) => 
                 computeDisjointTerm(t1, predTrack, set);
-                computeDisjointTerm(t2, predTrack, set);
                 let id1 = Ram.getTermRamId(t1);
-                let id2 = Ram.getTermRamId(t2);
+                let id2 = Ram.getLatVarRamId(rv, relSym);
                 MutDisjointSets.makeSet(id1, set);
                 MutDisjointSets.makeSet(id2, set);
                 MutDisjointSets.makeSet(id, set);
@@ -463,9 +462,9 @@ mod Fixpoint.Boxing {
             match s {
                 case RamTerm.Lit(_, id) => insert(id)
                 case RamTerm.RowLoad(_, _, _) => insert(getTermRamId(s))
-                case RamTerm.Meet(_, t1, t2, RamId.Id(id)) =>
+                case RamTerm.Meet(_, t1, (rv, relSym), RamId.Id(id)) =>
                     computeMappingTermRec(t1);
-                    computeMappingTermRec(t2);
+                    insert(Ram.getLatVarRamId(rv, relSym));
                     insert(RamId.Id(id))
                 case RamTerm.App0(_, id) => insert(id)
                 case RamTerm.App1(_, t1, RamId.Id(id)) =>
@@ -528,6 +527,8 @@ mod Fixpoint.Boxing {
                 case BoolExp.Eq(t1, t2) =>
                     computeMappingTermRec(t1);
                     computeMappingTermRec(t2)
+                case BoolExp.NotBot(t1, _, _) =>
+                    computeMappingTermRec(t1)
                 case BoolExp.Guard0(_) => ()
                 case BoolExp.Guard1(_, t1) =>
                     computeMappingTermRec(t1)

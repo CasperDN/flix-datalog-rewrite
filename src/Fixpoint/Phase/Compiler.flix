@@ -381,7 +381,7 @@ mod Fixpoint.Phase.Compiler {
                             if (i < Vector.length(terms) - 1)
                                 Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                             else
-                                let f = t1 -> t2 -> RamTerm.Meet(glb, t1, t2, RamId.Id(Counter.getNewID(counter)));
+                                let f = _ -> t2 -> RamTerm.Meet(glb, t2, (rowVar, toFullSym(bodySym)), RamId.Id(Counter.getNewID(counter)));
                                 Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                     }
                     case _ => acc1
@@ -429,14 +429,14 @@ mod Fixpoint.Phase.Compiler {
                 case BodyAtom(bodySym, denotation, Polarity.Positive, _, terms) =>
                     Vector.mapWithIndex(compileBodyTerm(bodySym), terms) |>
                     Vector.zip(Vector.range(0, Vector.length(terms))) |>
-                    Vector.filterMap(match (i, t) -> match denotation {
+                    Vector.map(match (i, t) -> match denotation {
                         case Denotation.Relational => 
-                            Some(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t))
-                        case Denotation.Latticenal(_, _, _, _) =>
+                            BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
+                        case Denotation.Latticenal(bot, leq, _, _) =>
                             if (i < Vector.length(terms) - 1)
-                                Some(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t))
+                                BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
                             else
-                                None
+                                BoolExp.NotBot(t, leq, bot)
                     })
                 case BodyAtom(bodySym, _, Polarity.Negative, _, terms) =>
                     let ramTerms = Vector.mapWithIndex(compileBodyTerm(bodySym), terms);
