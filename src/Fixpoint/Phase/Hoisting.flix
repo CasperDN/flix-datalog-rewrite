@@ -113,7 +113,7 @@ mod Fixpoint.Phase.Hoisting {
                         let range = Vector.range(0, arity);
                         // Remove all terms that were bound here.
                         // If there are equalities between 2 variables from the same tuple save them for later
-                        let _intraEqualities = MutList.empty(rc);
+                        let intraEqualities = MutList.empty(rc);
                         let knownEqualities = MutList.empty(rc);
                         range |> Vector.forEach(i -> {match MutDisjointSets.find((rowVar, i), equalitySets) {
                             case None => ()
@@ -124,7 +124,8 @@ mod Fixpoint.Phase.Hoisting {
                                         if(i == i1) {
                                             ()
                                         } else {
-                                            bug!("Case not handled currently")
+                                            // This is for atoms of the form AtomName(x, x).
+                                            MutList.push(BoolExp.Eq(RamTerm.RowLoad(rv, i, rel), RamTerm.RowLoad(rv, i1, rel)), intraEqualities)
                                         }
                                     } else 
                                     MutList.push(BoolExp.Eq(RamTerm.RowLoad(rowVar, i, relSym), RamTerm.RowLoad(rv, i1, rel)), knownEqualities)
@@ -133,7 +134,7 @@ mod Fixpoint.Phase.Hoisting {
                         let hoistedToHere =
                             List.filter(x -> not isBoolGround(termMap, equalitySets, x), relevant) |>
                             List.map(simplifyLoadsBool(termMap, equalitySets));
-                        let combined = List.toVector(List.append(hoistedToHere, MutList.toList(knownEqualities)));
+                        let combined = List.toVector(MutList.toList(knownEqualities) ::: MutList.toList(intraEqualities) ::: hoistedToHere);
                         let newOp = 
                             if (Vector.length(combined) != 0)
                                 Query(rowVar, relSym, combined, -1, hoistedBody)
