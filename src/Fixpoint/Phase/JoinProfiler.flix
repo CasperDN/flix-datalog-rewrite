@@ -113,12 +113,12 @@ mod Fixpoint.Phase.JoinProfiler {
             RamStmt.EstimateJoinSize(relSym, -1, savePos, search) :: acc
         }, Nil)
 
-    def combineStatemntWithEstimate(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r], s: RamStmt): RamStmt \ r = {
+    def combineStmtWithEstimate(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r], stmt: RamStmt): RamStmt \ r = {
         let estimateStmts = collectedToEstimateStmts(counter, rowVarToPos, collectFor);
         if(List.isEmpty(estimateStmts)) {
-            s
+            stmt
         } else {
-            List.reverse(s :: estimateStmts) |> 
+            List.reverse(stmt :: estimateStmts) |> 
             List.toVector |>
             RamStmt.Par
         }
@@ -155,7 +155,7 @@ mod Fixpoint.Phase.JoinProfiler {
                 // Collect information for RelSym with search and save it for RowVar.
                 let collectFor = MutMap.empty(rc);
                 estimateToCollect(rc, toEstimate, collectFor);
-                combineStatemntWithEstimate(counter, rowVarToPos, collectFor, s)
+                combineStmtWithEstimate(counter, rowVarToPos, collectFor, s)
             case RamStmt.Merge(_, _) => s
             case RamStmt.Swap(_, _) => s
             case RamStmt.Purge(_) => s
@@ -164,7 +164,7 @@ mod Fixpoint.Phase.JoinProfiler {
             case RamStmt.Until(conditions, body) => 
                 let collectFor = MutMap.empty(rc);
                 collectUntilBody(collectFor, body);
-                let newBody = combineStatemntWithEstimate(counter, rowVarToPos, collectFor, s);
+                let newBody = combineStmtWithEstimate(counter, rowVarToPos, collectFor, s);
                 RamStmt.Until(conditions, newBody)
             case RamStmt.Comment(_) => s
             case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: EstimateJoinSize should not exist at this point")

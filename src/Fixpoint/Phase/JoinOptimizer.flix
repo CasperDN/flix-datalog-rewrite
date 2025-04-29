@@ -17,7 +17,85 @@ mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.Phase.JoinProfiler
     use Fixpoint.Phase.JoinProfiler.JoinProfile
     use Fixpoint.Helpers.unwrap
+    use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound}
 
+
+
+    def scheduleProgram(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, predState, indexInfo) => 
+            let numOfFacts = Map.foldLeft(acc -> l -> acc + Vector.length(l) |> Int32.toInt64, 0i64, facts);
+            if (numOfFacts < profilerMinimumFacts()) {
+                program 
+            } else { 
+                let takeRandomFacts = fs -> {
+                    let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
+                    if (Vector.length(filtered) < profilerFactLowerBound()) {
+                        let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
+                        Vector.take(profilerFactLowerBound(), shuffled)
+                    } else filtered
+                } |> Random.handleWithSeed(profilerSeed());
+                let profilerFacts = facts |> Map.map(takeRandomFacts);
+                let programToProfile = RamProgram.Program(stmt, profilerFacts, predState, indexInfo);
+                let (profile, attributeMap) = JoinProfiler.profileProgram(programToProfile);
+                match profile {
+                    case JoinProfile.Profile(rowVarToRel, sizePerIter, expectedJoinSize) => 
+                        let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
+                        let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
+                        let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);
+                        RamProgram.Program(scheduledStmt, facts, predState, indexInfo)
+                }
+            }
+    }
+
+    def scheduleStmt(getOptimalJoin: List[RowVar] -> List[RowVar], stmt: RamStmt): RamStmt = match stmt {
+        case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(getOptimalJoin, Nil, Nil, Nil, op))
+        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.Swap(_, _) => stmt
+        case RamStmt.Purge(_) => stmt
+        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt(getOptimalJoin), xs))
+        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(scheduleStmt(getOptimalJoin), xs))
+        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, scheduleStmt(getOptimalJoin, body))
+        case RamStmt.Comment(_) => stmt
+        case RamStmt.EstimateJoinSize(_, _, _, _) => unreachable!()
+    }
+
+    def scheduleOp(
+        getOptimalJoin: List[RowVar] -> List[RowVar], 
+        independent: List[RelOp], 
+        ops: List[RelOp], 
+        rowVars: List[RowVar], 
+        op: RelOp
+    ): RelOp = match op {
+        case RelOp.Search(rowVar, _, body) => 
+            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
+        case RelOp.Query(rowVar, _, _, _, body) => 
+            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
+        case RelOp.Functional(_, _, _, body, _) => 
+            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
+        case RelOp.Project(_, _) => 
+            let joinOrder = List.reverse(rowVars) |> getOptimalJoin;
+            let opsAsVec = List.toVector(ops);
+            let opsInJoinOrder = region rc {
+                let asArr = Array.empty(rc, List.length(ops));
+                List.forEachWithIndex(i -> _ -> Array.put(Vector.get(i, opsAsVec), i, asArr), joinOrder);
+                Vector.toList(unchecked_cast(asArr as Vector[RelOp]))
+            };
+            let base = independent |> List.foldLeft(acc -> independentOp -> match independentOp {
+                case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
+                case RelOp.If(bools, _) => RelOp.If(bools, acc)
+                case _ => unreachable!()
+            }, op);
+            opsInJoinOrder |> List.foldLeft(acc -> opInOrder -> match opInOrder {
+                case RelOp.Search(f1, f2, _) => RelOp.Search(f1, f2, acc)
+                case RelOp.Query(f1, f2, f3, f4, _) => RelOp.Query(f1, f2, f3, f4, acc)
+                case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
+                case RelOp.Project(_, _) => opInOrder
+                case RelOp.If(f1, _) => RelOp.If(f1, acc)
+            }, base)
+        case RelOp.If(_, body) => 
+            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
+    }
+    
     def costToJoin(
         relations: List[RowVar], 
         optimal: MutMap[List[RowVar], (Int64, List[RowVar]), r], 
@@ -135,67 +213,4 @@ mod Fixpoint.Phase.JoinOptimizer {
         MutMap.get(relations, optimal) |> unwrap |> snd
     }
 
-    def scheduleProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, predState, indexInfo) => 
-            
-            let (profile, attributeMap) = JoinProfiler.profileProgram(program);
-            match profile {
-                case JoinProfile.Profile(rowVarToRel, sizePerIter, expectedJoinSize) => 
-                    let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
-                    let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
-                    let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);
-                    RamProgram.Program(scheduledStmt, facts, predState, indexInfo)
-            }
-    }
-
-    def scheduleStmt(getOptimalJoin: List[RowVar] -> List[RowVar], stmt: RamStmt): RamStmt = match stmt {
-        case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(getOptimalJoin, Nil, Nil, Nil, op))
-        case RamStmt.Merge(_, _) => stmt
-        case RamStmt.Swap(_, _) => stmt
-        case RamStmt.Purge(_) => stmt
-        case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt(getOptimalJoin), xs))
-        case RamStmt.Par(xs) => RamStmt.Par(Vector.map(scheduleStmt(getOptimalJoin), xs))
-        case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, scheduleStmt(getOptimalJoin, body))
-        case RamStmt.Comment(_) => stmt
-        case RamStmt.EstimateJoinSize(_, _, _, _) => unreachable!()
-    }
-
-    def scheduleOp(
-        getOptimalJoin: List[RowVar] -> List[RowVar], 
-        independent: List[RelOp], 
-        ops: List[RelOp], 
-        rowVars: List[RowVar], 
-        op: RelOp
-    ): RelOp = match op {
-        case RelOp.Search(rowVar, _, body) => 
-            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
-        case RelOp.Query(rowVar, _, _, _, body) => 
-            scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
-        case RelOp.Functional(_, _, _, body, _) => 
-            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
-        case RelOp.Project(_, _) => 
-            let joinOrder = List.reverse(rowVars) |> getOptimalJoin;
-            let opsAsVec = List.toVector(ops);
-            let opsInJoinOrder = region rc {
-                let asArr = Array.empty(rc, List.length(ops));
-                List.forEachWithIndex(i -> _ -> Array.put(Vector.get(i, opsAsVec), i, asArr), joinOrder);
-                Vector.toList(unchecked_cast(asArr as Vector[RelOp]))
-            };
-            let base = independent |> 
-                List.foldLeft(acc -> independentOp -> match independentOp {
-                    case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
-                    case RelOp.If(bools, _) => RelOp.If(bools, acc)
-                    case _ => unreachable!()
-                }, op);
-            opsInJoinOrder |> List.foldLeft(acc -> opInOrder -> match opInOrder {
-                case RelOp.Search(f1, f2, _) => RelOp.Search(f1, f2, acc)
-                case RelOp.Query(f1, f2, f3, f4, _) => RelOp.Query(f1, f2, f3, f4, acc)
-                case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
-                case RelOp.Project(_, _) => opInOrder
-                case RelOp.If(f1, _) => RelOp.If(f1, acc)
-            }, base)
-        case RelOp.If(_, body) => 
-            scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
-    }
-    
 }

@@ -15,18 +15,6 @@
  */
 
 mod Fixpoint.Options {
-    
-    ///
-    /// Returns the minimum number of facts required for running join optimization
-    ///
-    @Internal
-    pub def profilerFactMinimum(): Int32 = 100
-
-    ///
-    /// Returns the fraction of facts used in the join profiling stage
-    ///
-    @Internal
-    pub def profilerDiscrimination(): Float64 = 0.10
 
     ///
     /// Prints the Datalog program before the fixpoint computation.
@@ -43,5 +31,29 @@ mod Fixpoint.Options {
     /// Returns the name of the debug file.
     ///
     pub def debugFileName(): String = "fixpoint_debug.txt" 
+
+    ///
+    /// Returns the seed used in the random number generator to generate
+    /// the representative input used by the profiler
+    ///
+    pub def profilerFactLowerBound(): Int32 = 10
+
+    ///
+    /// Returns the seed used in the random number generator to generate
+    /// the representative input used by the profiler
+    ///
+    pub def profilerSeed(): Int64 = 0i64
+    
+    ///
+    /// Returns the minimum number of facts required for running join optimization
+    ///
+    @Internal
+    pub def profilerMinimumFacts(): Int64 = 100i64
+
+    ///
+    /// Returns the fraction of facts used in the join profiling stage
+    ///
+    @Internal
+    pub def profilerDiscrimination(): Float64 = 0.10
 
 }
