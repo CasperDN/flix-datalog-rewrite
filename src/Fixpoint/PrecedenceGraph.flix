@@ -1,15 +1,5 @@
 mod Fixpoint.PrecedenceGraph {
     pub type alias Vertex = Int32
-
-    pub enum StronglyConnectedComponent {
-        case SCC(Set[Vertex])
-    }
-
-    instance ToString[StronglyConnectedComponent] {
-        pub def toString(x: StronglyConnectedComponent): String = match x {
-            case StronglyConnectedComponent.SCC(val) => Set.toString(val)
-        }
-    }
     
     pub struct MutGraph[r] {
         vertices: MutSet[Vertex, r],
@@ -17,11 +7,9 @@ mod Fixpoint.PrecedenceGraph {
     }
 
     mod MutGraph {
-        use Fixpoint.PrecedenceGraph.MutGraph.stronglyConnectedComponents
         use Fixpoint.Counter
         use Fixpoint.Counter.{Counter}
         use Fixpoint.PrecedenceGraph.Vertex
-        use Fixpoint.PrecedenceGraph.StronglyConnectedComponent
         use Fixpoint.Helpers.unwrap
 
         pub enum Color with Eq {
@@ -71,8 +59,16 @@ mod Fixpoint.PrecedenceGraph {
 
         pub def main199(): Unit \ IO = region rc {
             let g = empty(rc);
-            addEdge(1, 2, g);
-            println(toString(g))
+            addEdge(1, 8, g);
+            addEdge(2, 8, g);
+            addEdge(3, 8, g);
+            addEdge(4, 8, g);
+            addEdge(5, 8, g);
+            addEdge(6, 8, g);
+            addEdge(7, 8, g);
+            addEdge(8, 1, g);
+
+            println(getStratums(g))
         }
 
         ///
@@ -82,16 +78,16 @@ mod Fixpoint.PrecedenceGraph {
             let edges = MutMap.joinWith(u -> v -> "\n  ${u} -> ${v}", ",", g->adjList);
             "MutGraph(${edges})"
 
-        pub def computeSCCOrder(g: MutGraph[r]): List[StronglyConnectedComponent] \ r = region rc {
+        pub def getStratums(g: MutGraph[r]): List[Set[Vertex]] \ r = region rc {
             let components = stronglyConnectedComponents(g);
             let contractedGraph = empty(rc);
-            let componentMap: MutMap[Vertex, StronglyConnectedComponent, rc] = MutMap.empty(rc);
+            let componentMap: MutMap[Vertex, Set[Vertex], rc] = MutMap.empty(rc);
             let rootMap: MutMap[Vertex, Vertex, rc] = MutMap.empty(rc);
             components |> 
-            List.forEachWithIndex(i -> match StronglyConnectedComponent.SCC(set) -> {
-                set |> Set.forEach(partOfComp -> MutMap.put(partOfComp, i, rootMap));
-                set |> Set.forEach(partOfComp -> 
-                    MutMap.put(partOfComp, StronglyConnectedComponent.SCC(set), componentMap)
+            List.forEachWithIndex(i -> scc -> {
+                scc |> Set.forEach(partOfComp -> MutMap.put(partOfComp, i, rootMap));
+                scc |> Set.forEach(partOfComp -> 
+                    MutMap.put(partOfComp, scc, componentMap)
                 )
             });
             
@@ -107,11 +103,28 @@ mod Fixpoint.PrecedenceGraph {
             );
             let inverseRootMap = MutMap.empty(rc);
             MutMap.forEach(k -> v -> MutMap.put(v, k, inverseRootMap), rootMap);
-            topologicalSort(contractedGraph) |> List.map(u -> unwrap(MutMap.get(unwrap(MutMap.get(u, inverseRootMap)), componentMap)))
+            let sorted = topologicalSort(contractedGraph) |> 
+                List.map(u ->  unwrap(MutMap.get(unwrap(MutMap.get(u, inverseRootMap)), componentMap)));
+            let stratums = MutList.empty(rc);
+            def loop(list) = match list {
+                case s1 :: s2 :: rest =>
+                    let mergable = s1 |> Set.forAll(u -> s2 |> Set.forAll(v -> not hasEdge(u, v, g))); 
+                    let next = 
+                        if (mergable)  s1 ++ s2
+                        else {
+                            MutList.push(s1, stratums);
+                            s2
+                        };
+                    loop(next :: rest)
+                case s :: Nil => MutList.push(s, stratums)
+                case Nil => ()
+            };
+            loop(sorted);
+            stratums |> MutList.toList
         }
 
         ///
-        /// Return a `List` of the vertices of `g` i
+        /// Return a `List` of the vertices of `g` in a topologically sorted order.
         ///
         pub def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
             let sorted = MutList.empty(rc);           
@@ -147,7 +160,7 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// Returns a `List` of the strongly conected components of `g`.
         ///
-        pub def stronglyConnectedComponents(g: MutGraph[r]): List[StronglyConnectedComponent] \ r = region rc {
+        pub def stronglyConnectedComponents(g: MutGraph[r]): List[Set[Vertex]] \ r = region rc {
             let n = getSize(g);
             let disc = Array.repeat(rc, n, -1);
             let low = Array.repeat(rc, n, -1);
@@ -174,7 +187,7 @@ mod Fixpoint.PrecedenceGraph {
             MutMap.getWithDefault(u, List.empty(), g->adjList) 
 
         def stronglyConnectedComponentsVisit(
-            components: MutList[StronglyConnectedComponent, r0],
+            components: MutList[Set[Vertex], r0],
             stack: MutList[Vertex, r0],
             disc: Array[Int32, r0],
             low: Array[Int32, r0],
@@ -218,7 +231,7 @@ mod Fixpoint.PrecedenceGraph {
                         else ()
                     };
                     loop();
-                    let component = StronglyConnectedComponent.SCC(MutSet.toSet(mutSet));
+                    let component = MutSet.toSet(mutSet);
                     MutList.push(component, components)
                 }
             } else ()

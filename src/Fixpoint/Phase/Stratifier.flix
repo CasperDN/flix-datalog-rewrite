@@ -24,7 +24,6 @@ mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.BodyPredicate.BodyAtom
     use Fixpoint.PrecedenceGraph
     use Fixpoint.PrecedenceGraph.MutGraph
-    use Fixpoint.PrecedenceGraph.StronglyConnectedComponent.SCC
     use Fixpoint.Ast.Shared.PredSym
 
 
@@ -32,12 +31,12 @@ mod Fixpoint.Phase.Stratifier {
     pub def stratify(d: Datalog): Map[PredSym, Int32] = region rc {
         let graph = MutGraph.empty(rc);
         mkDepGraphInternal(graph, d);
-        let scc = MutGraph.computeSCCOrder(graph);
+        let scc = MutGraph.getStratums(graph);
         let numberOfPredSyms = MutGraph.getSize(graph);
         let predSyms = Array.empty(rc, numberOfPredSyms);
         collectPredSym(predSyms, d);
         let result = MutMap.empty(rc);
-        scc |> List.forEachWithIndex(i -> match(SCC(set)) -> 
+        scc |> List.forEachWithIndex(i -> set -> 
             set |>
             Set.forEach(x ->
                 result |>
