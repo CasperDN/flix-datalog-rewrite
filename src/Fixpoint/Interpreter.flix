@@ -56,7 +56,7 @@ mod Fixpoint.Interpreter {
         search: Vector[Int32], 
         tuples: Vector[(Vector[Int64], Boxed)]
     ): Index[r] \ r = 
-        let index = BPlusTree.empty(rc, search);
+        let index = BPlusTree.emptyWithSearchWithSearch(rc, search);
         if(Vector.isEmpty(tuples)) 
             index
         else {
@@ -158,7 +158,7 @@ mod Fixpoint.Interpreter {
         case RamStmt.Purge(index) => 
             let (db, _, _) = ctxt;
             let oldIndex = Array.get(index, db);
-            let newIndex = BPlusTree.empty(rc, BPlusTree.getSearch(oldIndex));
+            let newIndex = BPlusTree.emptyWithSearch(rc, BPlusTree.getSearch(oldIndex));
             Array.put(newIndex, index, db)
         case RamStmt.Seq(stmts) => 
             Vector.forEach(evalStmt(rc, ctxt), stmts)

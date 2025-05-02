@@ -69,7 +69,7 @@ mod Fixpoint.Boxing {
 
     pub type alias Boxing[r: Region] = (
         Vector[MutList[Boxed, r]], // List of Boxed objects 
-        Vector[MutMap[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
+        Vector[BPlusTree[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
         RelSymTypeInfo.RelSymTypeInfo[r], // Mapping from RelSym and index to RealType
         Vector[Lock[r]], // Locks on the MutList/MutMap.
     )
@@ -83,7 +83,7 @@ mod Fixpoint.Boxing {
     def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToMarshal): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
-        let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
+        let boxToInt = Vector.init(_ -> BPlusTree.empty(rc), max);
         let locks = Vector.init(_ -> Lock.mkLock(rc), max);
         let posToIndex = Array.empty(rc, max);
         let info = (intToBox, boxToInt, posToIndex, locks);
@@ -112,18 +112,18 @@ mod Fixpoint.Boxing {
         let objectMap = Vector.get(index, vecObjectMap);
         let lock = Vector.get(index, locks);
         Lock.readLock(lock);
-        match MutMap.get(box, objectMap) {
-            case Some(id) => 
-                Lock.unlockRead(lock);
-                id
-            case None =>
-                Lock.unlockRead(lock);
-                Lock.writeLock(lock);
-                let id = getNextIndex(objectList);
-                MutList.insert(box, id, objectList);
-                MutMap.put(box, Int32.toInt64(id), objectMap);
-                Lock.unlockWrite(lock);
-                Int32.toInt64(id)
+        let maybeId = BPlusTree.getWithDefault(box, -1i64, objectMap);
+        if (maybeId != -1i64) {
+            Lock.unlockRead(lock);
+            maybeId
+        } else {
+            Lock.unlockRead(lock);
+            Lock.writeLock(lock);
+            let id = getNextIndex(objectList);
+            MutList.insert(box, id, objectList);
+            BPlusTree.insert(box, Int32.toInt64(id), objectMap);
+            Lock.unlockWrite(lock);
+            Int32.toInt64(id)
         }
     }
 
