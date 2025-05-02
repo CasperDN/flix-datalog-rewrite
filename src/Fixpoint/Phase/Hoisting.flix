@@ -1,8 +1,8 @@
 mod Fixpoint.Phase.Hoisting {
     use MutDisjointSets.MutDisjointSets
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, collectRowVarArity}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
-    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
 
@@ -50,7 +50,7 @@ mod Fixpoint.Phase.Hoisting {
                 case Some(newOp) => 
                     let isEmptyBools = 
                         collectRelSymsStmt(stmt) |> 
-                        List.map(relSym -> IsEmpty(relSym)) |>
+                        List.map(relSym -> Not(IsEmpty(relSym))) |>
                         List.toVector;
                     let newStmt = 
                         if (MutList.size(independent) == 0) {
@@ -218,6 +218,7 @@ mod Fixpoint.Phase.Hoisting {
 
     @Internal
     def collectBoolVariables(bool: BoolExp): Set[Int32] =  match bool {
+        case Not(boolExp) => collectBoolVariables(boolExp)
         case IsEmpty(_) => Set#{}
         case NotMemberOf(terms, _) => Vector.foldLeft(y -> x -> Set.union(collectTermVariables(x), y), Set#{}, terms)
         case Eq(term1, term2) => Set.union(collectTermVariables(term1), collectTermVariables(term2))
@@ -253,6 +254,7 @@ mod Fixpoint.Phase.Hoisting {
     ): BoolExp \ r = 
     let simplifyTerm = simplifyLoadsTerm(termMap, equalitySets);
     match bool {
+        case Not(boolExp) => simplifyLoadsBool(termMap, equalitySets, boolExp)
         case IsEmpty(_) => bool
         case NotMemberOf(_, _) => bool
         case Eq(t1, t2) => Eq(simplifyTerm(t1), simplifyTerm(t2))
@@ -294,6 +296,7 @@ mod Fixpoint.Phase.Hoisting {
     ): Bool \ r =
         let termGround = isTermGround(termMap, equalitySets);
         match bool {
+            case Not(boolExp) => isBoolGround(termMap, equalitySets, boolExp)
             case IsEmpty(_) => unreachable!()
             case NotMemberOf(terms, _) => Vector.forAll(termGround, terms)
             case Eq(term1, term2) => termGround(term1) and termGround(term2)

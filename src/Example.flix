@@ -477,3 +477,12 @@ pub def mainApp(): Unit \ IO =
     };
     query rules select (a, b, c, d, e, f) from Bar(a, b, c, d, e, f) |> println;
     ()
+
+pub def pathh(): Unit \ IO = 
+    let edges = List.range(0,101) |> List.map(i -> (i, i+1));
+    let f = inject edges into Edge;
+    let r = #{
+        Path(x, y) :- Edge(x, y).
+        Path(x, z) :- Path(x, y), Edge(y, z).
+    };
+    query f, r select (x, y) from Path(x, y) |> println

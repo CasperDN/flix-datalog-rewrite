@@ -47,7 +47,7 @@ mod Fixpoint.Phase.IndexSelection {
             let indexes = Map.union(indexesFull, indexesMissing); 
             let (indexedStmt, indexPlacement) = region rc2 {
                 let indexState = UniqueInts.empty(rc2);
-                let indexedStmt = indexStmt(newStmt, newIndexes, indexState);
+                let indexedStmt = indexStmt(newStmt, indexes, indexState);
                 Map.forEach(relSym -> _ -> {
                     UniqueInts.getIndex((relSym, 0), indexState);
                     ()

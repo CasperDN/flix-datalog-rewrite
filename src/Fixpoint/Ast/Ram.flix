@@ -119,6 +119,7 @@ mod Fixpoint.Ast.Ram {
 
     @Internal
     pub enum BoolExp {
+        case Not(BoolExp)
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
         case Eq(RamTerm, RamTerm)
@@ -133,6 +134,7 @@ mod Fixpoint.Ast.Ram {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
+                case BoolExp.Not(boolExp) => "not (${boolExp})"
                 case BoolExp.IsEmpty(relSym) => "${relSym} = ∅"
                 case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
@@ -283,30 +285,45 @@ mod Fixpoint.Ast.Ram {
     }
 
     @Internal
-    pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = match program {
-        case RamProgram.Program(stmt, _, _, _) =>
-            collectRowVarArityStmt(stmt)
+    pub def collectRowVarOp(op: RelOp): List[RowVar] = match op {
+        case RelOp.Search(rv, _, rest) => rv :: collectRowVarOp(rest)
+        case RelOp.Query(rv, _, _, _, rest) => rv :: collectRowVarOp(rest)
+        case RelOp.Functional(_, _, _, rest, _) => collectRowVarOp(rest)
+        case RelOp.Project(_, _) => Nil
+        case RelOp.If(_, rest) => collectRowVarOp(rest)
     }
 
     @Internal
-    pub def collectRowVarArityStmt(stmt: RamStmt): List[(RowVar, Int32)] \ r = match stmt {
-        case RamStmt.Insert(op) => collectRowVarArityOp(op)
+    pub def collectRowVarRelSym(program: RamProgram): List[(RowVar, RelSym)] = match program {
+        case RamProgram.Program(stmt, _, _, _) => 
+            collectRowVarRelSymStmt(stmt)
+    }
+
+    @Internal
+    pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = 
+        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
+    
+
+    @Internal
+    def collectRowVarRelSymStmt(stmt: RamStmt): List[(RowVar, RelSym)] \ r = match stmt {
+        case RamStmt.Insert(op) => collectRowVarRelSymOp(op)
         case RamStmt.Merge(_, _) => Nil
         case RamStmt.Swap(_, _) => Nil
         case RamStmt.Purge(_) => Nil
-        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarArityStmt(x), acc), Nil, stmts)
-        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarArityStmt(x), acc), Nil, stmts)
-        case RamStmt.Until(_, rest) => collectRowVarArityStmt(rest)
+        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
+        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
+        case RamStmt.Until(_, rest) => collectRowVarRelSymStmt(rest)
         case RamStmt.Comment(_) => Nil
         case RamStmt.EstimateJoinSize(_, _, _, _) => Nil
     }
 
-    def collectRowVarArityOp(op: RelOp): List[(RowVar, Int32)] \ r = match op {
-        case RelOp.Search(rv, RelSym.Symbol(_, arity, _), rest) => (rv, arity) :: collectRowVarArityOp(rest)
-        case RelOp.Query(rv, RelSym.Symbol(_, arity, _), _, _, rest) => (rv, arity) :: collectRowVarArityOp(rest)
-        case RelOp.Functional(rv, _, terms, rest, _) =>  (rv, Vector.length(terms)) :: collectRowVarArityOp(rest)
+    @Internal
+    pub def collectRowVarRelSymOp(op: RelOp): List[(RowVar, RelSym)] \ r = match op {
+        case RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
+        case RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
+        case RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
         case RelOp.Project(_, _) => Nil
-        case RelOp.If(_, rest) => collectRowVarArityOp(rest)
+        case RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
     }
 
     /////////////////////////////////////////////////////////////////////////////

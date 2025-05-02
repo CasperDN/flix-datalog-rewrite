@@ -129,6 +129,7 @@ mod Fixpoint.Ast.ExecutableRam {
 
     @Internal
     pub enum BoolExp {
+        case Not(BoolExp)
         case IsEmpty(Int32)
         // Boxed -> Boxed -> bool is leq.
         case NotMemberOf(Vector[RamTerm], Int32, Boxed -> Boxed -> Bool, IntToBox)
@@ -144,6 +145,7 @@ mod Fixpoint.Ast.ExecutableRam {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
+                case BoolExp.Not(boolExp) => "not (${boolExp})"
                 case BoolExp.IsEmpty(relSym) => "indexes[${relSym}] = ∅"
                 case BoolExp.NotMemberOf(terms, relSym, _, _) => "(${terms |> Vector.join(", ")}) ∉ indexes[${relSym}]"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"

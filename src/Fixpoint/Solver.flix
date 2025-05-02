@@ -61,6 +61,8 @@ mod Fixpoint.Solver {
             |> Fixpoint.Debugging.notifyPreLowering("Compiler")
             |> Fixpoint.Phase.Simplifier.simplifyProgram
             |> Fixpoint.Debugging.notifyPreLowering("Simplifier")
+            |> Fixpoint.Phase.JoinOptimizer.scheduleProgram
+            |> Fixpoint.Debugging.notifyPreLowering("Join Optimizer")
             |> Fixpoint.Phase.Hoisting.hoistProgram
             |> Fixpoint.Debugging.notifyPreLowering("Hoisting")
             |> Fixpoint.Phase.IndexSelection.indexProgram
@@ -85,7 +87,7 @@ mod Fixpoint.Solver {
     }
 
     @Internal
-    def runJoinProfiler(program: ARamProgram): Vector[Vector[(Int32, Int32)]] = region rc {
+    pub def runJoinProfiler(program: ARamProgram): Vector[Vector[(Int32, Int32)]] = region rc {
         let expectedJoinSize = 
             program |> 
             Fixpoint.Phase.Hoisting.hoistProgram |> 

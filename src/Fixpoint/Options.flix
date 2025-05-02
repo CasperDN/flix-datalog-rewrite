@@ -20,28 +20,38 @@ mod Fixpoint.Options {
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal
-    pub def enableDebugging(): Bool = false
+    pub def enableDebugging(): Bool = true
+
+    ///
+    /// Prints the input and output facts when debugging is enabled.
+    ///
+    @Internal
+    pub def enableDebugPrintFacts(): Bool = true
     
     ///
     /// Prints the debug output to the file given by `debugFileName`.
     ///
+    @Internal
     pub def enableDebugToFile(): Bool = true
 
     ///
     /// Returns the name of the debug file.
     ///
+    @Internal
     pub def debugFileName(): String = "fixpoint_debug.txt" 
 
     ///
     /// Returns the seed used in the random number generator to generate
     /// the representative input used by the profiler
     ///
+    @Internal
     pub def profilerFactLowerBound(): Int32 = 10
 
     ///
     /// Returns the seed used in the random number generator to generate
     /// the representative input used by the profiler
     ///
+    @Internal
     pub def profilerSeed(): Int64 = 0i64
     
     ///

@@ -13,15 +13,14 @@ leading to choosing an unsound join order.
 
 
 mod Fixpoint.Phase.JoinOptimizer {
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
-    use Fixpoint.Phase.JoinProfiler
-    use Fixpoint.Phase.JoinProfiler.JoinProfile
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym, collectRowVarRelSym}
     use Fixpoint.Helpers.unwrap
     use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound}
+    use Fixpoint.Phase.JoinProfiler
+    use Fixpoint.Phase.JoinProfiler.JoinProfile
 
-
-
-    def scheduleProgram(program: RamProgram): RamProgram = match program {
+    @Internal
+    pub def scheduleProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predState, indexInfo) => 
             let numOfFacts = Map.foldLeft(acc -> l -> acc + Vector.length(l) |> Int32.toInt64, 0i64, facts);
             if (numOfFacts < profilerMinimumFacts()) {
@@ -33,12 +32,13 @@ mod Fixpoint.Phase.JoinOptimizer {
                         let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
                         Vector.take(profilerFactLowerBound(), shuffled)
                     } else filtered
-                } |> Random.handleWithSeed(profilerSeed());
-                let profilerFacts = facts |> Map.map(takeRandomFacts);
+                };
+                let profilerFacts = facts |> Map.map(takeRandomFacts |> Random.handleWithSeed(profilerSeed()));
                 let programToProfile = RamProgram.Program(stmt, profilerFacts, predState, indexInfo);
                 let (profile, attributeMap) = JoinProfiler.profileProgram(programToProfile);
                 match profile {
-                    case JoinProfile.Profile(rowVarToRel, sizePerIter, expectedJoinSize) => 
+                    case JoinProfile.Profile(sizePerIter, expectedJoinSize) => 
+                        let rowVarToRel = collectRowVarRelSym(program) |> List.toMap;
                         let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
                         let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
                         let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);

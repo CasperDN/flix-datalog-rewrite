@@ -187,7 +187,7 @@ mod Fixpoint.Interpreter {
         case RamStmt.Seq(stmts) => 
             Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize), stmts)
         case RamStmt.Until(test, body) =>
-            if (evalBoolExp(rc, ctxt, test)) {
+            if (evalBoolExps(rc, ctxt, test)) {
                 ()
             } else {
                 evalStmt(rc, ctxt, expectedJoinSize, body);
@@ -322,7 +322,7 @@ mod Fixpoint.Interpreter {
                     else BPlusTree.putWith(lub, tuple, latVal, relIndex)
                 }
             case RelOp.If(test, then) =>
-                if (evalBoolExp(rc, ctxt, test))
+                if (evalBoolExps(rc, ctxt, test))
                     evalOp(rc, ctxt, then)
                 else
                     ()
@@ -341,11 +341,13 @@ mod Fixpoint.Interpreter {
         loop(0);
         tuple
 
-    def evalBoolExp(rc: Region[r], ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
+
+    def evalBoolExps(rc: Region[r], ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
         let (db, env, boxing) = ctxt;
         let evalT = evalTerm(env, boxing);
         let evalBoxedT = evalBoxedTerm(env, boxing);
-        exps |> Vector.forAll(exp -> match exp {
+        def evalBoolExp(exp) = match exp {
+            case BoolExp.Not(boolExp) => not evalBoolExp(boolExp)
             case BoolExp.IsEmpty(rel) => BPlusTree.isEmptyThreadUnsafe(Array.get(rel, db))
             case BoolExp.NotMemberOf(terms, rel, leq, index) =>
                 let relIndex = Array.get(rel, db);
@@ -389,7 +391,8 @@ mod Fixpoint.Interpreter {
                 let boxed4 = evalBoxedT(t4);
                 let boxed5 = evalBoxedT(t5);
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
-        })
+        };
+        exps |> Vector.forAll(evalBoolExp)
 
     def evalBoxedTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Boxed \ {r} = 
         let evalT = evalBoxedTerm(env, boxing);
