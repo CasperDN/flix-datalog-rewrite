@@ -17,7 +17,7 @@
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
     use Fixpoint.Ast.Ram.{PredicateState, RelSym, Search, IndexInformation}
-    use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Ast.Shared.{PredSym, Denotation}
     use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
@@ -82,11 +82,11 @@ mod Fixpoint.Ast.ExecutableRam {
         // (RowVar, searchIndex, writeTuple, body)
         case Search(Int32, Int32, Vector[WriteTuple], RelOp)
         // (RowVar, searchIndex, meetWith, meet, writeTuple, body)
-        case SearchLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
+        case SearchLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // (RowVar: EnvPos, searchIndex, body)
         case Query(Int32, Int32, Vector[WriteTuple], RelOp)
-        // (RowVar: EnvPos, searchIndex, meetWith, meet, writeLatticeTo, body)
-        case QueryLattice(Int32, Int32, Int32, Boxed -> Boxed -> Boxed, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, meetWith, Denotation, writeLatticeTo, body)
+        case QueryLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox])
         // The Boxed is Bot. The first Boxed -> Boxed -> Boxed is leq and the second is lub.
@@ -130,6 +130,7 @@ mod Fixpoint.Ast.ExecutableRam {
         // Boxed -> Boxed -> bool is leq.
         case NotMemberOf(Vector[RamTerm], Int32, Boxed -> Boxed -> Bool, IntToBox)
         case Eq(RamTerm, RamTerm)
+        case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
@@ -144,6 +145,7 @@ mod Fixpoint.Ast.ExecutableRam {
                 case BoolExp.IsEmpty(relSym) => "indexes[${relSym}] = ∅"
                 case BoolExp.NotMemberOf(terms, relSym, _, _) => "(${terms |> Vector.join(", ")}) ∉ indexes[${relSym}]"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
+                case BoolExp.Leq(lhs, _, rhs) => "${lhs} ≤ (${rhs})"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"

@@ -115,6 +115,10 @@ mod Fixpoint.Ast.Ram {
     pub enum BoolExp {
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
+        // (term, leq, bot). term must be a Meet or RowLoad of a lattice var.
+        case NotBot(RamTerm, Boxed -> Boxed -> Bool, Boxed)
+        // (lowerBound, rowVar, relSym).
+        case Leq(Boxed, RowVar, RelSym)
         case Eq(RamTerm, RamTerm)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed ->Bool, RamTerm)
@@ -129,6 +133,8 @@ mod Fixpoint.Ast.Ram {
             match exp {
                 case BoolExp.IsEmpty(relSym) => "${relSym} = ∅"
                 case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
+                case BoolExp.NotBot(term, _, _) => "(${term}) ≠ ⊥"
+                case BoolExp.Leq(elem, _, term) => "${elem} ≤ (${term})"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
@@ -157,7 +163,7 @@ mod Fixpoint.Ast.Ram {
     pub enum RamTerm {
         case Lit(Boxed, RamId)
         case RowLoad(RowVar, Int32, RelSym)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, RamId)
+        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, (RowVar, RelSym), RamId)
         case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
         case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
@@ -177,6 +183,12 @@ mod Fixpoint.Ast.Ram {
         case RamTerm.App4(_, _, _, _, _, id) => id
         case RamTerm.App5(_, _, _, _, _, _, id) => id
     }
+
+    pub def getLatVarRamId(rv: RowVar, relSym: RelSym): RamId =
+        let arity = arityOfNonLat(relSym);
+        let RowVar.Named(id) = rv;
+        RamId.TuplePos(id, arity)
+
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
@@ -274,50 +286,6 @@ mod Fixpoint.Ast.Ram {
             case RamProgram.Program(_, _, predState, _) =>
                 Fixpoint.Predicates.allRelSyms(predState)
         }
-    }
-
-    @Internal
-    pub def collectRelSymStmt(soFar: MutSet[RelSym, r], stmt: RamStmt): Unit \ r = match stmt {
-        case RamStmt.Insert(op) => collectRelSymOp(soFar, op)
-        case RamStmt.Merge(r1, r2) => MutSet.add(r1, soFar); MutSet.add(r2, soFar)
-        case RamStmt.Swap(r1, r2) => MutSet.add(r1, soFar); MutSet.add(r2, soFar)
-        case RamStmt.Purge(r1) => MutSet.add(r1, soFar)
-        case RamStmt.Seq(stmts) => Vector.forEach(x -> collectRelSymStmt(soFar, x), stmts)
-        case RamStmt.Par(stmts) => Vector.forEach(x -> collectRelSymStmt(soFar, x), stmts)
-        case RamStmt.Until(bools, rest) => collectRelSymStmt(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
-        case RamStmt.Comment(_) => ()
-    }
-
-    def collectRelSymOp(soFar: MutSet[RelSym, r], op: RelOp): Unit \ r = match op {
-        case RelOp.Search(_, r1, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest)
-        case RelOp.Query(_, r1, bools, _, rest) => MutSet.add(r1, soFar); collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymBool(soFar), bools)
-        case RelOp.Functional(_, _, terms, rest, _) => collectRelSymOp(soFar, rest); Vector.forEach(collectRelSymTerm(soFar), terms)
-        case RelOp.Project(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
-        case RelOp.If(bools, rest) => Vector.forEach(collectRelSymBool(soFar), bools); collectRelSymOp(soFar, rest)
-    }
-
-    def collectRelSymBool(soFar: MutSet[RelSym, r], bool: BoolExp): Unit \ r = match bool {
-        case BoolExp.IsEmpty(r1) => MutSet.add(r1, soFar)
-        case BoolExp.NotMemberOf(terms, r1) => MutSet.add(r1, soFar); Vector.forEach(collectRelSymTerm(soFar), terms)
-        case BoolExp.Eq(t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
-        case BoolExp.Guard0(_) => ()
-        case BoolExp.Guard1(_, t1) => collectRelSymTerm(soFar, t1)
-        case BoolExp.Guard2(_, t1, t2) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2)
-        case BoolExp.Guard3(_, t1, t2, t3) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3)
-        case BoolExp.Guard4(_, t1, t2, t3, t4) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3); collectRelSymTerm(soFar, t4)
-        case BoolExp.Guard5(_, t1, t2, t3, t4, t5) => collectRelSymTerm(soFar, t1); collectRelSymTerm(soFar, t2); collectRelSymTerm(soFar, t3); collectRelSymTerm(soFar, t4); collectRelSymTerm(soFar, t5)
-    }
-
-    def collectRelSymTerm(soFar: MutSet[RelSym, r], term: RamTerm): Unit \ r = match term {
-        case RamTerm.Lit(_, _) => ()
-        case RamTerm.RowLoad(_, _, r1) => MutSet.add(r1, soFar)
-        case RamTerm.Meet(_, _, _, _) => ()
-        case RamTerm.App0(_, _) => ()
-        case RamTerm.App1(_, _, _) => ()
-        case RamTerm.App2(_, _, _, _) => ()
-        case RamTerm.App3(_, _, _, _, _) => ()
-        case RamTerm.App4(_, _, _, _, _, _) => ()
-        case RamTerm.App5(_, _, _, _, _, _, _) => ()
     }
 
     @Internal

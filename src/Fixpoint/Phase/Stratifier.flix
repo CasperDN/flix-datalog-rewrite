@@ -66,7 +66,10 @@ mod Fixpoint.Phase.Stratifier {
         case (HeadAtom(PredSym.PredSym(_, dstId), _, _), BodyAtom(PredSym.PredSym(_, srcId), _, _, _, _)) => {
             if(dstId != srcId) {
                 MutGraph.addEdge(to32(srcId), to32(dstId), graph)
-            } else ()
+            } else (
+                // We still register the edge, as it is needed later
+                MutGraph.addVertex(to32(dstId), graph)
+            )
         }
         case _ => ()
     }

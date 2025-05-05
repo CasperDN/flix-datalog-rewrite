@@ -30,6 +30,11 @@ mod Fixpoint.PrecedenceGraph {
         }
 
         ///
+        /// Adds the edge `(u, v)` to `g`.
+        ///
+        pub def addVertex(v: Vertex, g: MutGraph[r]): Unit \ r = MutSet.add(v, g->vertices)
+
+        ///
         /// Returns `true` if `g` contains the edge `(u, v)`.
         ///
         pub def hasEdge(u: Vertex, v: Vertex, g: MutGraph[r]): Bool \ r = 
