@@ -130,6 +130,7 @@ mod Fixpoint.Ast.ExecutableRam {
         // Boxed -> Boxed -> bool is leq.
         case NotMemberOf(Vector[RamTerm], Int32, Boxed -> Boxed -> Bool, IntToBox)
         case Eq(RamTerm, RamTerm)
+        case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
@@ -144,6 +145,7 @@ mod Fixpoint.Ast.ExecutableRam {
                 case BoolExp.IsEmpty(relSym) => "indexes[${relSym}] = ∅"
                 case BoolExp.NotMemberOf(terms, relSym, _, _) => "(${terms |> Vector.join(", ")}) ∉ indexes[${relSym}]"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
+                case BoolExp.Leq(lhs, _, rhs) => "${lhs} ≤ (${rhs})"
                 case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"

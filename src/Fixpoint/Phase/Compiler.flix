@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram, RamId}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, PredicateState, RamProgram, RamId, arityOfNonLat}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, Fixity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -436,7 +436,10 @@ mod Fixpoint.Phase.Compiler {
                             if (i < Vector.length(terms) - 1)
                                 BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
                             else
-                                BoolExp.NotBot(t, leq, bot)
+                            // 2 cases: Either we have P(;x), Q(;x) in which case we ensure x is not bottom.
+                            // Otherwise we have P(;12) in which case we ensure that the read value is less than or equal to 12.
+                                compileBoolForLatticeenal(t, leq, bot, rowVar, toFullSym(bodySym))
+                                // BoolExp.NotBot(t, leq, bot)
                     })
                 case BodyAtom(bodySym, _, Polarity.Negative, _, terms) =>
                     let ramTerms = Vector.mapWithIndex(compileBodyTerm(bodySym), terms);
@@ -470,6 +473,13 @@ mod Fixpoint.Phase.Compiler {
                     let t5 = unwrap(Map.get(v5, env));
                     Vector#{BoolExp.Guard5(f, t1, t2, t3, t4, t5)}
             }, body)
+
+    // Compile the RamTerm `t` to either a Leq or NotBot depending on usage.
+    def compileBoolForLatticeenal(t: RamTerm, leq: Boxed -> Boxed -> Bool, bot: Boxed, rv: RowVar, relSym: RelSym): BoolExp = match t {
+        case RamTerm.Lit(val, _) =>
+            BoolExp.Leq(val, rv, relSym)
+        case _ => BoolExp.NotBot(t, leq, bot)
+    }
 
     def unwrap(o: Option[a]): a = match o {
         case Some(a) => a

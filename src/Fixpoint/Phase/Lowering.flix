@@ -11,13 +11,13 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat}
     use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
     use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
-    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Eq => AEq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
+    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Leq => ALeq, Eq => AEq, Guard0 => AGuard0, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, Meet => AMeet, App0 => AApp0, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
 
 
     use Fixpoint.Ast.ExecutableRam.{RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
     use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, SearchLattice => ESearchLattice, QueryLattice => EQueryLattice, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
-    use Fixpoint.Ast.ExecutableRam.BoolExp.{IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Eq => EEq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
+    use Fixpoint.Ast.ExecutableRam.BoolExp.{IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
     use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App0 => EApp0, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
 
     use Fixpoint.Ast.Ram
@@ -345,6 +345,12 @@ mod Fixpoint.Phase.Lowering {
             case ANotBot(t1, _, _) => 
                 lowerMeet(t1, idToIndex, meetWithMap);
                 None
+            case ALeq(box, rv, relSym) =>
+                let leq = match toDenotation(relSym) {
+                    case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
+                    case Denotation.Latticenal(_, leq, _, _) => leq
+                };
+                Some(ELeq(box, leq, lowerRowVar(rv, idToIndex)))
             case AEq(term1, term2) => 
                 Some(EEq(lowerT(term1), lowerT(term2)))
             case AGuard0(f) => Some(EGuard0(f))

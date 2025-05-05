@@ -226,7 +226,6 @@ mod Fixpoint.Interpreter {
                 Array.get(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
                     latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt),
-                    // latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt),
                     Vector.get(tuplePos, minEnv),
                     Vector.get(tuplePos, maxEnv)
                 )
@@ -345,6 +344,10 @@ mod Fixpoint.Interpreter {
                         not (latVal `leq` curLatVal)
                 }
             case BoolExp.Eq(lhs, rhs) => evalTerm(env, boxing, lhs) == evalTerm(env, boxing, rhs)
+            case BoolExp.Leq(lhs, leq, index) => 
+                let (_, _, _, latEnv) = env;
+                let rightSide = Array.get(index, latEnv);
+                leq(lhs, rightSide)
             case BoolExp.Guard0(f) => f()
             case BoolExp.Guard1(f, t1) =>
                 let boxed1 = evalBoxedT(t1);
