@@ -68,7 +68,8 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, constructedIndexes, indexState))
         case RamStmt.Comment(_) => stmt 
         case RamStmt.EstimateJoinSize(relSym, _, writeTo, search) => 
-            RamStmt.EstimateJoinSize(relSym, lookupIndex(relSym, search, constructedIndexes), writeTo, search)
+            let absoluteIndex = UniqueInts.getIndex((relSym, lookupIndex(relSym, search, constructedIndexes)), indexState);
+            RamStmt.EstimateJoinSize(relSym, absoluteIndex, writeTo, search)
     }
 
     def lookupIndex(

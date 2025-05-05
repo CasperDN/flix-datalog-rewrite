@@ -20,6 +20,7 @@ mod Fixpoint.Debugging {
     use Fixpoint.Ast.ExecutableRam
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Boxing
 
     def flush(s: String, overwrite: Bool): Unit \ IO = 
         if (Fixpoint.Options.enableDebugToFile()) {
@@ -112,7 +113,9 @@ mod Fixpoint.Debugging {
     /// Note: Returns `s` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreInterpret(program: ExecutableRam.RamProgram): ExecutableRam.RamProgram = match program {
+    pub def notifyPreInterpret(
+        input: (ExecutableRam.RamProgram, Boxing.Boxing[rc])
+    ): (ExecutableRam.RamProgram, Boxing.Boxing[rc]) = match fst(input) {
         case ExecutableRam.RamProgram.Program(stmt, facts, _meta, (index, indexPos), _, _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
@@ -145,9 +148,9 @@ mod Fixpoint.Debugging {
                 String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", indexPos)) |> psh;
                 "" |> psh;
                 flush(MutList.join("\n", strings), false);
-                program
+                input
             } else {
-                program
+                input
             }
         } as _ \ {})
     }

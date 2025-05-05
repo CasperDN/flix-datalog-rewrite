@@ -22,7 +22,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Boxing.{Boxing, boxWith, unboxWith, RamIdToMarshal}
     use Fixpoint.Counter
     use Fixpoint.Helpers.{unwrap}
-    use Fixpoint.Phase.JoinProfiler
+    use Fixpoint.JoinProfiler.getJoinEstimateNum
     use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
 
     type alias Tuple[r: Region] = Array[Int64, r]
@@ -74,11 +74,7 @@ mod Fixpoint.Interpreter {
 
     @Internal
     pub def estimateJoinSizes(rc: Region[r], input: (RamProgram, Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
-        let expectedJoinSize = match fst(input) {
-            case RamProgram.Program(_, _, _, _, (arities, _), _) => 
-                let numOfRels = Vector.length(arities);
-                Array.empty(rc, numOfRels)
-        };
+        let expectedJoinSize = Array.empty(rc, getJoinEstimateNum(fst(input)));
         expectedJoinSize |> Array.transform(_ -> MutList.empty(rc));
         let _ = interpretWithInput(rc, Some(expectedJoinSize), input);
         expectedJoinSize        
@@ -123,7 +119,7 @@ mod Fixpoint.Interpreter {
         boxing: Boxing[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         program: RamProgram
-    ): (DatabaseExternal[r], PredSymMapInternal) \ r = match Fixpoint.Debugging.notifyPreInterpret(program) {
+    ): (DatabaseExternal[r], PredSymMapInternal) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
@@ -209,7 +205,7 @@ mod Fixpoint.Interpreter {
                 ()
             } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
         }
-        case RamStmt.EstimateJoinSize(relIndex, writeTo, attr) =>  
+        case RamStmt.EstimateJoinSize(relIndex, writeTo, attr) =>
             let prevRef = Ref.fresh(rc, None);
             let dupRef = Counter.fresh(rc);
             let sizeRef = Counter.fresh(rc);

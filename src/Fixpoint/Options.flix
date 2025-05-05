@@ -41,6 +41,11 @@ mod Fixpoint.Options {
     pub def debugFileName(): String = "fixpoint_debug.txt" 
 
     ///
+    /// Disables the join optimization phase
+    ///
+    pub def disableJoinOptimizer(): Bool = false
+
+    ///
     /// Returns the seed used in the random number generator to generate
     /// the representative input used by the profiler
     ///
@@ -64,6 +69,6 @@ mod Fixpoint.Options {
     /// Returns the fraction of facts used in the join profiling stage
     ///
     @Internal
-    pub def profilerDiscrimination(): Float64 = 0.10
+    pub def profilerDiscrimination(): Float64 = 0.20
 
 }

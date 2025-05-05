@@ -1,4 +1,5 @@
-mod Fixpoint.Phase.JoinProfiler {
+mod Fixpoint.JoinProfiler {
+    use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, collectRowVarRelSymOp}
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
@@ -14,14 +15,22 @@ mod Fixpoint.Phase.JoinProfiler {
         )
     }
 
+    instance ToString[JoinProfile] {
+        pub def toString(x: JoinProfile): String = match x {
+            case JoinProfile.Profile(sizePerIter, expectedJoinSize) =>
+                "JoinProfile(\n${sizePerIter}\n${expectedJoinSize}\n)"
+        }
+    }
+    
     // (non-recursive, recursive rules)
     type alias Rules = (List[RelOp], List[RelOp])
 
     @Internal
     pub def profileProgram(program: RamProgram): (JoinProfile, Map[RowVar, Map[RowVar, Set[Int32]]]) = region rc {
         let (instrumentedProgram, attributeMap, rowVarToPos) = instrumentProgram(rc, program); 
-        let _ = Fixpoint.Debugging.notifyPreLowering("Join Profiler", instrumentedProgram);
-        let vec = Solver.runJoinProfiler(instrumentedProgram);
+        let vec = instrumentedProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Join Profiler") |>
+            Solver.runJoinProfiler;
         let joinToSizeDup = Map.map(i -> Vector.get(i, vec), rowVarToPos);
         let sizePerIter = joinToSizeDup |> 
             Map.foldLeftWithKey(acc -> k1 -> v1 -> {
@@ -131,6 +140,9 @@ mod Fixpoint.Phase.JoinProfiler {
         }
     }
 
+    ///
+    /// Instruments the program with EstimateJoinSize statements.
+    ///
     def instrumentProgram(
         rc: Region[r], 
         program: RamProgram
@@ -147,16 +159,16 @@ mod Fixpoint.Phase.JoinProfiler {
             case RamStmt.Purge(_) => ()
             case RamStmt.Seq(stmts) => Vector.forEach(collectUntilBody(collectFor), stmts)
             case RamStmt.Par(stmts) => Vector.forEach(collectUntilBody(collectFor), stmts)
-            case RamStmt.Until(_, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: Nested until statements should not exist")
+            case RamStmt.Until(_, _) => bug!("bug in Fixpoint.JoinProfiler: Nested until statements should not exist")
             case RamStmt.Comment(_) => ()
-            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: EstimateJoinSize should not exist at this point")
+            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.JoinProfiler: EstimateJoinSize should not exist at this point")
         };
 
         // Note that estimation can be done in parallel with the expressions using them.
         // Even for statements outside the until blocks they only write to the new versions.
         // This means that we require the compiler to not change any indexes used in a given
-        // par statement. This might seem like an of course, but it would not necessarily be
-        // unsafe to do so.
+        // par statement. This might seem self evident, but it would not necessarily be
+        // unsafe to do so from a compilers perspective.
         def instrumentStmt(s: RamStmt): RamStmt = match s {
             case RamStmt.Insert(op) =>
                 // We estimate the size immediately before the insert-loop
@@ -176,16 +188,31 @@ mod Fixpoint.Phase.JoinProfiler {
                 let newBody = combineStmtWithEstimate(counter, rowVarToPos, collectFor, s);
                 RamStmt.Until(conditions, newBody)
             case RamStmt.Comment(_) => s
-            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.Phase.JoinProfiler: EstimateJoinSize should not exist at this point")
+            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.JoinProfiler: EstimateJoinSize should not exist at this point")
         };
         let RamProgram.Program(mainStmt, facts, predState, indexes) = program;
         let instrumentedStmt = instrumentStmt(mainStmt);
         let collectedAttributeMap = attributeMap |> 
             MutMap.map(rc, innerMap -> innerMap |> MutMap.map(rc, MutSet.toSet) |> MutMap.toMap) |> 
             MutMap.toMap;
-        unchecked_cast(println(instrumentedStmt) as _ \ r);
         let instrumentedProgram = RamProgram.Program(instrumentedStmt, facts, predState, indexes);
         (instrumentedProgram, collectedAttributeMap, rowVarToPos |> MutMap.toMap)
+    }
+
+    pub def getJoinEstimateNum(program: ERamProgram): Int32 =
+        let ERamProgram.Program(stmt, _, _, _, _, _) = program;
+        getJoinEstimateNumStmt(stmt) + 1
+        
+    def getJoinEstimateNumStmt(s: ERamStmt): Int32 = match s {
+        case ERamStmt.Insert(_) => -1
+        case ERamStmt.Merge(_, _, _, _) => -1
+        case ERamStmt.Swap(_, _) => -1
+        case ERamStmt.Purge(_) => -1
+        case ERamStmt.Seq(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)
+        case ERamStmt.Par(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)
+        case ERamStmt.Until(_, stmt) => getJoinEstimateNumStmt(stmt)
+        case ERamStmt.Comment(_) => -1
+        case ERamStmt.EstimateJoinSize(_, writeTo, _) => writeTo
     }
 
 }

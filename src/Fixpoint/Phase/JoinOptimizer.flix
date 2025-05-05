@@ -15,35 +15,40 @@ leading to choosing an unsound join order.
 mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym, collectRowVarRelSym}
     use Fixpoint.Helpers.unwrap
-    use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound}
-    use Fixpoint.Phase.JoinProfiler
-    use Fixpoint.Phase.JoinProfiler.JoinProfile
+    use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound, disableJoinOptimizer}
+    use Fixpoint.JoinProfiler
+    use Fixpoint.JoinProfiler.JoinProfile
 
     @Internal
-    pub def scheduleProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, predState, indexInfo) => 
+    pub def scheduleProgram(program: RamProgram): RamProgram = 
+        if (disableJoinOptimizer()) program
+        else {
+            let RamProgram.Program(_, facts, _, _) = program;
             let numOfFacts = Map.foldLeft(acc -> l -> acc + Vector.length(l) |> Int32.toInt64, 0i64, facts);
             if (numOfFacts < profilerMinimumFacts()) {
                 program 
-            } else { 
-                let takeRandomFacts = fs -> {
-                    let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
-                    if (Vector.length(filtered) < profilerFactLowerBound()) {
-                        let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
-                        Vector.take(profilerFactLowerBound(), shuffled)
-                    } else filtered
-                };
-                let profilerFacts = facts |> Map.map(takeRandomFacts |> Random.handleWithSeed(profilerSeed()));
-                let programToProfile = RamProgram.Program(stmt, profilerFacts, predState, indexInfo);
-                let (profile, attributeMap) = JoinProfiler.profileProgram(programToProfile);
-                match profile {
-                    case JoinProfile.Profile(sizePerIter, expectedJoinSize) => 
-                        let rowVarToRel = collectRowVarRelSym(program) |> List.toMap;
-                        let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
-                        let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
-                        let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);
-                        RamProgram.Program(scheduledStmt, facts, predState, indexInfo)
-                }
+            } else scheduleProgramInternal(program)
+        }
+        
+    def scheduleProgramInternal(program: RamProgram): RamProgram = match program {
+        case RamProgram.Program(stmt, facts, predState, indexInfo) => 
+            let takeRandomFacts = fs -> {
+                let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
+                if (Vector.length(filtered) < profilerFactLowerBound()) {
+                    let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
+                    Vector.take(profilerFactLowerBound(), shuffled)
+                } else filtered
+            };
+            let profilerFacts = facts |> Map.map(takeRandomFacts |> Random.handleWithSeed(profilerSeed()));
+            let programToProfile = RamProgram.Program(stmt, profilerFacts, predState, indexInfo);
+            let (profile, attributeMap) = JoinProfiler.profileProgram(programToProfile);
+            match profile {
+                case JoinProfile.Profile(sizePerIter, expectedJoinSize) => 
+                    let rowVarToRel = collectRowVarRelSym(program) |> List.toMap;
+                    let arities = Map.map(match RelSym.Symbol(_, arity, _) -> arity, rowVarToRel);
+                    let getOptimalJoin = getOptimalJoinWith(expectedJoinSize, sizePerIter, attributeMap, arities);
+                    let scheduledStmt = scheduleStmt(getOptimalJoin, stmt);
+                    RamProgram.Program(scheduledStmt, facts, predState, indexInfo)
             }
     }
 
@@ -72,13 +77,17 @@ mod Fixpoint.Phase.JoinOptimizer {
             scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
         case RelOp.Functional(_, _, _, body, _) => 
             scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
-        case RelOp.Project(_, _) => 
-            let joinOrder = List.reverse(rowVars) |> getOptimalJoin;
+        case RelOp.Project(_, _) =>
+            let joinOrder = List.sort(rowVars) |> getOptimalJoin;
             let opsAsVec = List.toVector(ops);
             let opsInJoinOrder = region rc {
                 let asArr = Array.empty(rc, List.length(ops));
-                List.forEachWithIndex(i -> _ -> Array.put(Vector.get(i, opsAsVec), i, asArr), joinOrder);
-                Vector.toList(unchecked_cast(asArr as Vector[RelOp]))
+                rowVars |> List.forEachWithIndex(i -> rv -> {
+                    let pos = List.indexOf(rv, joinOrder) |> unwrap;
+                    Array.put(Vector.get(i, opsAsVec), pos, asArr)
+                });
+                Array.reverse(asArr);
+                Array.toList(asArr)
             };
             let base = independent |> List.foldLeft(acc -> independentOp -> match independentOp {
                 case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
@@ -186,21 +195,22 @@ mod Fixpoint.Phase.JoinOptimizer {
             let sizePerIterForRel = Map.get(rel, sizePerIter) |> unwrap;
             MutMap.put(rel :: Nil, sizePerIterForRel, tuplesFromJoin)
         });
+        unchecked_cast(println("TUPLES FROM JOIN ${MutMap.toString(tuplesFromJoin)}") as _ \ rc);
         let max = List.length(relations);
         def loop(num) = {
-            if (num >= max) ()
+            if (num > max) ()
             else {
                 powerSetOfSize(num, relations) |>
                 List.forEach(set -> {
-                    let opt = set |> List.mapWithIndex(i -> attr -> {
+                    let opt = set |> List.mapWithIndex(i -> x -> {
                         let (ls, right) = List.splitAt(i, set);
                         let rs = List.drop(1, right);
-                        let withoutAttr = ls ::: rs;
-                        let prevJoin = MutMap.get(withoutAttr, optimal) |> unwrap |> snd;
-                        let optJoin = attr :: prevJoin;
-                        let arity = Map.get(attr, arities) |> unwrap;
+                        let withoutX = ls ::: rs;
+                        let prevJoin = MutMap.get(withoutX, optimal) |> unwrap |> snd;
+                        let optJoin = x :: prevJoin;
+                        let arity = Map.get(x, arities) |> unwrap;
                         let cost = costToJoin(
-                            withoutAttr, optimal, tuplesFromJoin, expectedJoinSize, attributeMap, arity, attr
+                            withoutX, optimal, tuplesFromJoin, expectedJoinSize, attributeMap, arity, x
                         );
                         (cost, optJoin)
                     }) |> List.minimumBy(x -> y -> fst(x) <=> fst(y)) |> unwrap;
@@ -210,6 +220,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             }
         };
         loop(2);
+        unchecked_cast(println(MutMap.toString(optimal)) as _ \ rc);
         MutMap.get(relations, optimal) |> unwrap |> snd
     }
 
