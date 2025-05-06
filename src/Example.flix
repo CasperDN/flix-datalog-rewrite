@@ -498,4 +498,5 @@ pub def dumb(): Unit \ IO =
     let r = #{
         C(x) :- A(x), B(x).
     };
-    query f1, f2, r select x from C(x) |> Vector.head |> println
+    query f1, f2, r select x from C(x) |> Vector.head |> println;
+    ()

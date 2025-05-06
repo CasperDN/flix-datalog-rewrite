@@ -38,7 +38,7 @@ mod Fixpoint.JoinProfiler {
                 let v2 = Vector.map(fst >> Int32.toInt64, v1);
                 Map.insert(k2, v2, acc)
             }, Map#{});
-        let expectedJoinSize = Map.map(Vector.map(snd >> Int32.toInt64), joinToSizeDup);
+        let expectedJoinSize = Map.map(Vector.map(match (size, dup) -> Int32.toInt64(size) / (Int32.toInt64(size) - Int32.toInt64(dup))), joinToSizeDup);
         let profile = JoinProfile.Profile(sizePerIter, expectedJoinSize);
         (profile, attributeMap)
     }
@@ -60,11 +60,7 @@ mod Fixpoint.JoinProfiler {
             Vector.forEach(i -> 
                 let load = (rv, i);
                 let rep = unwrap(MutDisjointSets.find(load, equalities));
-                if (rep == load)
-                    ()
-                else {
-                    MutMap.putWith(_ -> oldVal -> load :: oldVal, rep, load :: Nil, equivalentMap)
-                }
+                MutMap.putWith(_ -> oldVal -> load :: oldVal, rep, load :: Nil, equivalentMap)
             )
         });
         let attributesForRelSym = MutMap.empty(rc);
@@ -72,11 +68,12 @@ mod Fixpoint.JoinProfiler {
             let mapForI = MutMap.getOrElsePut(rvi, MutMap.empty(rc), attributeMap);
             let boundForI = MutSet.empty(rc);
             vars |>
-            List.forEach(aj ->
+            List.filter(match (rvj, _) -> rvj != rvi) |>
+            List.forEach(aj -> {
                 let (rvj, RelSym.Symbol(_, arity, _)) = aj;
                 let boundByJ = MutSet.empty(rc);
                 Vector.range(0, arity) |>
-                Vector.forEach(i ->
+                Vector.forEach(i -> {
                     match MutMap.get((rvj, i), equivalentMap) {
                         case None => ()
                         case Some(v) => 
@@ -87,12 +84,12 @@ mod Fixpoint.JoinProfiler {
                                 else ()
                             )
                     }
-                );
+                });
                 // We should never encounter rvj again with rvi.
                 MutMap.put(rvj, boundByJ, mapForI);
                 // MutMap.putWith(_ -> old -> MutSet.add(boundByJ, old), rvj, boundByJ, mapForI);
                 MutSet.add(MutSet.toList(boundByJ), boundForI)
-            );
+            });
             let result = MutSet.empty(rc);
             powerSetForEach(List.toVector(MutSet.toList(boundForI)), result);
             let collectedSoFar = MutMap.getOrElsePut((rvi, relSym), MutSet.empty(rc), attributesForRelSym);
@@ -134,9 +131,7 @@ mod Fixpoint.JoinProfiler {
         if(List.isEmpty(estimateStmts)) {
             stmt
         } else {
-            List.reverse(stmt :: estimateStmts) |> 
-            List.toVector |>
-            RamStmt.Par
+            RamStmt.Seq(Vector#{RamStmt.Par(List.toVector(estimateStmts)), stmt})
         }
     }
 
@@ -185,7 +180,7 @@ mod Fixpoint.JoinProfiler {
             case RamStmt.Until(conditions, body) => 
                 let collectFor = MutMap.empty(rc);
                 collectUntilBody(collectFor, body);
-                let newBody = combineStmtWithEstimate(counter, rowVarToPos, collectFor, s);
+                let newBody = combineStmtWithEstimate(counter, rowVarToPos, collectFor, body);
                 RamStmt.Until(conditions, newBody)
             case RamStmt.Comment(_) => s
             case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.JoinProfiler: EstimateJoinSize should not exist at this point")

@@ -1,17 +1,3 @@
-Renaming:
-    Query => Query
-Ram => Ram
-Change indentation in BPlusTree
-Change RowVar back to RowVar
-Use Redef for Array Order
-
-IndexSelection must generate an index for all relations. Also relations with no indexes.
-^Extra note: new_path has same index as the first delta_path
-
 In project: optimize `bot` out
 
-Leq doesn't add anything. Ask Magnus.
-
-Possible mini-optimization: Check whether any relations is empty and terminate early if so.
-
-Stratifier: Parallel in stratums
+Add functional and constant handling to join-optimizer.

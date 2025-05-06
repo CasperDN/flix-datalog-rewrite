@@ -195,7 +195,6 @@ mod Fixpoint.Phase.JoinOptimizer {
             let sizePerIterForRel = Map.get(rel, sizePerIter) |> unwrap;
             MutMap.put(rel :: Nil, sizePerIterForRel, tuplesFromJoin)
         });
-        unchecked_cast(println("TUPLES FROM JOIN ${MutMap.toString(tuplesFromJoin)}") as _ \ rc);
         let max = List.length(relations);
         def loop(num) = {
             if (num > max) ()
@@ -220,7 +219,6 @@ mod Fixpoint.Phase.JoinOptimizer {
             }
         };
         loop(2);
-        unchecked_cast(println(MutMap.toString(optimal)) as _ \ rc);
         MutMap.get(relations, optimal) |> unwrap |> snd
     }
 
