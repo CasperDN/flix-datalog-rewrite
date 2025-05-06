@@ -1,6 +1,8 @@
 /*
  * Copyright 2021 Magnus Madsen
  * Copyright 2021 Benjamin Dahse
+ * Copyright 2025 Casper Dalgaard Nielsen
+ *                Adam Yasser Tallouzi
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,8 +127,6 @@ mod Fixpoint.Ast.Shared {
     instance ToString[PredSym] {
         pub def toString(predSym: PredSym): String = match predSym {
             case PredSym.PredSym(name, id) => "${name}%${id}"
-            // case PredSym.PredSym(name, _) => "${name}"
-            // case PredSym.PredSym(name, id) => if (id == 0i64) name else "${name}%${id}"
         }
     }
 
