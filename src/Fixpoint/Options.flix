@@ -20,7 +20,7 @@ mod Fixpoint.Options {
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal
-    pub def enableDebugging(): Bool = true
+    pub def enableDebugging(): Bool = false
 
     ///
     /// Prints the input and output facts when debugging is enabled.
