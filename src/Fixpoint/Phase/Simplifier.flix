@@ -89,6 +89,7 @@ mod Fixpoint.Phase.Simplifier {
             }
         case RamStmt.Comment(_) => Some(stmt)
         case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper, xs)))
+        case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
     }
 
     def simplifyOp(op: RelOp): Option[RelOp] = match op {
@@ -145,11 +146,11 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Merge(_, _) => true
         case RamStmt.Swap(_, _) => true
         case RamStmt.Purge(_) => true
-        case RamStmt.Seq(xs) =>
-            Vector.forAll(isOnlyMergeSwapPurge, xs)
+        case RamStmt.Seq(xs) => Vector.forAll(isOnlyMergeSwapPurge, xs)
         case RamStmt.Until(_, _) => false
         case RamStmt.Comment(_) => true
         case RamStmt.Par(xs) => Vector.forAll(isOnlyMergeSwapPurge, xs)
+        case RamStmt.EstimateJoinSize(_, _, _, _) => false
     }
     
 }

@@ -2,7 +2,7 @@ mod Fixpoint.Phase.Hoisting {
     use MutDisjointSets.MutDisjointSets
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, arityOfNonLat}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
-    use Fixpoint.Ast.Ram.BoolExp.{IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
 
@@ -48,10 +48,18 @@ mod Fixpoint.Phase.Hoisting {
             match optNewOp {
                 case None => None 
                 case Some(newOp) => 
-                    if (MutList.size(independent) == 0) 
-                        Some(RamStmt.Insert(newOp)) 
-                    else Some(RamStmt.Insert(If(MutList.toVector(independent), newOp)))
-
+                    let isEmptyBools = 
+                        collectRelSymsStmt(stmt) |> 
+                        List.map(relSym -> Not(IsEmpty(relSym))) |>
+                        List.toVector;
+                    let newStmt = 
+                        if (MutList.size(independent) == 0) {
+                            RamStmt.Insert(RelOp.If(isEmptyBools, newOp))
+                        } else {
+                            let bools = MutList.toVector(independent) `Vector.append` isEmptyBools;
+                            RamStmt.Insert(If(bools, newOp))
+                        };
+                    Some(newStmt)
             }
         case RamStmt.Seq(xs) =>
             let children =
@@ -76,6 +84,20 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
+        case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
+    }
+
+    def collectRelSymsStmt(stmt: RamStmt): List[RelSym] \ r = match stmt {
+        case RamStmt.Insert(op) => collectRelSymsOp(op)
+        case _ => unreachable!()
+    }
+
+    def collectRelSymsOp(op: RelOp): List[RelSym] \ r = match op {
+        case RelOp.Search(_, relSym, body) => relSym :: collectRelSymsOp(body)
+        case RelOp.Query(_, relSym, _, _, body) => relSym :: collectRelSymsOp(body)
+        case RelOp.Functional(_, _, _, body, _) => collectRelSymsOp(body)
+        case RelOp.Project(_, _) => Nil
+        case RelOp.If(_, body) => collectRelSymsOp(body)
     }
 
     /// Takes the relative operator, op, region rc, and tuple-vars defined so far, seenRowVars 
@@ -184,7 +206,7 @@ mod Fixpoint.Phase.Hoisting {
                     if (Set.size(vars) == 0)
                         MutList.push(b, independentBool) 
                     else
-                    // Don't collect Eq's. They are handled separately to ensure we refer to the earliest evaluated expression.
+                        // Don't collect Eq's. They are handled separately to ensure we refer to the earliest evaluated expression.
                         Set.forEach(v -> match b {
                             case Eq(_, _) => ()
                             case _ => let boolList = MutMap.getOrElsePut(v, MutList.empty(rc), idToBool);
@@ -197,6 +219,7 @@ mod Fixpoint.Phase.Hoisting {
 
     @Internal
     def collectBoolVariables(bool: BoolExp): Set[Int32] =  match bool {
+        case Not(boolExp) => collectBoolVariables(boolExp)
         case IsEmpty(_) => Set#{}
         case NotMemberOf(terms, _) => Vector.foldLeft(y -> x -> Set.union(collectTermVariables(x), y), Set#{}, terms)
         case BoolExp.NotBot(term1, _, _) => collectTermVariables(term1)
@@ -234,6 +257,7 @@ mod Fixpoint.Phase.Hoisting {
     ): BoolExp \ r = 
     let simplifyTerm = simplifyLoadsTerm(termMap, equalitySets);
     match bool {
+        case Not(boolExp) => simplifyLoadsBool(termMap, equalitySets, boolExp)
         case IsEmpty(_) => bool
         case NotMemberOf(_, _) => bool
         case BoolExp.NotBot(_, _, _) => bool
@@ -277,6 +301,7 @@ mod Fixpoint.Phase.Hoisting {
     ): Bool \ r =
         let termGround = isTermGround(termMap, equalitySets);
         match bool {
+            case Not(boolExp) => isBoolGround(termMap, equalitySets, boolExp)
             case IsEmpty(_) => unreachable!()
             case NotMemberOf(terms, _) => Vector.forAll(termGround, terms)
             case BoolExp.NotBot(t1, _, _) => termGround(t1)
@@ -330,6 +355,7 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()
+        case RamStmt.EstimateJoinSize(_, _, _, _) => ()
     }
 
     def unifyBoolExp(
@@ -347,7 +373,8 @@ mod Fixpoint.Phase.Hoisting {
         case _ => ()
     }
 
-    def unifyEqualitiesOp(
+    @Internal
+    pub def unifyEqualitiesOp(
         equalitySets: MutDisjointSets[Load, r], 
         constEqualities: MutMap[Load, List[(Boxed, RamId)], r],
         op: RelOp

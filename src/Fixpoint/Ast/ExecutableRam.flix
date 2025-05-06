@@ -54,6 +54,7 @@ mod Fixpoint.Ast.ExecutableRam {
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
         case Comment(String)
+        case EstimateJoinSize(Int32, Int32, Vector[Int32])
     }
 
     instance ToString[RamStmt] {
@@ -70,6 +71,8 @@ mod Fixpoint.Ast.ExecutableRam {
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
+                case RamStmt.EstimateJoinSize(index, writeTo, attr) => 
+                    "EstimateJoinSize(<optimized out>, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"
             }
     }
 
@@ -126,6 +129,7 @@ mod Fixpoint.Ast.ExecutableRam {
 
     @Internal
     pub enum BoolExp {
+        case Not(BoolExp)
         case IsEmpty(Int32)
         // Boxed -> Boxed -> bool is leq.
         case NotMemberOf(Vector[RamTerm], Int32, Boxed -> Boxed -> Bool, IntToBox)
@@ -142,6 +146,7 @@ mod Fixpoint.Ast.ExecutableRam {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
+                case BoolExp.Not(boolExp) => "not (${boolExp})"
                 case BoolExp.IsEmpty(relSym) => "indexes[${relSym}] = ∅"
                 case BoolExp.NotMemberOf(terms, relSym, _, _) => "(${terms |> Vector.join(", ")}) ∉ indexes[${relSym}]"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"

@@ -201,6 +201,7 @@ mod Fixpoint.Boxing {
             case RamStmt.Par(stmts) => Vector.forEach(x -> computeDisjointStmt(x, predTrack, set), stmts)
             case RamStmt.Until(bools, stmt) => computeDisjointStmt(stmt, predTrack, set); Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools)
             case RamStmt.Comment(_) => ()
+            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
         def computeDisjointOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
@@ -246,6 +247,7 @@ mod Fixpoint.Boxing {
         }
 
         def computeDisjointBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
+            case BoolExp.Not(boolExp) => computeDisjointBool(boolExp, predTrack, set)
             case BoolExp.IsEmpty(_) => ()
             case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, id), _, _)) =>
                 Vector.forEach(term -> computeDisjointTerm(term, predTrack, set), terms);
@@ -438,6 +440,7 @@ mod Fixpoint.Boxing {
                 computeMappingStmt(stmt, predTrack, set, map, counter); 
                 Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools)
             case RamStmt.Comment(_) => ()
+            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
 
@@ -537,6 +540,7 @@ mod Fixpoint.Boxing {
             let insert = x -> insertIndex(x, set, map, counter);
             let computeMappingTermRec = x -> computeMappingTerm(x, predicates, set, map, counter);
             match s {
+                case BoolExp.Not(boolExp) => computeMappingBool(boolExp, predicates, set, map, counter)
                 case BoolExp.IsEmpty(_) => ()
                 case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
                     Vector.forEach(x -> computeMappingTermRec(x), terms);
@@ -593,10 +597,6 @@ mod Fixpoint.Boxing {
                     MutMap.put(repID, newID, map)
             }
     }
-
-
-
-
 
     def unwrap(v: Option[a]): a = match v {
         case Some(x) => x
