@@ -15,7 +15,7 @@
  */
 
 mod Fixpoint.Interpreter {
-    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram}
+    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
     use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId, RamId}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Boxed

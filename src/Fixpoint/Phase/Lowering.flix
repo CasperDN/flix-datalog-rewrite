@@ -332,7 +332,9 @@ mod Fixpoint.Phase.Lowering {
         let idToMarshall = fst(marshalling);
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
         match bool {
-            case ANot(s) => ENot(lowerBool(s, map, marshalling, indexInfo, meetWithMap))
+            case ANot(s) => 
+                lowerBool(s, idToIndex, marshalling, indexInfo, meetWithMap) |>
+                Option.map(ENot)
             case AIsEmpty(s) =>
                 let (_, placements) = indexInfo;
                 let sPos = unwrap(Map.get((s, 0), placements));
