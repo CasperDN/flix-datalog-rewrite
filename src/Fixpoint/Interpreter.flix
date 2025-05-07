@@ -18,7 +18,7 @@
 
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
-    use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId, RamId}
+    use Fixpoint.Ast.Ram.{RelSym, toDenotation, Predicates, arityOfNonLat, toId, RamId}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
@@ -26,7 +26,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Counter
     use Fixpoint.Helpers.{unwrap}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
-    use Fixpoint.Predicates.{PredSymMapInternal, allFullRelSyms}
+    use Fixpoint.Predicates.{allFullRelSyms}
 
     type alias Tuple[r: Region] = Array[Int64, r]
 
@@ -83,7 +83,7 @@ mod Fixpoint.Interpreter {
         expectedJoinSize        
 
     @Internal
-    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], PredSymMapInternal) \ r = 
+    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (DatabaseExternal[r], Predicates) \ r = 
         interpretWithInput(rc, None, input)
 
     @Internal
@@ -91,7 +91,7 @@ mod Fixpoint.Interpreter {
         rc: Region[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         input: (RamProgram, Boxing[r])
-    ): (DatabaseExternal[r], PredSymMapInternal) \ r =
+    ): (DatabaseExternal[r], Predicates) \ r =
         let (program, boxing) = input;
         let indexes = match program {
             case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) => 
@@ -122,7 +122,7 @@ mod Fixpoint.Interpreter {
         boxing: Boxing[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         program: RamProgram
-    ): (DatabaseExternal[r], PredSymMapInternal) \ r = match program {
+    ): (DatabaseExternal[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
@@ -139,7 +139,7 @@ mod Fixpoint.Interpreter {
     }
 
 
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: PredSymMapInternal, boxingIndexes: RamIdToMarshal): DatabaseExternal[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToMarshal): DatabaseExternal[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {

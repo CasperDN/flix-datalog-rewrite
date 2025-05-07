@@ -17,12 +17,13 @@
 
 mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, collectRowVarRelSymOp}
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar}
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
     use Fixpoint.Helpers.unwrap
     use Fixpoint.Phase.Hoisting.unifyEqualitiesOp
     use Fixpoint.Solver
+    use Fixpoint.Helpers.{collectRowVarRelSymOp}
 
     @Internal
     pub enum JoinProfile {

@@ -29,6 +29,7 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.Boxing.Boxing
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
+    use Fixpoint.Predicates.relSymsOfProgram
     use RelSymTypeInfo.{setType, getType, RealType}
     import java.lang.{Float, Double, Object, Character}
 
@@ -103,7 +104,7 @@ mod Fixpoint.Boxing {
         let locks = Vector.init(_ -> Lock.mkLock(rc), max);
         let posToIndex = Array.empty(rc, max);
         let info = (intToBox, boxToInt, posToIndex, locks);
-        let relSyms = Ram.collectRelSym(program);
+        let relSyms = relSymsOfProgram(program);
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
@@ -183,8 +184,8 @@ mod Fixpoint.Boxing {
     mod Equality {
         use Fixpoint.Ast.Ram.getTermRamId
         use Fixpoint.Ast.Ram
-        use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
-        use Fixpoint.Predicates.{PredSymMapInternal, PredType, idToFullPredID, fullIDtoPredType}
+        use Fixpoint.Ast.Ram.{RamId, Predicates, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
+        use Fixpoint.Predicates.{PredType, idToFullPredID, fullIDtoPredType, relSymsOfProgram}
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Counter
@@ -194,7 +195,7 @@ mod Fixpoint.Boxing {
             let disjointSet = MutDisjointSets.empty(rc);
             let RamProgram.Program(s, _, predTrack, _) = d;
             computeDisjointStmt(s, predTrack, disjointSet);
-            let relSyms = Ram.collectRelSym(d);
+            let relSyms = relSymsOfProgram(d);
             List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(id, i), disjointSet), Vector.range(0, arity))
             }, relSyms);
@@ -209,7 +210,7 @@ mod Fixpoint.Boxing {
             MutMap.toMap(mutMap)
         }
 
-        def computeDisjointStmt(s: RamStmt, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
+        def computeDisjointStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeDisjointOp(rest, predTrack, set)
             case RamStmt.Merge(rel1, rel2) => unifyPredicates(rel1, rel2, set)
             case RamStmt.Swap(rel1, rel2) => unifyPredicates(rel1, rel2, set)
@@ -221,17 +222,17 @@ mod Fixpoint.Boxing {
             case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
-        def computeDisjointOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
-            case RelOp.Search(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
-                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
+        def computeDisjointOp(s: RelOp, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
+            case RelOp.Search(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(rv, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
-                Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
+                Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(rv, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 computeDisjointOp(rest, predTrack, set)
-            case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
-                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(id, i), set), Vector.range(0, arity));
+            case RelOp.Query(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.TuplePos(rv, i), set), Vector.range(0, arity));
                 Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(predSym, i), set), Vector.range(0, arity));
-                Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(id, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
+                Vector.forEach(i -> MutDisjointSets.union(RamId.TuplePos(rv, i), RamId.RelPos(predSym, i), set), Vector.range(0, arity));
                 unifyPredTypes(predSym, arity, predTrack, set);
                 Vector.forEach(x -> computeDisjointBool(x, predTrack, set), bools);
                 computeDisjointOp(rest, predTrack, set)
@@ -245,7 +246,7 @@ mod Fixpoint.Boxing {
                 }, inputTerms);
                 Vector.range(0, arity) |>
                 Vector.forEach(i -> 
-                    MutDisjointSets.makeSet(RamId.TuplePos(id, i), set)
+                    MutDisjointSets.makeSet(RamId.TuplePos(RowVar.Named(id), i), set)
                 );
                 computeDisjointOp(rest, predTrack, set)
             case RelOp.Project(terms, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
@@ -263,7 +264,7 @@ mod Fixpoint.Boxing {
                 computeDisjointOp(rest, predTrack, set)
         }
 
-        def computeDisjointBool(s: BoolExp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
+        def computeDisjointBool(s: BoolExp, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case BoolExp.Not(boolExp) => computeDisjointBool(boolExp, predTrack, set)
             case BoolExp.IsEmpty(_) => ()
             case BoolExp.NotMemberOf(terms, RelSym.Symbol(PredSym.PredSym(_, id), _, _)) =>
@@ -328,7 +329,7 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.union(RamId.RelPos(id1, i), RamId.RelPos(id2, i), set)
             }, Vector.range(0, arity))
 
-        def unifyPredTypes(predSym: Int64, arity: Int32, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r =
+        def unifyPredTypes(predSym: Int64, arity: Int32, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r =
             let fullSymbol = idToFullPredID(predSym, predTrack);
             let deltaSymbol = fullIDtoPredType(fullSymbol, PredType.Delta, predTrack);
             let newSymbol = fullIDtoPredType(fullSymbol, PredType.New, predTrack);
@@ -343,7 +344,7 @@ mod Fixpoint.Boxing {
             }, Vector.range(0, arity));
             ()
 
-        def computeDisjointTerm(s: RamTerm, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
+        def computeDisjointTerm(s: RamTerm, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamTerm.Lit(_, id) =>
                 MutDisjointSets.makeSet(id, set)
             case RamTerm.RowLoad(_, _, _) =>
@@ -442,7 +443,7 @@ mod Fixpoint.Boxing {
         }
 
         @Internal
-        def computeMappingStmt(s: RamStmt, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = match s {
+        def computeMappingStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeMappingOp(rest, predTrack, set, map, counter)
             case RamStmt.Merge(rel1, rel2) =>
                 insertIndexRelSym(rel1, set, map, counter);
@@ -460,22 +461,21 @@ mod Fixpoint.Boxing {
             case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
-
-        def computeMappingOp(s: RelOp, predTrack: PredSymMapInternal, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
+        def computeMappingOp(s: RelOp, predTrack: Predicates, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = 
             let recurse = x -> computeMappingOp(x, predTrack, set, map, counter);
             let insert = x -> insertIndex(x, set, map, counter);
             match s {
-                case RelOp.Search(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
-                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                case RelOp.Search(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), rest) =>
+                    Vector.forEach(i -> insert(RamId.TuplePos(rv, i)), Vector.range(0, arity));
                     Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                     recurse(rest)
-                case RelOp.Query(RowVar.Named(id), RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
-                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                case RelOp.Query(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, rest) =>
+                    Vector.forEach(i -> insert(RamId.TuplePos(rv, i)), Vector.range(0, arity));
                     Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, arity));
                     Vector.forEach(x -> computeMappingBool(x, predTrack, set, map, counter), bools);
                     recurse(rest)
                 case RelOp.Functional(RowVar.Named(id), _, inputTerms, rest, arity) => // equality on the input should be handled elsewhere.
-                    Vector.forEach(i -> insert(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                    Vector.forEach(i -> insert(RamId.TuplePos(RowVar.Named(id), i)), Vector.range(0, arity));
                     Vector.forEach(i -> insert(RamId.InId(id, i)), Vector.range(0, Vector.length(inputTerms)));
                     Vector.forEach(x -> computeMappingTerm(x, predTrack, set, map, counter), inputTerms);
                     recurse(rest)
@@ -489,7 +489,7 @@ mod Fixpoint.Boxing {
 
         def computeMappingTerm(
             s: RamTerm, 
-            predicates: PredSymMapInternal, 
+            predicates: Predicates, 
             set: MutDisjointSets[RamId, r], 
             map: MutMap[RamId, Int32, r], 
             counter: Counter[r]
@@ -549,7 +549,7 @@ mod Fixpoint.Boxing {
 
         def computeMappingBool(
             s: BoolExp, 
-            predicates: PredSymMapInternal, 
+            predicates: Predicates, 
             set: MutDisjointSets[RamId, r], 
             map: MutMap[RamId, Int32, r], 
             counter: Counter[r]

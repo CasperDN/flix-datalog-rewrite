@@ -26,8 +26,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Ram.RelSym
-    use Fixpoint.Ast.Ram.{RamProgram => ARamProgram}
+    use Fixpoint.Ast.Ram.{RelSym, Predicates, RamProgram => ARamProgram}
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
@@ -36,7 +35,6 @@ mod Fixpoint.Solver {
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
     use Fixpoint.Interpreter.DatabaseExternal
-    use Fixpoint.Predicates.PredSymMapInternal
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -787,7 +785,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModelWithRenaming(dbMeta: (DatabaseExternal[r], PredSymMapInternal)): Datalog \ r =
+    def toModelWithRenaming(dbMeta: (DatabaseExternal[r], Predicates)): Datalog \ r =
         let (db, meta) = dbMeta;
         let fst = MutMap.toMap(db); 
         let snd = Map.map(MutMap.toMap, fst);

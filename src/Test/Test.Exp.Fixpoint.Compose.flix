@@ -107,7 +107,7 @@ mod Test.Exp.Fixpoint.Compose {
     }
 
     @test
-    def testFixpointCompose15(): Bool = {
+    pub def testFixpointCompose15(): Bool = {
         let ans = query duckVille(#{ Rip(1). Rap(2). Rup(3). }) select s from Duck(s);
         ans == Vector#{"quack!"}
     }

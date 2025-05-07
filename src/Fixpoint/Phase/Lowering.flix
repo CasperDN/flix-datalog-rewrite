@@ -99,7 +99,7 @@ mod Fixpoint.Phase.Lowering {
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)
             , Nil) |> List.toVector;
             // Compute arities
-            let arityInformation = Ram.collectRowVarArity(program);
+            let arityInformation = Fixpoint.Helpers.collectRowVarArity(program);
             let numOfArities = UniqueInts.peek(idToIndex);
             let arities = Array.empty(rc, numOfArities);
             arityInformation |> List.forEach(match (rv, arity) -> Array.put(arity, UniqueInts.getIndex(rv, idToIndex), arities));
@@ -221,12 +221,11 @@ mod Fixpoint.Phase.Lowering {
                 let oldPos = computeMeetWithPos(rv, relSym, idToIndex, meetWithMap);
                 ESearch(lowerRowVar(rv, idToIndex), relPos, oldPos, den, thisWriteTo, loweredBody)
             case AFunctional(rv, f, terms, body, arity) =>
-                let RowVar.Named(id) = rv;
                 let (idToMarshall, _) = marshalling;
-                let idToMarhsalled = id_ -> unwrap(Map.get(id_, idToMarshall));
+                let idToMarhsalled = id -> unwrap(Map.get(id, idToMarshall));
                 let loweredBody = lowerOpRec(body);
                 let thisWriteTo = getWriteTo(rv, writeTo);
-                let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(id, i)), Vector.range(0, arity));
+                let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
                 EFunctional(
                     lowerRowVar(rv, idToIndex), f, 
                     Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms), 

@@ -37,8 +37,6 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Shared.isRelational
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
-    use Fixpoint.Predicates.{PredSymMapInternal}
-    use Fixpoint.Predicates.PredType.{Full, Delta, New}
     use Fixpoint.UniqueInts.{IndexState, ReverseState}
     use Fixpoint.Helpers.unwrap
 

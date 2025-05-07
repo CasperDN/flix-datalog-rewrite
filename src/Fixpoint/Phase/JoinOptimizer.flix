@@ -30,8 +30,8 @@ leading to choosing an unsound join order.
 
 
 mod Fixpoint.Phase.JoinOptimizer {
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym, collectRowVarRelSym}
-    use Fixpoint.Helpers.unwrap
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
+    use Fixpoint.Helpers.{unwrap, collectRowVarRelSym}
     use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound, disableJoinOptimizer}
     use Fixpoint.JoinProfiler
     use Fixpoint.JoinProfiler.JoinProfile
@@ -238,5 +238,4 @@ mod Fixpoint.Phase.JoinOptimizer {
         loop(2);
         MutMap.get(relations, optimal) |> unwrap |> snd
     }
-
 }

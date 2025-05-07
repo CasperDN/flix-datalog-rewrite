@@ -20,8 +20,6 @@ mod Fixpoint.Ast.Shared {
 
     use Fixpoint.Boxable
     use Fixpoint.Boxed
-    use Fixpoint.Predicates.PredType.{Full, New, Delta}
-    use Fixpoint.Predicates.PredSymMapInternal
 
 
     /////////////////////////////////////////////////////////////////////////////

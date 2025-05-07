@@ -21,7 +21,6 @@ mod Fixpoint.Ast.Ram {
     use Fixpoint.Ast.Shared.Denotation.{Relational}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Boxed;
-    use Fixpoint.Predicates.PredSymMapInternal
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
 
@@ -29,24 +28,53 @@ mod Fixpoint.Ast.Ram {
     // RamProgram                                                              //
     /////////////////////////////////////////////////////////////////////////////
 
-    // A program consists of statements, the EDB, predicate renaming information,
-    // and a set of indices to be constructed.
+    // A program consists of a statements, the EDB, predicate information,
+    // and the set of indices to be constructed.
     pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation)
+        case Program(RamStmt, Facts, Predicates, IndexInformation)
     }
 
-    pub type alias PredicateState = Fixpoint.Predicates.PredSymMapInternal
+    // (maximal identifier of full RelSym, set of RelSym in program)
+    pub type alias Predicates = (Int64, Set[RelSym])
+
+    // The EDB of a program
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
+    // A `search`. A `Search` describes the order in which elements are ordered.
+    // [2, 0, 1] means that the elements are ordered by first the third element
+    // then the first and finally the second.
     pub type alias Search = Vector[Int32]
+    // A map from RelSym to a list of indexes created for the RelSym.
     pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
-    // The first is a list of the indices that should be made. The second is a map 
-    // describing where they are suppoesed to be saved at runtime.
+    // A map from RelSym and its place in the vector of ConstructedIndexes
+    // to its final position in memory.
+    pub type alias IndexPositions = Map[(RelSym, Int32), Int32]
     pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
 
     /////////////////////////////////////////////////////////////////////////////
     // RamStmt                                                                 //
     /////////////////////////////////////////////////////////////////////////////
 
+    ///
+    /// `Insert(body) represents an insert statement.
+    ///
+    /// `Merge(r1, r2) represents merging the facts of `r1` into `r2`
+    ///
+    /// `Swap(newRel, deltaRel)` represents swapping the facts of `deltaRel` and `newRel`.
+    /// For multi-indexed relations the only guarantee is that all indexes on `deltaRel`
+    /// will contain all facts of `newRel`.
+    ///
+    /// `Purge(rel)` represents removing all facts from all indexes on `rel`.
+    ///
+    /// `Seq(body)` represents a sequence of statments to be executed sequentially
+    ///
+    /// `Par(body)` represents a sequence of statments to be executed in parallel
+    ///
+    /// `Comment(string)` represents a comment for debugging
+    ///
+    /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` represents an
+    /// instruction to estimate the size `relSym` using `indexUsed` as described by `search` and save the
+    /// result to `savePosition`. For details see JoinOptimizer
+    ///
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
@@ -57,8 +85,7 @@ mod Fixpoint.Ast.Ram {
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
         case Comment(String)
-        // (RelSym, index, position to save result, search)
-        case EstimateJoinSize(RelSym, Int32, Int32, Vector[Int32])
+        case EstimateJoinSize(RelSym, Int32, Int32, Search)
     }
 
     instance ToString[RamStmt] {
@@ -84,12 +111,24 @@ mod Fixpoint.Ast.Ram {
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
     
+    ///
+    /// `Search(rv, relSym, body)` represents going through each facts associated with `relSym`,
+    /// saving them as `rv` and execute `body`.
+    ///
+    /// `Query(rv, relSym, bools, indexPos, body)` represents going through each facts associated with `relSym`,
+    /// saving them as `rv` and execute `body` if `bools` is true. The index saved at `indexPos` will be used
+    ///
+    /// `Functional(rv, f, input, body, arity)` represents evaluating `f(input)`, for each resutl save it as `rv`
+    /// and execute `body`. `arity` is the size of the output.
+    ///
+    /// `Project(terms, relSym)` represents inserting `terms` as a fact for relSym.
+    ///
+    /// `If(bools, body)` represents evaluating `body` if `bools` is true.
+
     @Internal
     pub enum RelOp {
-        // Loop through RelSym, saving values in RowVar with body of loop RelOp.
-        case Search(RowVar, RelSym, RelOp) 
+        case Search(RowVar, RelSym, RelOp)
         case Query(RowVar, RelSym, Vector[BoolExp], Int32, RelOp)
-        // The last is the arity
         case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32) 
         case Project(Vector[RamTerm], RelSym)
         case If(Vector[BoolExp], RelOp)
@@ -120,22 +159,40 @@ mod Fixpoint.Ast.Ram {
     // BoolExp                                                                 //
     /////////////////////////////////////////////////////////////////////////////
 
+    ///
+    /// `Not(b)`: True if `b` is false
+    ///
+    /// `IsEmpty(relSym)`: True if there are no facts associated with `relSym`
+    ///
+    /// `NotMemberOf(terms, relSym)`: True if `terms` is not a fact associated with `relSym`
+    ///
+    /// `NotBot(term, leq, bot)`: True if `term` is not a `bot`.
+    /// `term`` must be a Meet or RowLoad of a lattice var.
+    ///
+    /// `Leq(const, rv, relSym)`: True if `const` is less than the lattice element of `rv`.
+    ///
+    /// `Guard0(f)`: True if `f() == true`
+    /// `Guard1(f, term1)`: True if `f(term1) == true`
+    /// `Guard2(f, term1, term2)`: True if `f(term1, term2) == true`
+    /// `Guard3(f, term1, term2, term3)`: True if `f(term1, term2, term3) == true`
+    /// `Guard4(f, term1, term2, term3, term4)`: True if `f(term1, term2, term3, term4) == true`
+    /// `Guard5(f, term1, term2, term3, term4, term5)`: True if `f(term1, term2, term3, term4, term5) == true`
+    ///
+
     @Internal
     pub enum BoolExp {
         case Not(BoolExp)
         case IsEmpty(RelSym)
         case NotMemberOf(Vector[RamTerm], RelSym)
-        // (term, leq, bot). term must be a Meet or RowLoad of a lattice var.
         case NotBot(RamTerm, Boxed -> Boxed -> Bool, Boxed)
-        // (lowerBound, rowVar, relSym).
         case Leq(Boxed, RowVar, RelSym)
         case Eq(RamTerm, RamTerm)
         case Guard0(Unit -> Bool)
         case Guard1(Boxed ->Bool, RamTerm)
-        case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
-        case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
-        case Guard4(Boxed -> Boxed  -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
-        case Guard5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard2(Boxed -> Boxed -> Bool, RamTerm, RamTerm)
+        case Guard3(Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
+        case Guard4(Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
     }
 
     instance ToString[BoolExp] {
@@ -163,18 +220,34 @@ mod Fixpoint.Ast.Ram {
     ///
     /// Represents a RAM term.
     ///
-    /// `RowLoad(x, i)` represents an index into the tuple
-    /// bound to the local variable `x`, i.e. `x[i]`.
+    /// Enums with a `RamId` can be reffered to by the `RamId`.
     ///
-    /// `LoadLatVar(x)` represents the lattice component in the tuple
-    /// bound to the local variable `x`.
+    /// `Lit(val, id)` represents the literal `val`
     ///
-    /// The RamId uniquely identifies the term
+    /// `RowLoad(x, i, relSym)` represents an index into the tuple
+    /// bound to the local variable `x`, i.e. `x[i]`. `x` is a tuple
+    /// from `relSym`
+    ///
+    /// `Meet(meet, term, (rv, relSym), id)` represents the meet of `term` with the lattice
+    /// element of `rv`
+    ///
+    /// `App0(f)` represents `f()`.
+    ///
+    /// `App1(f, term1)` represents `f(term1)`.
+    ///
+    /// `App2(f, term1, term2)` represents `f(term1, term2)`.
+    ///
+    /// `App3(f, term1, term2, term3)` represents `f(term1, term2, term3)`.
+    ///
+    /// `App4(f, term1, term2, term3, term4)` represents `f(term1, term2, term3, term4)`.
+    ///
+    /// `App5(f, term1, term2, term3, term4, term5)` represents `f(term1, term2, term3, term4, term4)`.
+    ///
     @Internal
     pub enum RamTerm {
         case Lit(Boxed, RamId)
         case RowLoad(RowVar, Int32, RelSym)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, (RowVar, RelSym), RamId)
+        case Meet(Boxed -> Boxed -> Boxed, RamTerm, (RowVar, RelSym), RamId)
         case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
         case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
@@ -183,9 +256,13 @@ mod Fixpoint.Ast.Ram {
         case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
     }
 
+    ///
+    /// Returns the `RamId` of `t`.
+    ///
+    @Internal
     pub def getTermRamId(t: RamTerm): RamId = match t {
         case RamTerm.Lit(_, id) => id
-        case RamTerm.RowLoad(RowVar.Named(i), index, _) => RamId.TuplePos(i, index)
+        case RamTerm.RowLoad(rv, index, _) => RamId.TuplePos(rv, index)
         case RamTerm.Meet(_, _, _, id) => id
         case RamTerm.App0(_, id) => id
         case RamTerm.App1(_ , _, id) => id
@@ -195,11 +272,13 @@ mod Fixpoint.Ast.Ram {
         case RamTerm.App5(_, _, _, _, _, _, id) => id
     }
 
+    ///
+    /// Returns the `RamId` of the lattice-element of `rv`
+    ///
+    @Internal
     pub def getLatVarRamId(rv: RowVar, relSym: RelSym): RamId =
         let arity = arityOfNonLat(relSym);
-        let RowVar.Named(id) = rv;
-        RamId.TuplePos(id, arity)
-
+        RamId.TuplePos(rv, arity)
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
@@ -219,39 +298,36 @@ mod Fixpoint.Ast.Ram {
     // RelSym                                                                  //
     /////////////////////////////////////////////////////////////////////////////
 
-    /**
-        Represents the relations (also delta relations) of the program.
-            The first is the symbol of the relation
-            The second parameter is the arity
-            The third depends denotes whether we are dealing with a lattice or a 'normal' relation.
-    */
+    ///
+    /// `RelSym(predSym, arity, den)` represents the relation of `predSym`
+    /// which has arity `arity` and denotation `den`
+    ///
 
-    @Internal
     pub enum RelSym {
         case Symbol(PredSym, Int32, Denotation)
     }
 
     instance Eq[RelSym] {
         pub def eq(a: RelSym, b: RelSym): Bool = match (a, b) {
-            case (RelSym.Symbol(s1, _, _),  RelSym.Symbol(s2, _, _))  => s1 == s2
+            case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) => s1 == s2
         }
     }
 
     instance Order[RelSym] {
         pub def compare(a: RelSym, b: RelSym): Comparison = match (a, b) {
-            case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) =>  s1 <=> s2
+            case (RelSym.Symbol(s1, _, _), RelSym.Symbol(s2, _, _)) => s1 <=> s2
         }
     }
 
     instance PredSymsOf[RelSym] {
         pub def predSymsOf(x: RelSym): Set[PredSym] = match x {
-            case RelSym.Symbol(predSym, _, _)    => Set.singleton(predSym)
+            case RelSym.Symbol(predSym, _, _) => Set.singleton(predSym)
         }
     }
 
     instance SubstitutePredSym[RelSym] {
         pub def substitute(x: RelSym, s: Map[PredSym, PredSym]): RelSym = match x {
-            case RelSym.Symbol(predSym, arity, den)  =>
+            case RelSym.Symbol(predSym, arity, den) =>
                 let newSym = Map.getWithDefault(predSym, predSym, s);
                 RelSym.Symbol(newSym, arity, den)
         }
@@ -259,20 +335,21 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[RelSym] {
         pub def toString(relSym: RelSym): String = match relSym {
-            case RelSym.Symbol(sym, _, _)    => "${sym}"
+            case RelSym.Symbol(sym, _, _) => "${sym}"
         }
     }
 
-    @Internal
-    pub def toPredID(relSym: RelSym): Int64 = match relSym {
-        case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
-    }
-
+    ///
+    /// Returns the arity of `relSym`.
+    ///
     @Internal
     pub def arityOf(relSym: RelSym): Int32 = match relSym {
         case RelSym.Symbol(_, arity, _) => arity
     }
 
+    ///
+    /// Returns the arity of the non-lattice part of `relSym`.
+    ///
     @Internal
     pub def arityOfNonLat(relSym: RelSym): Int32 = match relSym {
         case RelSym.Symbol(_, arity, den) => match den {
@@ -281,80 +358,36 @@ mod Fixpoint.Ast.Ram {
         }
     }
 
+    ///
+    /// Returns the denotation of `relSym`.
+    ///
     @Internal
     pub def toDenotation(relSym: RelSym): Denotation = match relSym {
         case RelSym.Symbol(_, _, den) => den
     }
 
+    ///
+    /// Returns the identifier of `relSym`.
+    ///
     @Internal
     pub def toId(relSym: RelSym): Int64 = match relSym {
         case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
-    }
-
-    @Internal
-    pub def collectRelSym(program: RamProgram): List[RelSym] = region _rc { 
-        match program {
-            case RamProgram.Program(_, _, predState, _) =>
-                Fixpoint.Predicates.allRelSyms(predState)
-        }
-    }
-
-    @Internal
-    pub def collectRowVarOp(op: RelOp): List[RowVar] = match op {
-        case RelOp.Search(rv, _, rest) => rv :: collectRowVarOp(rest)
-        case RelOp.Query(rv, _, _, _, rest) => rv :: collectRowVarOp(rest)
-        case RelOp.Functional(_, _, _, rest, _) => collectRowVarOp(rest)
-        case RelOp.Project(_, _) => Nil
-        case RelOp.If(_, rest) => collectRowVarOp(rest)
-    }
-
-    @Internal
-    pub def collectRowVarRelSym(program: RamProgram): List[(RowVar, RelSym)] = match program {
-        case RamProgram.Program(stmt, _, _, _) => 
-            collectRowVarRelSymStmt(stmt)
-    }
-
-    @Internal
-    pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = 
-        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
-    
-
-    @Internal
-    def collectRowVarRelSymStmt(stmt: RamStmt): List[(RowVar, RelSym)] \ r = match stmt {
-        case RamStmt.Insert(op) => collectRowVarRelSymOp(op)
-        case RamStmt.Merge(_, _) => Nil
-        case RamStmt.Swap(_, _) => Nil
-        case RamStmt.Purge(_) => Nil
-        case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
-        case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
-        case RamStmt.Until(_, rest) => collectRowVarRelSymStmt(rest)
-        case RamStmt.Comment(_) => Nil
-        case RamStmt.EstimateJoinSize(_, _, _, _) => Nil
-    }
-
-    @Internal
-    pub def collectRowVarRelSymOp(op: RelOp): List[(RowVar, RelSym)] \ r = match op {
-        case RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
-        case RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
-        case RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
-        case RelOp.Project(_, _) => Nil
-        case RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
     }
 
     /////////////////////////////////////////////////////////////////////////////
     // RowVar                                                                  //
     /////////////////////////////////////////////////////////////////////////////
 
-    /**
-    Note that the id is supposed to be unique
-
-    For code:
-        search e1 ∈ Edge  do 
-            search e2 ∈ Edge do
-                ...
-
-    'e1' and 'e2' would be the RowVars.
-    */
+    ///
+    /// `Named(id)` represents the unique identifier, `id`, of some row variable
+    ///
+    ///
+    /// For a program:
+    /// search e1 ∈ Edge do 
+    ///    search e2 ∈ Edge do
+    ///        ...
+    /// `e1` and `e2` would be the identifiers. Identifiers will only be defined
+    /// once in a program, but can be reffered to from elsewhere.
 
     @Internal
     pub enum RowVar with Eq {
@@ -377,13 +410,23 @@ mod Fixpoint.Ast.Ram {
     // RamId                                                                   //
     /////////////////////////////////////////////////////////////////////////////
 
-    // A RamId is is either an identifier on a RAM-instruction, or an index in a RelSym.
-    // Identifiers should be <0 for RamId.Id. Might be avoidable
+    ///
+    /// `RamId` represents a unique identifier for literals, positions in relations,
+    /// positions in tuples or input to a function.
+    ///
+    /// `Id(id)` represents the id `id`. If `Id(id)` exists `RowVar.Named(id)` does not.
+    ///
+    /// `InId(id, i)` represents the `i`'th input of the term represented by `id`.
+    ///
+    /// `TuplePos(rv, i)` represents `rv[i]`
+    ///
+    /// `RelPos(predId, i)` represents `i`'th index of the `RelSym` with PredSym-id `predId`.
+    ///
     pub enum RamId {
-        case Id(Int32) // (ID)
-        case InId(Int32, Int32) // (OutID, index)
-        case TuplePos(Int32, Int32) // (RowVar, index)
-        case RelPos(Int64, Int32) // (PredSym, index). This does not exist in the RAM, but is useful for Boxing.
+        case Id(Int32)
+        case InId(Int32, Int32)
+        case TuplePos(RowVar, Int32)
+        case RelPos(Int64, Int32)
     }
 
     instance ToString[RamId] {
@@ -427,5 +470,4 @@ mod Fixpoint.Ast.Ram {
             case (_, RamId.InId(_, _)) => Comparison.GreaterThan
         }
     }
-
 }

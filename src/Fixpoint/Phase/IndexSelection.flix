@@ -16,8 +16,8 @@
  */
 
 mod Fixpoint.Phase.IndexSelection {
-    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, RowVar, collectRelSym, arityOf, arityOfNonLat};
-    use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType}
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, ConstructedIndexes, IndexInformation, RowVar, arityOf, arityOfNonLat};
+    use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
     use Fixpoint.UniqueInts
     use Fixpoint.UniqueInts.IndexState
     
@@ -47,7 +47,7 @@ mod Fixpoint.Phase.IndexSelection {
                     )
                 );
             let indexesMissing = 
-                collectRelSym(program) |>
+                relSymsOfProgram(program) |>
                 List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
                 List.foldLeft(acc -> relSym -> {
                     let deltaRelSym = relSymFromPredType(relSym, PredType.Delta, meta);

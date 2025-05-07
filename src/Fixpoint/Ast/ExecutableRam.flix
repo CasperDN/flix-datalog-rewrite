@@ -17,7 +17,7 @@
 
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
-    use Fixpoint.Ast.Ram.{PredicateState, RelSym, Search, IndexInformation}
+    use Fixpoint.Ast.Ram.{Predicates, RelSym, Search, IndexInformation}
     use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
     use Fixpoint.SubstitutePredSym
 
@@ -28,7 +28,7 @@ mod Fixpoint.Ast.ExecutableRam {
     // RamProgram consisting of the the ExecutableRam program/statements, 
     // the starting database/facts and information about which indices should be used.
     pub enum RamProgram {
-        case Program(RamStmt, Facts, PredicateState, IndexInformation, (Arities, ConstWrites), Fixpoint.Boxing.RamIdToMarshal)
+        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.Boxing.RamIdToMarshal)
     }
 
     pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
