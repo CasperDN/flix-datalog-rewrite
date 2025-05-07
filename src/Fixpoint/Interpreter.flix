@@ -19,7 +19,8 @@
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
     use Fixpoint.Ast.Ram.{RelSym, toDenotation, arityOfNonLat, toId, RamId}
-    use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
     use Fixpoint.Boxing.{Boxing, boxWith, unboxWith, RamIdToMarshal}
     use Fixpoint.Counter
@@ -65,9 +66,9 @@ mod Fixpoint.Interpreter {
             Vector.forEach(match (nonLat, lat) -> {
                 let asArray = unchecked_cast(nonLat as Array[Int64, r]);
                 match toDenotation(relSym) {
-                    case Denotation.Relational => 
+                    case Relational => 
                         BPlusTree.insert(asArray, lat, index)
-                    case Denotation.Latticenal(_, _, lub, _) =>
+                    case Latticenal(_, _, lub, _) =>
                         BPlusTree.putWith(lub, asArray, lat, index)
                 }
             }, tuples);
@@ -233,37 +234,23 @@ mod Fixpoint.Interpreter {
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
         let (db, env, boxing) = ctxt;
         match op {
-            case RelOp.Search(tuplePos, searchIndex, writes, body) =>
+            case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, tupleEnv, _) = env;
                 Array.get(searchIndex, db) |>
-                BPlusTree.forEach(t -> _ -> {
-                    Array.put(t, tuplePos, tupleEnv);
-                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
-                        Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
-                    });
-                    evalOp(rc, ctxt, body)
-                })
-            case RelOp.Query(tuplePos, searchIndex, writes, body) =>
-                let (minEnv, maxEnv, tupleEnv, _) = env;
-                Array.get(searchIndex, db) |>
-                BPlusTree.rangeQueryWith(
-                    t -> _ -> {
-                        Array.put(t, tuplePos, tupleEnv);
-                        writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
-                            Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
-                        });
-                        evalOp(rc, ctxt, body)
-                    },
-                    Vector.get(tuplePos, minEnv),
-                    Vector.get(tuplePos, maxEnv)
-                )
-            case RelOp.SearchLattice(tuplePos, searchIndex, meetWith, Denotation.Latticenal(bot, leq, _, glb), writes, body) => 
+                BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
+            case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 let (minEnv, maxEnv, _, _) = env;
                 Array.get(searchIndex, db) |> 
                 BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
-            case RelOp.QueryLattice(tuplePos, searchIndex, meetWith, Denotation.Latticenal(bot, leq, _, glb), writes, body) => 
+            case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
+                let (minEnv, maxEnv, tupleEnv, _) = env;
+                Array.get(searchIndex, db) |>
+                BPlusTree.rangeQueryWith(
+                    relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt),
+                    Vector.get(tuplePos, minEnv),
+                    Vector.get(tuplePos, maxEnv)
+                )
+            case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 let (minEnv, maxEnv, _, _) = env;
                 Array.get(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
@@ -322,6 +309,21 @@ mod Fixpoint.Interpreter {
             Array.put(Array.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
         });
         Array.put(t, tuplePos, tupleEnv)
+
+    def relationHandlingBodyFunc(
+        rc: Region[r],
+        tuplePos: Int32,
+        writes: Vector[WriteTuple],
+        body: RelOp,
+        ctxt: Context[r],
+        t: Array[Int64, r],
+        _: Boxed
+    ): Unit \ r =
+        let (_, env, _) = ctxt;
+        let (minEnv, maxEnv, tupleEnv, _) = env;
+        handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
+        // Recurse only if the meet is not bottom
+        evalOp(rc, ctxt, body)
 
     def latticeHandlingBodyFunc(
         rc: Region[r],

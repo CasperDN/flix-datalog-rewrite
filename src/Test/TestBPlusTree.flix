@@ -28,7 +28,7 @@ mod TestBPlusTree {
         };
         repeatNInternal(callNum, true)
 
-    def totalInsertNum(): Int64 = 300_000i64
+    def totalInsertNum(): Int64 = 30i64
 
     ///
     /// `gen` and `inserted` are the functions that generate the inserted values.

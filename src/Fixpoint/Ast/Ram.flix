@@ -17,7 +17,8 @@
  */
 
 mod Fixpoint.Ast.Ram {
-    use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Shared.Denotation.{Relational}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Boxed;
     use Fixpoint.Predicates.PredSymMapInternal
@@ -275,7 +276,7 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub def arityOfNonLat(relSym: RelSym): Int32 = match relSym {
         case RelSym.Symbol(_, arity, den) => match den {
-            case Denotation.Relational => arity
+            case Relational => arity
             case _ => arity - 1
         }
     }

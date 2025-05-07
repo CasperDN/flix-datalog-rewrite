@@ -33,7 +33,7 @@ mod Fixpoint.Phase.Lowering {
 
 
     use Fixpoint.Ast.ExecutableRam.{RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
-    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, SearchLattice => ESearchLattice, QueryLattice => EQueryLattice, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
+    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
     use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard0 => EGuard0, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
     use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App0 => EApp0, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
 
@@ -219,13 +219,7 @@ mod Fixpoint.Phase.Lowering {
                 let placements = snd(indexInfo);
                 let relPos = unwrap(Map.get((relSym, 0), placements));
                 let oldPos = computeMeetWithPos(rv, relSym, idToIndex, meetWithMap);
-                match den {
-                    case Denotation.Relational => (
-                        ESearch(lowerRowVar(rv, idToIndex), relPos, thisWriteTo, loweredBody)
-                    )
-                    case Denotation.Latticenal(_, _, _, _) =>
-                        ESearchLattice(lowerRowVar(rv, idToIndex), relPos, oldPos, den, thisWriteTo, loweredBody)
-                }
+                ESearch(lowerRowVar(rv, idToIndex), relPos, oldPos, den, thisWriteTo, loweredBody)
             case AFunctional(rv, f, terms, body, arity) =>
                 let RowVar.Named(id) = rv;
                 let (idToMarshall, _) = marshalling;
@@ -282,14 +276,7 @@ mod Fixpoint.Phase.Lowering {
                 if(Vector.length(otherBools) != 0)
                     unchecked_cast(bug!("Bug in Fixpoint.Lowering: Bools except equality in query") as _ \ r) 
                 else ();
-
-                match den {
-                    case Denotation.Relational => (
-                        EQuery(lowerRowVar(rv, idToIndex), index, thisWriteTo, loweredBody)
-                    )
-                    case Denotation.Latticenal(_, _, _, _) =>
-                        EQueryLattice(lowerRowVar(rv, idToIndex), index, oldPos, den, thisWriteTo, loweredBody)
-                }
+                EQuery(lowerRowVar(rv, idToIndex), index, oldPos, den, thisWriteTo, loweredBody)
         }
 
     def lowerTerm(

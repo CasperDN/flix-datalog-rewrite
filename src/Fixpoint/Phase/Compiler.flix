@@ -23,7 +23,8 @@ mod Fixpoint.Phase.Compiler {
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.{Guard0, Guard1, Guard2, Guard3, Guard4, Guard5, Functional, BodyAtom}
-    use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.isRelational
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
@@ -34,7 +35,7 @@ mod Fixpoint.Phase.Compiler {
     use Fixpoint.Predicates.PredType.{Full, Delta, New}
 
     // This should (hopefully) be fine. The symbol should not be used for anything.
-    pub def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Denotation.Relational)
+    pub def functionalRelSym(arity: Int32): RelSym = RelSym.Symbol(PredSym.PredSym("", -1i64), arity, Relational)
     ///
     /// Compile the given Datalog program `d` to RAM.
     /// First compile all facts in `d` to project-statements.
@@ -377,9 +378,9 @@ mod Fixpoint.Phase.Compiler {
                 let (term, i) = termI;
                 match term {
                     case BodyTerm.Var(var) => match denotation {
-                        case Denotation.Relational =>
+                        case Relational =>
                             Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
-                        case Denotation.Latticenal(_, _, _, glb) =>
+                        case Latticenal(_, _, _, glb) =>
                             if (i < Vector.length(terms) - 1)
                                 Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), acc1)
                             else
@@ -432,9 +433,9 @@ mod Fixpoint.Phase.Compiler {
                     Vector.mapWithIndex(compileBodyTerm(bodySym), terms) |>
                     Vector.zip(Vector.range(0, Vector.length(terms))) |>
                     Vector.map(match (i, t) -> match denotation {
-                        case Denotation.Relational => 
+                        case Relational => 
                             BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
-                        case Denotation.Latticenal(bot, leq, _, _) =>
+                        case Latticenal(bot, leq, _, _) =>
                             if (i < Vector.length(terms) - 1)
                                 BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(bodySym)), t)
                             else

@@ -18,7 +18,7 @@
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
     use Fixpoint.Ast.Ram.{PredicateState, RelSym, Search, IndexInformation}
-    use Fixpoint.Ast.Shared.{PredSym, Denotation}
+    use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
     use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
@@ -83,17 +83,13 @@ mod Fixpoint.Ast.ExecutableRam {
     
     @Internal
     pub enum RelOp {
-        // (RowVar, searchIndex, writeTuple, body)
-        case Search(Int32, Int32, Vector[WriteTuple], RelOp)
-        // (RowVar, searchIndex, meetWith, meet, writeTuple, body)
-        case SearchLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
-        // (RowVar: EnvPos, searchIndex, body)
-        case Query(Int32, Int32, Vector[WriteTuple], RelOp)
-        // (RowVar: EnvPos, searchIndex, meetWith, Denotation, writeLatticeTo, body)
-        case QueryLattice(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, meetWith(only relevant for lattices), Denotation, writeTuple, body)
+        case Search(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
+        // (RowVar: EnvPos, searchIndex, meetWith(only relevant for lattices), Denotation, writeTuple, body)
+        case Query(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox])
-        // The Boxed is Bot. The first Boxed -> Boxed -> Boxed is leq and the second is lub.
+        // (Vector of terms to be inserted, Bot, leq, lub, Boxing info for lattice elem (-1 for Relational))
         case Project(Vector[RamTerm], Int32, Boxed, Boxed -> Boxed -> Bool, Boxed -> Boxed -> Boxed, IntToBox)
         case If(Vector[BoolExp], RelOp)
     }
@@ -102,18 +98,12 @@ mod Fixpoint.Ast.ExecutableRam {
         pub def toString(op: RelOp): String =
             let nl = String.lineSeparator();
             match op {
-                case RelOp.Search(var, relSym, writes, body) =>
+                case RelOp.Search(var, relSym, _, _, writes, body) =>
                     let writeString = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
                     "search x${var} ∈ indexes[${relSym}] | ${writeString} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Query(var, ramSym, writes, body) =>
+                case RelOp.Query(var, ramSym, _, _, writes, body) =>
                     let writeString = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
                     "query {x${var} ∈ indexes[${ramSym}] | ${writeString}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.SearchLattice(var, relSym, _, _, writes, body) =>
-                    let writeString = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
-                    "searchLat x${var} ∈ indexes[${relSym}] | ${writeString} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.QueryLattice(var, ramSym, _, _, writes, body) =>
-                    let qry = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
-                    "queryLat {x${var} ∈ indexes[${ramSym}] | ${qry}} do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Functional(id, _, terms, _, body, _) => 
                     "loop(x${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _, _, _, _) =>

@@ -25,7 +25,8 @@ mod Fixpoint.Ast.Datalog {
     use Fixpoint.SubstitutePredSym
     use Fixpoint.SubstitutePredSym.substitute
     use Fixpoint.Ast.Ram.RelSym
-    use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Ast.Shared.PredSym
 
     /////////////////////////////////////////////////////////////////////////////
@@ -79,8 +80,8 @@ mod Fixpoint.Ast.Datalog {
                         Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
                             let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
                             match toDenotation(ramSym) {
-                                case Denotation.Relational => "${ramSym}(${tupleString})."
-                                case Denotation.Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
+                                case Relational => "${ramSym}(${tupleString})."
+                                case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
                             }
                         })
                     })
@@ -158,8 +159,8 @@ mod Fixpoint.Ast.Datalog {
     instance ToString[HeadPredicate] {
         pub def toString(head: HeadPredicate): String =
             match head {
-                case HeadPredicate.HeadAtom(predSym, Denotation.Relational, terms) => "${predSym}(${terms |> Vector.join(", ")})"
-                case HeadPredicate.HeadAtom(predSym, Denotation.Latticenal(_, _, _, _), terms) =>
+                case HeadPredicate.HeadAtom(predSym, Relational, terms) => "${predSym}(${terms |> Vector.join(", ")})"
+                case HeadPredicate.HeadAtom(predSym, Latticenal(_, _, _, _), terms) =>
                     let (keyTerms, latticeTerms) = Vector.splitAt(Vector.length(terms)-1, terms);
                     match Vector.head(latticeTerms) {
                         case None    => "${predSym}(${keyTerms |> Vector.join(", ")})"
@@ -211,9 +212,9 @@ mod Fixpoint.Ast.Datalog {
                 case Fixity.Loose => ""
             };
             match body {
-                case BodyPredicate.BodyAtom(predSym, Denotation.Relational, p, f, terms) =>
+                case BodyPredicate.BodyAtom(predSym, Relational, p, f, terms) =>
                     "${polarityPrefix(p)}${fixityPrefix(f)}${predSym}(${terms |> Vector.join(", ")})"
-                case BodyPredicate.BodyAtom(predSym, Denotation.Latticenal(_, _, _, _), p, f, terms) =>
+                case BodyPredicate.BodyAtom(predSym, Latticenal(_, _, _, _), p, f, terms) =>
                     let n = Vector.length(terms)-1;
                     let (keyTerms, latticeTerms) = (Vector.take(n, terms), Vector.drop(n, terms));
                     match Vector.head(latticeTerms) {
