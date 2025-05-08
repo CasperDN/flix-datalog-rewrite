@@ -171,10 +171,10 @@ mod Fixpoint.Phase.Compiler {
             let newRel = Predicates.getRelSymAsType(relSym, New, predSymMaps);
             let deltaRel = Predicates.getRelSymAsType(relSym, Delta, predSymMaps);
             let fullRel = Predicates.getRelSymAsType(relSym, Full, predSymMaps);
-            let mergeFull = RamStmt.Merge(newRel, fullRel);
+            let mergeFull = RamStmt.MergeInto(newRel, fullRel);
             MutList.push(mergeFull, merges);
             if(mergeIntoDelta) {
-            let mergeDelta = RamStmt.Merge(newRel, deltaRel);
+            let mergeDelta = RamStmt.MergeInto(newRel, deltaRel);
                 MutList.push(mergeDelta, merges)
             } else ()
         }, idb);

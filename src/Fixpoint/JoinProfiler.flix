@@ -167,7 +167,7 @@ mod Fixpoint.JoinProfiler {
             case RamStmt.Insert(op) =>
                 let toEstimate = collectBoundVars(rc, collectRowVarRelSymOp(op), attributeMap, op);
                 estimateToCollect(rc, toEstimate, collectFor)
-            case RamStmt.Merge(_, _) => ()
+            case RamStmt.MergeInto(_, _) => ()
             case RamStmt.Swap(_, _) => ()
             case RamStmt.Purge(_) => ()
             case RamStmt.Seq(stmts) => Vector.forEach(collectUntilBody(collectFor), stmts)
@@ -190,7 +190,7 @@ mod Fixpoint.JoinProfiler {
                 let collectFor = MutMap.empty(rc);
                 estimateToCollect(rc, toEstimate, collectFor);
                 combineStmtWithEstimate(counter, rowVarToPos, collectFor, s)
-            case RamStmt.Merge(_, _) => s
+            case RamStmt.MergeInto(_, _) => s
             case RamStmt.Swap(_, _) => s
             case RamStmt.Purge(_) => s
             case RamStmt.Seq(stmts) => Vector.map(instrumentStmt, stmts) |> RamStmt.Seq
@@ -218,7 +218,7 @@ mod Fixpoint.JoinProfiler {
         
     def getJoinEstimateNumStmt(s: ERamStmt): Int32 = match s {
         case ERamStmt.Insert(_) => -1
-        case ERamStmt.Merge(_, _, _, _) => -1
+        case ERamStmt.MergeInto(_, _, _, _) => -1
         case ERamStmt.Swap(_, _) => -1
         case ERamStmt.Purge(_) => -1
         case ERamStmt.Seq(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)

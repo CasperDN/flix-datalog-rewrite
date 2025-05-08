@@ -22,7 +22,8 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
-    use Fixpoint.Boxing.{Boxing, boxWith, unboxWith, RamIdToMarshal}
+    use Fixpoint.Boxing.{boxWith, unboxWith}
+    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos}
     use Fixpoint.Counter
     use Fixpoint.Helpers.{unwrap}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
@@ -139,7 +140,7 @@ mod Fixpoint.Interpreter {
     }
 
 
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToMarshal): DatabaseExternal[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): DatabaseExternal[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
@@ -165,7 +166,7 @@ mod Fixpoint.Interpreter {
     ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, relOp)
-        case RamStmt.Merge(srcIndex, dstIndex, lub, index) =>
+        case RamStmt.MergeInto(srcIndex, dstIndex, lub, index) =>
             let (db, _, _) = ctxt;
             let src = Array.get(srcIndex, db);
             let dst = Array.get(dstIndex, db);

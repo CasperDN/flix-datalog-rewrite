@@ -140,7 +140,7 @@ mod BPlusTree {
     
     def fixRoot(newRoot: Option[Node[r]], tree: BPlusTree[r]): Unit \ r = match newRoot {
         case Some(root) =>
-            // While this may seem unsafe the splits so far should have ensured that
+            // Until this may seem unsafe the splits so far should have ensured that
             // at this point we have a lock on the old root which is still the root
             Lock.lock(tree->rootLock);
             let oldRoot = tree->root;

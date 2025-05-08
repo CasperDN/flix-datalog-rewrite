@@ -68,13 +68,13 @@ mod Fixpoint.Phase.Simplifier {
                     //             case _ => -1
                     //         }, tuple) == Vector.range(0, arityOf(relB));
                     //     if (isCopy)
-                    //         RamStmt.Merge(relB, relA)
+                    //         RamStmt.MergeInto(relB, relA)
                     //     else
                     //         RamStmt.Insert(newOp)
                     case _ => RamStmt.Insert(newOp)
                 }
             }
-        case RamStmt.Merge(_, _) => Some(stmt)
+        case RamStmt.MergeInto(_, _) => Some(stmt)
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
@@ -145,7 +145,7 @@ mod Fixpoint.Phase.Simplifier {
 
     def isOnlyMergeSwapPurge(r: RamStmt): Bool = match r {
         case RamStmt.Insert(_) => false
-        case RamStmt.Merge(_, _) => true
+        case RamStmt.MergeInto(_, _) => true
         case RamStmt.Swap(_, _) => true
         case RamStmt.Purge(_) => true
         case RamStmt.Seq(xs) => Vector.forAll(isOnlyMergeSwapPurge, xs)

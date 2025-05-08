@@ -39,7 +39,7 @@ mod Fixpoint.Helpers {
     ///
     def collectRowVarRelSymStmt(stmt: RamStmt): List[(RowVar, RelSym)] \ r = match stmt {
         case RamStmt.Insert(op) => collectRowVarRelSymOp(op)
-        case RamStmt.Merge(_, _) => Nil
+        case RamStmt.MergeInto(_, _) => Nil
         case RamStmt.Swap(_, _) => Nil
         case RamStmt.Purge(_) => Nil
         case RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)

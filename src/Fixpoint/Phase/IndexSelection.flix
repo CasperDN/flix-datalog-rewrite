@@ -78,7 +78,7 @@ mod Fixpoint.Phase.IndexSelection {
     def indexStmt(stmt: RamStmt, constructedIndexes: ConstructedIndexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
         case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, constructedIndexes, indexState))
-        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.MergeInto(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
@@ -135,7 +135,7 @@ mod Fixpoint.Phase.IndexSelection {
     def collectSearchesStmt(indexes: Indexes[r], rc: Region[r], stmt: RamStmt): RamStmt \ r = match stmt {
         case RamStmt.Insert(op) => 
             RamStmt.Insert(collectSearchesOp(op, indexes, MutSet.empty(rc), rc))
-        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.MergeInto(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(collectSearchesStmt(indexes, rc), xs))

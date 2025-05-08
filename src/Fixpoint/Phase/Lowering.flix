@@ -23,7 +23,7 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.UniqueInts
     use Fixpoint.Ast.ExecutableRam.WriteTuple
     use Fixpoint.Interpreter.Database
-    use Fixpoint.Boxing.Boxing;
+    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos};
     use Fixpoint.Interpreter.DatabaseExternal
     use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat}
     use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
@@ -42,7 +42,7 @@ mod Fixpoint.Phase.Lowering {
 
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
 
-    use Fixpoint.Boxing.{Equality, RamIdToMarshal}
+    use Fixpoint.Boxing.Equality
     use Fixpoint.Boxing
     use Fixpoint.Boxed
     use Fixpoint.Debugging
@@ -56,7 +56,7 @@ mod Fixpoint.Phase.Lowering {
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
-    def relSymToLatticeBoxingInfo(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
+    def relSymToLatticeBoxingInfo(relSym: RelSym, idToMarshall: RamIdToPos): Int32 = match relSym {
         case RelSym.Symbol(_, _, Denotation.Relational) => -1
         case RelSym.Symbol(PredSym.PredSym(_, id), arity, Denotation.Latticenal(_, _, _, _)) =>
             unwrap(Map.get(RamId.RelPos(id, arity - 1), idToMarshall))
@@ -107,7 +107,7 @@ mod Fixpoint.Phase.Lowering {
     }
 
     @Internal
-    def lowerStmt(stmt: ARamStmt, rc: Region[r], idToIndex: IdToIndex[r], marshalling: (RamIdToMarshal, Boxing[r]), writeTo: (WriteTos[r], ConstWrites[r]), indexInfo: IndexInformation): ERamStmt \ r =
+    def lowerStmt(stmt: ARamStmt, rc: Region[r], idToIndex: IdToIndex[r], marshalling: (RamIdToPos, Boxing[r]), writeTo: (WriteTos[r], ConstWrites[r]), indexInfo: IndexInformation): ERamStmt \ r =
         let lowerStmtRec = x -> lowerStmt(x, rc, idToIndex, marshalling, writeTo, indexInfo);
         match stmt {
             case ARamStmt.Insert(op) =>
@@ -118,7 +118,7 @@ mod Fixpoint.Phase.Lowering {
             case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
 
             // For all of these we have to do the operation for all indexes created for the relations.
-            case ARamStmt.Merge(newRel, deltaRel) =>
+            case ARamStmt.MergeInto(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
                 let newRelPos = unwrap(Map.get((newRel, 0), placements));
                 let lub = match toDenotation(newRel) {
@@ -126,7 +126,7 @@ mod Fixpoint.Phase.Lowering {
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
                 let deltaRels = Vector.length(unwrap(Map.get(deltaRel, constructed)));
                 let merges = Vector.map(index -> lowerToMerge(unwrap(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
                 if(Vector.length(merges) == 1) {
@@ -142,7 +142,7 @@ mod Fixpoint.Phase.Lowering {
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
                 let deltaRels = Vector.length(unwrap(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, unwrap(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {
@@ -204,7 +204,7 @@ mod Fixpoint.Phase.Lowering {
         op: ARelOp,
         rc: Region[r],
         idToIndex: IdToIndex[r],
-        marshalling: (RamIdToMarshal, Boxing[r]), 
+        marshalling: (RamIdToPos, Boxing[r]), 
         writeTo: (WriteTos[r], ConstWrites[r]), 
         indexInfo: IndexInformation,
         meetWithMap: MeetWithMap[r]
@@ -273,7 +273,7 @@ mod Fixpoint.Phase.Lowering {
     def lowerTerm(
         term: ARamTerm, 
         idToIndex: IdToIndex[r], 
-        marshalling: (RamIdToMarshal, Boxing[r]), 
+        marshalling: (RamIdToPos, Boxing[r]), 
         meetWithMap: MeetWithMap[r]
     ): ERamTerm \ r =
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
@@ -323,7 +323,7 @@ mod Fixpoint.Phase.Lowering {
     }
     
     // NotBot is removed as it is handled separately by the interpreter.
-    def lowerBool(bool: ABoolExp, idToIndex: IdToIndex[r], marshalling: (RamIdToMarshal, Boxing[r]), indexInfo: IndexInformation, meetWithMap: MeetWithMap[r]): Option[EBoolExp] \ r = 
+    def lowerBool(bool: ABoolExp, idToIndex: IdToIndex[r], marshalling: (RamIdToPos, Boxing[r]), indexInfo: IndexInformation, meetWithMap: MeetWithMap[r]): Option[EBoolExp] \ r = 
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
         match bool {
             case ANot(s) => 

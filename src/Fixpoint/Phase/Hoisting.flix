@@ -97,7 +97,7 @@ mod Fixpoint.Phase.Hoisting {
                 case None => None
                 case Some(v) => Some(RamStmt.Until(test, v))
             }
-        case RamStmt.Merge(_, _) => Some(stmt)
+        case RamStmt.MergeInto(_, _) => Some(stmt)
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
@@ -368,7 +368,7 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Until(boolExps, body) =>
             Vector.forEach(boolExp -> unifyBoolExp(equalitySets, constEqualities, boolExp), boolExps);
             unifyEqualitiesStmt(equalitySets, constEqualities, body)
-        case RamStmt.Merge(_, _) => ()
+        case RamStmt.MergeInto(_, _) => ()
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()

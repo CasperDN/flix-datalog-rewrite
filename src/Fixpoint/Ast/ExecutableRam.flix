@@ -38,7 +38,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /// constants should be saved, and information about Boxing-information.
     /// 
     pub enum RamProgram {
-        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.Boxing.RamIdToMarshal)
+        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.BoxingTypes.RamIdToPos)
     }
     ///
     /// The EDB of a program
@@ -75,7 +75,7 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Insert(body)` represents an insert statement.
     ///
-    /// `Merge(r1, r2, den)` represents merging the facts of `r1` into `r2`
+    /// `MergeInto(r1, r2, den)` represents merging the facts of `r1` into `r2`
     /// for a RelSym with denotation `den`
     ///
     /// `Swap(newPos, deltaPos)` represents swapping the facts of the indexes placed at `deltaPos` and `newPos`.
@@ -96,7 +96,7 @@ mod Fixpoint.Ast.ExecutableRam {
     pub enum RamStmt {
         case Insert(RelOp)
         // Boxed -> Boxed -> Boxed and IntToBox here only means something for lattice-tuples.
-        case Merge(Int32, Int32, Boxed -> Boxed -> Boxed, IntToBox)
+        case MergeInto(Int32, Int32, Boxed -> Boxed -> Boxed, IntToBox)
         case Swap(Int32, Int32)
         case Purge(Int32)
         case Seq(Vector[RamStmt])
@@ -111,7 +111,7 @@ mod Fixpoint.Ast.ExecutableRam {
             let nl = String.lineSeparator();
             match stmt {
                 case RamStmt.Insert(op) => ToString.toString(op)
-                case RamStmt.Merge(src, dst, _, _) => "merge indexes[${src}] into indexes[${dst}]"
+                case RamStmt.MergeInto(src, dst, _, _) => "merge indexes[${src}] into indexes[${dst}]"
                 case RamStmt.Swap(lhs, rhs) => "Swap indexes[${lhs}] and indexes[${rhs}]"
                 case RamStmt.Purge(ramSym) => "purge indexes[${ramSym}]"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)

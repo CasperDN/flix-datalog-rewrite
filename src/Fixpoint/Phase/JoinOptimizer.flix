@@ -71,7 +71,7 @@ mod Fixpoint.Phase.JoinOptimizer {
 
     def scheduleStmt(getOptimalJoin: List[RowVar] -> List[RowVar], stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(getOptimalJoin, Nil, Nil, Nil, op))
-        case RamStmt.Merge(_, _) => stmt
+        case RamStmt.MergeInto(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt(getOptimalJoin), xs))

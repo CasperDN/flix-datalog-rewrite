@@ -27,83 +27,22 @@ mod Fixpoint.Boxing {
     use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym, RamProgram, arityOfNonLat}
     use Fixpoint.Ast.Datalog.{Datalog}
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
-    use Fixpoint.Boxing.Boxing
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use Fixpoint.Predicates.relSymsOfProgram
-    use RelSymTypeInfo.{setType, getType, RealType}
+    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Lock, Types, setType, getType, RamIdToPos}
     import java.lang.{Float, Double, Object, Character}
 
-    import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
-
-    @Internal
-    enum Lock[_: Region](JReadWriteLock)
-
-    mod Lock {
-        import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
-        use Fixpoint.Boxing.Lock
-
-        pub def mkLock(_: Region[r]): Lock[r] \ r =
-            Lock(unchecked_cast((new JReadWriteLock(): _ \ IO) as _ \ r))
-
-        pub def readLock(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.readLock().lock(): _ \ IO) as _ \ r)
-
-        pub def writeLock(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.writeLock().lock(): _ \ IO) as _ \ r)
-
-        pub def unlockRead(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.readLock().unlock(): _ \ IO) as _ \ r)
-
-        pub def unlockWrite(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.writeLock().unlock(): _ \ IO) as _ \ r)
-    }
-
-
-    mod RelSymTypeInfo {
-        pub enum RealType {
-            case Unknown
-            case Bool
-            case Char
-            case Int8
-            case Int16
-            case Int32
-            case Int64
-            case Float32
-            case Float64
-            case Object
-        }
-
-        pub type alias RelSymTypeInfo[r: Eff] = Array[RealType, r]
-
-        pub def setType(t: RealType, index: Int32, symInfo: RelSymTypeInfo[r]): Unit \ r = Array.put(t, index, symInfo)
-
-        pub def getType(index: Int32, symInfo: RelSymTypeInfo[r]): RealType \ r = Array.get(index, symInfo)
-    }
-
-    pub type alias Boxing[r: Region] = (
-        Vector[MutList[Boxed, r]], // List of Boxed objects 
-        Vector[MutMap[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
-        RelSymTypeInfo.RelSymTypeInfo[r], // Mapping from RelSym and index to RealType
-        Vector[Lock[r]], // Locks on the MutList/MutMap.
-    )
-
-    pub type alias RamIdToMarshal = Map[RamId, Int32]
-
-    pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToMarshal) \ r =
+    pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToPos) \ r =
         let mapping = Equality.computeMapping(program);
         (initializeInternal(rc, program, mapping), mapping)
 
-    def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToMarshal): Boxing[r] \ r =
+    def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToPos): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
         let locks = Vector.init(_ -> Lock.mkLock(rc), max);
         let posToIndex = Array.empty(rc, max);
-        let info = (intToBox, boxToInt, posToIndex, locks);
+        let info = (intToBox, boxToInt, TypeInfo.TypeInfo(posToIndex), locks);
         let relSyms = relSymsOfProgram(program);
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
@@ -112,7 +51,7 @@ mod Fixpoint.Boxing {
                     unboxWith(bot, unwrap(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
-        (intToBox, boxToInt, posToIndex, locks)
+        info
 
     def deMarshalObject(value: Int64, index: Int32, info: Boxing[r]): Boxed \ r = {
         let (objectList, _, _, locks) = info;
@@ -151,31 +90,31 @@ mod Fixpoint.Boxing {
     pub def unboxWith(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
         let (_, _, symInfo, _) = info;
         match box {
-            case BoxedBool(x)       => setType(RealType.Bool, index, symInfo); if (x) 1i64 else 0i64
-            case BoxedChar(x)       => setType(RealType.Char, index, symInfo); Int32.toInt64(Char.toBmpCodePoint(x))
-            case BoxedInt8(x)       => setType(RealType.Int8, index, symInfo); Int8.toInt64(x)
-            case BoxedInt16(x)      => setType(RealType.Int16, index, symInfo); Int16.toInt64(x)
-            case BoxedInt32(x)      => setType(RealType.Int32, index, symInfo); Int32.toInt64(x)
-            case BoxedInt64(x)      => setType(RealType.Int64, index, symInfo); x
-            case BoxedFloat32(x)    => setType(RealType.Float32, index, symInfo); Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(x).floatValue()))
-            case BoxedFloat64(x)    => setType(RealType.Float64, index, symInfo); Double.doubleToRawLongBits(Float64.valueOf(x).doubleValue())
-            case BoxedObject(_, _)  => setType(RealType.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
+            case BoxedBool(x)       => setType(Types.Bool, index, symInfo); if (x) 1i64 else 0i64
+            case BoxedChar(x)       => setType(Types.Char, index, symInfo); Int32.toInt64(Char.toBmpCodePoint(x))
+            case BoxedInt8(x)       => setType(Types.Int8, index, symInfo); Int8.toInt64(x)
+            case BoxedInt16(x)      => setType(Types.Int16, index, symInfo); Int16.toInt64(x)
+            case BoxedInt32(x)      => setType(Types.Int32, index, symInfo); Int32.toInt64(x)
+            case BoxedInt64(x)      => setType(Types.Int64, index, symInfo); x
+            case BoxedFloat32(x)    => setType(Types.Float32, index, symInfo); Int32.toInt64(Float.floatToRawIntBits(Float32.valueOf(x).floatValue()))
+            case BoxedFloat64(x)    => setType(Types.Float64, index, symInfo); Double.doubleToRawLongBits(Float64.valueOf(x).doubleValue())
+            case BoxedObject(_, _)  => setType(Types.Object, index, symInfo); marshallObject(box, index, info) // We remap to low, so only goes wrong when dealing with more than 2^32 different RelSyms
             case Boxed.None         => bug!("None should never be in a position to be unboxed unboxed")
         }
 
     pub def boxWith(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
         let (_, _, symInfo, _) = info;
         match getType(index, symInfo) {
-            case RealType.Bool      => Boxed.BoxedBool(not(v == 0i64))
-            case RealType.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(unwrap(Int64.tryToInt32(v)))) as _ \ {}))
-            case RealType.Int8      => BoxedInt8(unwrap(Int64.tryToInt8(v)))
-            case RealType.Int16     => BoxedInt16(unwrap(Int64.tryToInt16(v)))
-            case RealType.Int32     => BoxedInt32(unwrap(Int64.tryToInt32(v)))
-            case RealType.Int64     => BoxedInt64(v)
-            case RealType.Float32   => BoxedFloat32(Float.intBitsToFloat(unwrap(Int64.tryToInt32(v))))
-            case RealType.Float64   => BoxedFloat64(Double.longBitsToDouble(v))
-            case RealType.Object    => deMarshalObject(v, index, info)
-            case RealType.Unknown   => bug!("Unormalizing value, which has never been normalized")
+            case Types.Bool      => Boxed.BoxedBool(not(v == 0i64))
+            case Types.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(unwrap(Int64.tryToInt32(v)))) as _ \ {}))
+            case Types.Int8      => BoxedInt8(unwrap(Int64.tryToInt8(v)))
+            case Types.Int16     => BoxedInt16(unwrap(Int64.tryToInt16(v)))
+            case Types.Int32     => BoxedInt32(unwrap(Int64.tryToInt32(v)))
+            case Types.Int64     => BoxedInt64(v)
+            case Types.Float32   => BoxedFloat32(Float.intBitsToFloat(unwrap(Int64.tryToInt32(v))))
+            case Types.Float64   => BoxedFloat64(Double.longBitsToDouble(v))
+            case Types.Object    => deMarshalObject(v, index, info)
+            case Types.Unknown   => bug!("Unormalizing value, which has never been normalized")
         }
 
 
@@ -212,7 +151,7 @@ mod Fixpoint.Boxing {
 
         def computeDisjointStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeDisjointOp(rest, predTrack, set)
-            case RamStmt.Merge(rel1, rel2) => unifyPredicates(rel1, rel2, set)
+            case RamStmt.MergeInto(rel1, rel2) => unifyPredicates(rel1, rel2, set)
             case RamStmt.Swap(rel1, rel2) => unifyPredicates(rel1, rel2, set)
             case RamStmt.Purge(_) => ()
             case RamStmt.Seq(stmts) => Vector.forEach(x -> computeDisjointStmt(x, predTrack, set), stmts)
@@ -445,7 +384,7 @@ mod Fixpoint.Boxing {
         @Internal
         def computeMappingStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeMappingOp(rest, predTrack, set, map, counter)
-            case RamStmt.Merge(rel1, rel2) =>
+            case RamStmt.MergeInto(rel1, rel2) =>
                 insertIndexRelSym(rel1, set, map, counter);
                 insertIndexRelSym(rel2, set, map, counter)
             case RamStmt.Swap(rel1, rel2) =>
