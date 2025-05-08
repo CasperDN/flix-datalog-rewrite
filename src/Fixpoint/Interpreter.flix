@@ -276,18 +276,17 @@ mod Fixpoint.Interpreter {
                     Array.put(unchecked_cast(t as Array[Int64, r]), tupleIndex, tupleEnv);
                     evalOp(rc, ctxt, body)
                 })
-            case RelOp.Project(terms, rel, bot, leq, lub, index) =>
+            case RelOp.Project(terms, rel, Relational) =>
                 let relIndex = Array.get(rel, db);
-                if (index == -1) {
-                    let tuple = unchecked_cast(Vector.map(evalTerm(env, boxing), terms) as Array[Int64, r]);
-                    BPlusTree.insert(tuple, Boxed.None, relIndex)
-                } else {
-                    let len = Vector.length(terms);
-                    let tuple = evalTermsWithLat(rc, ctxt, terms);
-                    let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
-                    if (latVal `leq` bot) ()
-                    else BPlusTree.putWith(lub, tuple, latVal, relIndex)
-                }
+                let tuple = unchecked_cast(Vector.map(evalTerm(env, boxing), terms) as Array[Int64, r]);
+                BPlusTree.insert(tuple, Boxed.None, relIndex)
+            case RelOp.Project(terms, rel, Latticenal(bot, leq, lub, _)) =>
+                let relIndex = Array.get(rel, db);
+                let len = Vector.length(terms);
+                let tuple = evalTermsWithLat(rc, ctxt, terms);
+                let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
+                if (latVal `leq` bot) ()
+                else BPlusTree.putWith(lub, tuple, latVal, relIndex)
             case RelOp.If(test, then) =>
                 if (evalBoolExps(rc, ctxt, test))
                     evalOp(rc, ctxt, then)
@@ -374,21 +373,20 @@ mod Fixpoint.Interpreter {
         def evalBoolExp(exp) = match exp {
             case BoolExp.Not(boolExp) => not evalBoolExp(boolExp)
             case BoolExp.IsEmpty(rel) => BPlusTree.isEmptyThreadUnsafe(Array.get(rel, db))
-            case BoolExp.NotMemberOf(terms, rel, leq, index) =>
+            case BoolExp.NotMemberOf(terms, rel, Relational) =>
                 let relIndex = Array.get(rel, db);
-                if (index == -1)
-                    let tuple = Vector.map(evalT, terms);
-                    not BPlusTree.memberOfThreadUnsafe(unchecked_cast(tuple as Array[Int64, r]), relIndex)
-                else {
-                    let len = Vector.length(terms);
-                    let tuple = evalTermsWithLat(rc, ctxt, terms);
-                    let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
-                    let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.None, relIndex);
-                    if(curLatVal == Boxed.None)
-                        true
-                    else
-                        not (latVal `leq` curLatVal)
-                }
+                let tuple = Vector.map(evalT, terms);
+                not BPlusTree.memberOfThreadUnsafe(unchecked_cast(tuple as Array[Int64, r]), relIndex)
+            case BoolExp.NotMemberOf(terms, rel, Latticenal(_, leq, _, _)) =>
+                let relIndex = Array.get(rel, db);
+                let len = Vector.length(terms);
+                let tuple = evalTermsWithLat(rc, ctxt, terms);
+                let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
+                let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.None, relIndex);
+                if(curLatVal == Boxed.None)
+                    true
+                else
+                    not (latVal `leq` curLatVal)
             case BoolExp.Eq(lhs, rhs) => evalTerm(env, boxing, lhs) == evalTerm(env, boxing, rhs)
             case BoolExp.Leq(lhs, leq, index) => 
                 let (_, _, _, latEnv) = env;

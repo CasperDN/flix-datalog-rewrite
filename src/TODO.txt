@@ -3,3 +3,5 @@ In project: optimize `bot` out
 Add functional and constant handling to join-optimizer.
 
 Possible merge RowVar with RamId.
+
+Remove Guard0 and App0 from (both) Ram.

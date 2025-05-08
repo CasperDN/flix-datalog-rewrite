@@ -56,7 +56,7 @@ mod Fixpoint.Phase.Lowering {
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
-    def relSymToDenId(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
+    def relSymToLatticeBoxingInfo(relSym: RelSym, idToMarshall: RamIdToMarshal): Int32 = match relSym {
         case RelSym.Symbol(_, _, Denotation.Relational) => -1
         case RelSym.Symbol(PredSym.PredSym(_, id), arity, Denotation.Latticenal(_, _, _, _)) =>
             unwrap(Map.get(RamId.RelPos(id, arity - 1), idToMarshall))
@@ -126,7 +126,7 @@ mod Fixpoint.Phase.Lowering {
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToDenId(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
                 let deltaRels = Vector.length(unwrap(Map.get(deltaRel, constructed)));
                 let merges = Vector.map(index -> lowerToMerge(unwrap(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
                 if(Vector.length(merges) == 1) {
@@ -142,7 +142,7 @@ mod Fixpoint.Phase.Lowering {
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToDenId(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.Merge(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
                 let deltaRels = Vector.length(unwrap(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, unwrap(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {
@@ -232,20 +232,12 @@ mod Fixpoint.Phase.Lowering {
                     thisWriteTo, loweredBody, to
                 )
             case AProject(terms, s) => 
-                let idToMarshall = fst(marshalling);
                 let (_, placements) = indexInfo;
                 let newRelPos = unwrap(Map.get((s, 0), placements));
-                let (bot, leq, lub) = match toDenotation(s) {
-                    case Denotation.Relational => (
-                        BoxedBool(false),
-                        _ -> _ -> bug!("Using lattice logic on normal relation"),
-                        _ -> _ -> bug!("Using lattice logic on normal relation")
-                    )
-                    case Denotation.Latticenal(bot, leq, lub, _) => (bot, leq, lub)
-                };
+                let den = toDenotation(s);
                 let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
                 EProject(
-                    loweredTerms, newRelPos, bot, leq, lub, relSymToDenId(s, idToMarshall)
+                    loweredTerms, newRelPos, den
                 )
             case AIf(boolExps, body) =>
                 EIf(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, meetWithMap), boolExps), lowerOpRec(body))
@@ -332,7 +324,6 @@ mod Fixpoint.Phase.Lowering {
     
     // NotBot is removed as it is handled separately by the interpreter.
     def lowerBool(bool: ABoolExp, idToIndex: IdToIndex[r], marshalling: (RamIdToMarshal, Boxing[r]), indexInfo: IndexInformation, meetWithMap: MeetWithMap[r]): Option[EBoolExp] \ r = 
-        let idToMarshall = fst(marshalling);
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
         match bool {
             case ANot(s) => 
@@ -344,12 +335,9 @@ mod Fixpoint.Phase.Lowering {
                 Some(EIsEmpty(sPos))
             case ANotMemberOf(terms, s) => 
                 let (_, placements) = indexInfo;
-                let leq = match toDenotation(s) {
-                    case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
-                    case Denotation.Latticenal(_, leq, _, _) => leq
-                };
+                let den = toDenotation(s);
                 let sPos = unwrap(Map.get((s, 0), placements));
-                Some(ENotMemberOf(Vector.map(lowerT, terms), sPos, leq, relSymToDenId(s, idToMarshall)))
+                Some(ENotMemberOf(Vector.map(lowerT, terms), sPos, den))
             case ANotBot(t1, _, _) => 
                 lowerMeet(t1, idToIndex, meetWithMap);
                 None
@@ -361,7 +349,8 @@ mod Fixpoint.Phase.Lowering {
                 Some(ELeq(box, leq, lowerRowVar(rv, idToIndex)))
             case AEq(term1, term2) => 
                 Some(EEq(lowerT(term1), lowerT(term2)))
-            case AGuard0(f) => Some(EGuard0(f))
+            case AGuard0(_) => unreachable!()
+            // case AGuard0(f) => Some(EGuard0(f))
             case AGuard1(f, term1) => Some(EGuard1(f, lowerT(term1)))
             case AGuard2(f, term1, term2) => Some(EGuard2(f, lowerT(term1), lowerT(term2)))
             case AGuard3(f, term1, term2, term3) => Some(EGuard3(f, lowerT(term1), lowerT(term2), lowerT(term3)))
