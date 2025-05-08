@@ -17,10 +17,10 @@
  */
 
 mod Fixpoint.Ast.Ram {
-    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    // We have not updated these imports to be for Fixpoint3 as we have not changed any of the files
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation, PredSym}
     use Fixpoint.Ast.Shared.Denotation.{Relational}
-    use Fixpoint.Ast.Shared.PredSym
-    use Fixpoint.Boxed;
+    use Fixpoint.Boxed
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
 
@@ -28,27 +28,46 @@ mod Fixpoint.Ast.Ram {
     // RamProgram                                                              //
     /////////////////////////////////////////////////////////////////////////////
 
-    // A program consists of a statements, the EDB, predicate information,
-    // and the set of indices to be constructed.
+    ///
+    /// A `RamProgram` consists of a statements, the EDB, predicate information,
+    /// and the information about the indexes to be constructed.
+    /// 
     pub enum RamProgram {
         case Program(RamStmt, Facts, Predicates, IndexInformation)
     }
 
-    // (maximal identifier of full RelSym, set of RelSym in program)
+    ///
+    /// `Predicate` represents 1 + the maximal indentifier of the full `RelSym`s of the program and set of `RelSym`
+    ///
     pub type alias Predicates = (Int64, Set[RelSym])
 
-    // The EDB of a program
+    ///
+    /// The EDB of a program
+    ///
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
-    // A `search`. A `Search` describes the order in which elements are ordered.
-    // [2, 0, 1] means that the elements are ordered by first the third element
-    // then the first and finally the second.
+
+    ///
+    /// A `Search` describes the order in which elements are ordered.
+    /// [2, 0, 1] means that the elements are ordered by the third element,
+    /// then the first and finally the second.
+    ///
     pub type alias Search = Vector[Int32]
-    // A map from RelSym to a list of indexes created for the RelSym.
+
+    ///
+    /// `ConstructedIndexes` represents a map from list of indexes created for the RelSym.
+    ///
     pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
-    // A map from RelSym and its place in the vector of ConstructedIndexes
-    // to its final position in memory.
+
+    ///
+    /// `IndexPositions` represents a map from RelSym and its place in the vector of ConstructedIndexes
+    /// to its final position in memory.
+    ///
     pub type alias IndexPositions = Map[(RelSym, Int32), Int32]
-    pub type alias IndexInformation = (ConstructedIndexes, Map[(RelSym, Int32), Int32])
+
+    ///
+    /// `IndexInformation` contains the combined information about indexes in a program
+    ///
+    pub type alias IndexInformation = (ConstructedIndexes, IndexPositions)
 
     /////////////////////////////////////////////////////////////////////////////
     // RamStmt                                                                 //
@@ -121,7 +140,8 @@ mod Fixpoint.Ast.Ram {
     /// `Functional(rv, f, input, body, arity)` represents evaluating `f(input)`, for each resutl save it as `rv`
     /// and execute `body`. `arity` is the size of the output.
     ///
-    /// `Project(terms, relSym)` represents inserting `terms` as a fact for relSym.
+    /// `Project(terms, relSym)` represents inserting `terms` as a fact for `relSym`.
+    /// `relSym` should be a new relation.
     ///
     /// `If(bools, body)` represents evaluating `body` if `bools` is true.
 
