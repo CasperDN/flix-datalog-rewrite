@@ -18,7 +18,6 @@
 
 mod Fixpoint.Solver {
     use Fixpoint.BoxingTypes.{Boxing}
-    use Fixpoint.Interpreter.Database
 
     import dev.flix.runtime.Global
 

@@ -25,16 +25,113 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxable
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym, RamProgram, arityOfNonLat}
+    use Fixpoint.Ast.ExecutableRam.{Facts => EFacts}
     use Fixpoint.Ast.Datalog.{Datalog}
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use Fixpoint.Predicates.relSymsOfProgram
-    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Lock, Types, setType, getType, RamIdToPos}
+    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Lock, Types, setType, getType, RamIdToPos, AtomicCounter}
     import java.lang.{Float, Double, Object, Character}
 
+    @Internal
     pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToPos) \ r =
         let mapping = Equality.computeMapping(program);
-        (initializeInternal(rc, program, mapping), mapping)
+        let boxingInfo = initializeInternal(rc, program, mapping);
+        // let facts = initializeFacts(rc, program, boxingInfo, mapping);
+        (boxingInfo, mapping)
+
+    // @Internal
+    // pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], EFacts, RamIdToPos) \ r =
+    //     let mapping = Equality.computeMapping(program);
+    //     let boxingInfo = initializeInternal(rc, program, mapping);
+    //     // let facts = initializeFacts(rc, program, boxingInfo, mapping);
+    //     (boxingInfo, mapping)
+
+    // def initializeFacts(rc1: Region[r], program: RamProgram, boxingInfo: Boxing[r], mapping: RamIdToPos): EFacts \ r = region rc2 {        
+    //     let Program(_, facts, _, _) = program;
+    //     let factsAsVec = Map.toVector(facts);
+    //     let counters = initializeCounters(boxingInfo);
+    //     unchecked_cast(() ->
+    //         Vector.forEach(match (relSym, factVec) ->
+    //             spawn unchecked_cast(() -> (mapAllFacts(relSym, factVec, boxingInfo, counters, mapping): _ \ r) as _ \ IO)() @ rc2
+    //         )
+    //         as _ \ r
+    //     )
+    //     // let newFacts =
+    //     //     facts |>
+    //     //         Map.mapWithKey(k -> values ->
+    //     //             let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
+    //     //             values |> 
+    //     //             Vector.map(vec -> match den {
+    //     //                 case Denotation.Relational =>
+    //     //                     let tuple = vec |>
+    //     //                         Vector.mapWithIndex(i -> v -> {
+    //     //                             Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
+    //     //                         });
+    //     //                     (tuple, Boxed.None)
+    //     //                 case Denotation.Latticenal(_, _, _ ,_) =>
+    //     //                     let len = Vector.length(vec);
+    //     //                     let tuple = Array.empty(rc, len - 1);
+    //     //                     vec |> Vector.forEachWithIndex(i -> term -> {
+    //     //                         if (i < len - 1)
+    //     //                             Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
+    //     //                         else ()
+    //     //                     });
+    //     //                     let latVal = Vector.get(len - 1, vec);
+    //     //                     (Array.toVector(tuple), latVal)
+    //     //             })
+    //     //         );
+
+    // }
+
+    // ///
+    // /// Returns the number of threads to use for parallel evaluation.
+    // ///
+    // /// # SAFETY:
+    // /// This accesses the runtime environment, which is an effect.
+    // /// It is assumed that this function is only used in contexts
+    // /// where this effect is not observable outside of the RedBlackTree module.
+    // ///
+    // /// Copy pasted from RedBlackTree.flix.
+    // ///
+    // def threads(): Int32 = unsafe {
+    //     // Note: We use a multiple of the number of physical cores for better performance.
+    //     let multiplier = 4;
+    //     multiplier * Runtime.getRuntime().availableProcessors()
+    // }
+
+
+    // def mapAllFacts(rc1: Region[r], relSymFacts: (RelSym, Vector[Vector[Boxed]]), boxingInfo: Boxing[r], counters: Vector[AtomicCounter], mapping: RamIdToPos): RelSym {
+    //     let (relSym, facts) = relSymFacts;
+    //     let threadNum = threads();
+    //     let resultArr = Array.empty(rc1, Vector.length(facts));
+    //     if(Vector.length(facts) <= threadNum) {
+
+    //     } else {
+
+    //     }
+    // }
+
+    // def mapPartOfVector(rc: Region[r], relSym: RelSym, factVec: Vector[Vector[Boxed]], from_: Int32, to_: Int32, collectionArr: Array[Int64], boxingInfo: Boxing[r], counters: Vector[AtomicCounter], mapping: RamIdToPos): Unit \ r = {
+    //     def loop(i) =
+    //         if(to_ >= i) ()
+    //         else
+
+    //             loop(i)
+    //     loop(0)
+    // }
+
+    // def initializeCounters(rc: Region[r], boxingInfo: Boxing[r]): Vector[AtomicCounter] = {
+    //     let (boxedVecList, _, _, _) = boxingInfo;
+    //     let atomicCounters =
+    //         boxedVecList |>
+    //         Vector.map(listOfBoxed ->  AtomicCounter.mkCounter(rc, MutList.length(listOfBoxed)))
+    // }
+
+    // def getMaxUnifiedTypePos(boxingInfo: Boxing[r]): UnifiedTypePos = {
+    //     let (_, _, _, locks) = boxingInfo;
+    //     Vector.length(locks) - 1
+    // }
 
     def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToPos): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
@@ -221,7 +318,6 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.makeSet(Ram.getTermRamId(term1), set);
                 MutDisjointSets.makeSet(Ram.getTermRamId(term2), set);
                 MutDisjointSets.union(Ram.getTermRamId(term1), Ram.getTermRamId(term2), set)
-            case BoolExp.Guard0(_) => ()
             case BoolExp.Guard1(_, term1) =>
                 MutDisjointSets.makeSet(Ram.getTermRamId(term1), set);
                 computeDisjointTerm(term1, predTrack, set)
@@ -297,7 +393,6 @@ mod Fixpoint.Boxing {
                 MutDisjointSets.makeSet(id, set);
                 MutDisjointSets.union(id1, id, set);
                 MutDisjointSets.union(id1, id2, set)
-            case RamTerm.App0(_, _) => ()
             case RamTerm.App1(_, t1, RamId.Id(id)) =>
                 computeDisjointTerm(t1, predTrack, set);
                 let id1 = Ram.getTermRamId(t1);
@@ -442,7 +537,6 @@ mod Fixpoint.Boxing {
                     computeMappingTermRec(t1);
                     insert(Ram.getLatVarRamId(rv, relSym));
                     insert(RamId.Id(id))
-                case RamTerm.App0(_, id) => insert(id)
                 case RamTerm.App1(_, t1, RamId.Id(id)) =>
                     computeMappingTermRec(t1);
                     insert(RamId.Id(id));
@@ -508,7 +602,6 @@ mod Fixpoint.Boxing {
                     computeMappingTermRec(t1)
                 case BoolExp.Leq(_, _, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _)) =>
                     insert(RamId.RelPos(predSym, arity - 1))
-                case BoolExp.Guard0(_) => ()
                 case BoolExp.Guard1(_, t1) =>
                     computeMappingTermRec(t1)
                 case BoolExp.Guard2(_, t1, t2) =>

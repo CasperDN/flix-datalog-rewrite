@@ -17,19 +17,21 @@
  */
 
 mod Fixpoint.Phase.Stratifier {
-    use Fixpoint.Helpers.unwrap
-
     use Fixpoint.Ast.Datalog.BodyPredicate.BodyAtom
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
-    use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
+    use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Helpers.unwrap
     use Fixpoint.PrecedenceGraph
     use Fixpoint.PrecedenceGraph.MutGraph
     use Fixpoint.Ast.Shared.PredSym
 
-
+    ///
+    ///
+    ///
+    ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, Int32] = region rc {
         let graph = MutGraph.empty(rc);

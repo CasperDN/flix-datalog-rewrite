@@ -19,8 +19,8 @@ mod Fixpoint.Phase.Hoisting {
     use MutDisjointSets.MutDisjointSets
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, arityOfNonLat}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
-    use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App0, App1, App2, App3, App4, App5}
+    use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
 
     type alias Load = (RowVar, Int32)
@@ -242,7 +242,6 @@ mod Fixpoint.Phase.Hoisting {
         case BoolExp.NotBot(term1, _, _) => collectTermVariables(term1)
         case BoolExp.Leq(_, RowVar.Named(id), _) => Set#{id}
         case Eq(term1, term2) => Set.union(collectTermVariables(term1), collectTermVariables(term2))
-        case Guard0(_) => Set#{}
         case Guard1(_, term1) => collectTermVariables(term1)
         case Guard2(_, term1, term2) => Set.union(collectTermVariables(term1), collectTermVariables(term2))
         case Guard3(_, term1, term2, term3) => 
@@ -258,7 +257,6 @@ mod Fixpoint.Phase.Hoisting {
         case Lit(_, _)                              => Set#{}
         case RowLoad(RowVar.Named(id), _, _)        => Set#{id}
         case Meet(_, t1, (RowVar.Named(id), _), _)  => Set.union(collectTermVariables(t1), Set#{id})
-        case App0(_, _)                             => Set#{}
         case App1(_, t1, _)                         => collectTermVariables(t1)
         case App2(_, t1, t2, _)                     => Set.union(collectTermVariables(t1), collectTermVariables(t2))
         case App3(_, t1, t2, t3, _)                 => Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3))
@@ -280,7 +278,6 @@ mod Fixpoint.Phase.Hoisting {
         case BoolExp.NotBot(_, _, _) => bool
         case BoolExp.Leq(_, _, _) => bool
         case Eq(t1, t2) => Eq(simplifyTerm(t1), simplifyTerm(t2))
-        case Guard0(_) => bool
         case Guard1(f, t1) => Guard1(f, simplifyTerm(t1))
         case Guard2(f, t1, t2) => Guard2(f, simplifyTerm(t1), simplifyTerm(t2))
         case Guard3(f, t1, t2, t3) => Guard3(f, simplifyTerm(t1), simplifyTerm(t2), simplifyTerm(t3))
@@ -302,7 +299,6 @@ mod Fixpoint.Phase.Hoisting {
             case None => term
         }
         case Meet(f, t1, t2, id) => Meet(f, t1, t2, id)
-        case App0(_, _) => term
         case App1(f, t1, id) => App1(f, recurse(t1), id)
         case App2(f, t1, t2, id) => App2(f, recurse(t1), recurse(t2), id)
         case App3(f, t1, t2, t3, id) => App3(f, recurse(t1), recurse(t2), recurse(t3), id)
@@ -326,7 +322,6 @@ mod Fixpoint.Phase.Hoisting {
             MutMap.memberOf(unwrap(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
             
             case Eq(term1, term2) => termGround(term1) and termGround(term2)
-            case Guard0(_) => true
             case Guard1(_, term1) => termGround(term1)
             case Guard2(_, term1, term2) => termGround(term1) and termGround(term2)
             case Guard3(_, term1, term2, term3) => termGround(term1) and termGround(term2) and termGround(term3)
@@ -346,7 +341,6 @@ mod Fixpoint.Phase.Hoisting {
             case RowLoad(rv, i, _) =>
                 MutMap.memberOf(unwrap(MutDisjointSets.find((rv, i), equalitySets)), termMap)
             case Meet(_, t1, (rv, relSym), _) => termGround(t1) and MutMap.memberOf(unwrap(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
-            case App0(_, _) => true
             case App1(_, t1, _) => termGround(t1)
             case App2(_, t1, t2, _) => termGround(t1) and termGround(t2)
             case App3(_, t1, t2, t3, _) => termGround(t1) and termGround(t2) and termGround(t3)

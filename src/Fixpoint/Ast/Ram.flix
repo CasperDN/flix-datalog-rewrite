@@ -17,7 +17,6 @@
  */
 
 mod Fixpoint.Ast.Ram {
-    // We have not updated these imports to be for Fixpoint3 as we have not changed any of the files
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation, PredSym}
     use Fixpoint.Ast.Shared.Denotation.{Relational}
     use Fixpoint.Boxed
@@ -29,14 +28,14 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// A `RamProgram` represents a Datalog program
+    /// A `RamProgram` represents a compiled Datalog program.
     /// 
     pub enum RamProgram {
         case Program(RamStmt, Facts, Predicates, IndexInformation)
     }
 
     ///
-    /// `Predicate` contains a set of `RelSym`s and 1 + the maximal indentifier of the `RelSym`s.
+    /// `Predicate` contains a set of `RelSym` and 1 + the maximal indentifier of the `RelSym`s.
     ///
     pub type alias Predicates = (Int64, Set[RelSym])
 
@@ -46,9 +45,20 @@ mod Fixpoint.Ast.Ram {
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
 
     ///
-    /// A `Search` describes the order in which elements are ordered.
-    /// [2, 0, 1] means that the elements are ordered by the third element,
-    /// then the first and finally the second.
+    /// A `Search` describes the order in which entries in a tuple are ordered. These are
+    /// created during the index selection phase and are used by indexes to store tuples
+    /// for efficient retrieval in range queries.
+    ///
+    /// For example, the datalog rule
+    /// 
+    /// A(x) :- B(x), C(_, _, x).
+    ///
+    /// produces the search `Vector#{2, 0, 1}` for relation `C`. This means the tuples in
+    /// `C` are ordered by the third element, then the first and finally the second.
+    /// During the index selection phase, searches are collected and are expanded to
+    /// describe the order of the whole tuple, i.e., the above search is collected as
+    /// `Vector#{2}` but gets expanded to `Vector#{2, 0, 1}`. Thus, the final search used
+    /// by an index has length exactly equal to the relation's arity.
     ///
     pub type alias Search = Vector[Int32]
 
@@ -58,8 +68,8 @@ mod Fixpoint.Ast.Ram {
     pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
 
     ///
-    /// `IndexPositions` represents a map from RelSym and its place in the vector of ConstructedIndexes
-    /// to its final position in memory.
+    /// `IndexPositions` represents a map from RelSym and its place in the vector of
+    /// ConstructedIndexes to its final position in memory.
     ///
     pub type alias IndexPositions = Map[(RelSym, Int32), Int32]
 
@@ -73,27 +83,28 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// `Insert(body)` represents an insert statement.
+    /// `Insert(body)` executes the RelOp `body`.
     ///
-    /// `MergeInto(r1, r2)` represents merging the facts of `r1` into `r2`.
+    /// `MergeInto(r1, r2)` merges the facts of `r1` into `r2`.
     ///
-    /// `Swap(newRel, deltaRel)` represents swapping the facts of `deltaRel` and `newRel`.
-    /// For multi-indexed relations the only guarantee is that all indexes on `deltaRel`
-    /// will contain all facts of `newRel`.
+    /// `Swap(newRel, deltaRel)` swaps the facts of `deltaRel` and `newRel`. For
+    /// multi-indexed relations, the only guarantee is that all indexes on `deltaRel` will
+    /// contain all facts of `newRel`.
     ///
-    /// `Purge(rel)` represents removing all facts from all indexes on `rel`.
+    /// `Purge(rel)` removes all facts from all indexes on `rel`.
     ///
-    /// `Seq(body)` represents a sequence of statments to be executed sequentially.
+    /// `Seq(body)` is sequence of statements to be executed sequentially.
     ///
-    /// `Par(body)` represents a sequence of statments to be executed in parallel.
+    /// `Par(body)` is a sequence of statments to be executed in parallel.
     ///
-    /// `Until(condition, body)` represents `If(condition) () else Seq(body; Until(condition, body))`.
+    /// `Until(condition, body)` checks if `condition` is false and repeadetly executes
+    /// `body` until `condition` is `true`.
     ///
-    /// `Comment(string)` represents a comment for debugging.
+    /// `Comment(string)` is a comment for debugging.
     ///
-    /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` represents an
-    /// instruction to estimate the size `relSym` using `indexUsed` as described by `search` and save the
-    /// result to `savePosition`. For details see JoinOptimizer.
+    /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` estimates the size
+    /// relation `relSym` based on index `indexUsed` as described by `search` and saves
+    /// the result to `savePosition`. For details see JoinOptimizer.
     ///
     @Internal
     pub enum RamStmt {
@@ -113,7 +124,7 @@ mod Fixpoint.Ast.Ram {
             let nl = String.lineSeparator();
             match stmt {
                 case RamStmt.Insert(op) => ToString.toString(op)
-                case RamStmt.MergeInto(src, dst) => "MergeInto ${src} into ${dst}"
+                case RamStmt.MergeInto(src, dst) => "Merge ${src} into ${dst}"
                 case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
                 case RamStmt.Purge(relSym) => "Purge ${relSym}"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
@@ -132,19 +143,20 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
     
     ///
-    /// `Search(rv, relSym, body)` represents going through each facts associated with `relSym`,
-    /// saving them as `rv` and execute `body`.
+    /// `Search(rv, relSym, body)` iterates through the facts in relation `relSym`, saving
+    /// them as RowVar `rv` and executes `body`.
     ///
-    /// `Query(rv, relSym, bools, indexPos, body)` represents going through each facts associated with `relSym`,
-    /// saving them as `rv` and execute `body` if `bools` is true. The index saved at `indexPos` will be used.
+    /// `Query(rv, relSym, bools, indexPos, body)` iterates through the facts in relation
+    /// `relSym`, saving them as `rv` and executes `body` if `bools` is
+    /// true. The index saved at `indexPos` will be used.
     ///
-    /// `Functional(rv, f, input, body, arity)` represents evaluating `f(input)`, for each resutl save it as `rv`
-    /// and execute `body`. `arity` is the size of the output.
+    /// `Functional(rv, f, input, body, arity)` evaluates `f(input)`, for each result,
+    /// saves it as `rv` and executes `body`. `arity` is the arity of the output tuples.
     ///
-    /// `Project(terms, relSym)` represents inserting `terms` as a fact for `relSym`.
-    /// `relSym` should be a new relation.
+    /// `Project(terms, relSym)` constructs a tuple from `terms` and inserts it as a fact
+    /// for relation `relSym`. `relSym` should be a new relation.
     ///
-    /// `If(bools, body)` represents evaluating `body` if `bools` is true.
+    /// `If(bools, body)` evaluates `body` if `bools` is true.
     ///
     @Internal
     pub enum RelOp {
@@ -183,18 +195,18 @@ mod Fixpoint.Ast.Ram {
     ///
     /// `Not(b)`: True if `b` is false.
     ///
-    /// `IsEmpty(relSym)`: True if there are no facts associated with `relSym`.
+    /// `IsEmpty(relSym)`: True if there are no facts in relation `relSym`.
     ///
-    /// `NotMemberOf(terms, relSym)`: True if `terms` is not a fact associated with `relSym`.
+    /// `NotMemberOf(terms, relSym)`: True if the tuple constructed from `terms` is not
+    /// in relation `relSym`.
     ///
     /// `NotBot(term, leq, bot)`: True if `term` is not a `bot`.
-    /// `term`` must be a Meet or RowLoad of a lattice var.
+    /// `term` must be a Meet or RowLoad of a lattice var.
     ///
     /// `Leq(const, rv, relSym)`: True if `const` is less than the lattice element of `rv`.
     /// 
     /// `Eq(term1, term2)`: True if `term1 == term2`.
     ///
-    /// `Guard0(f)`: True if `f() == true`.
     /// `Guard1(f, term1)`: True if `f(term1) == true`.
     /// `Guard2(f, term1, term2)`: True if `f(term1, term2) == true`.
     /// `Guard3(f, term1, term2, term3)`: True if `f(term1, term2, term3) == true`.
@@ -210,7 +222,6 @@ mod Fixpoint.Ast.Ram {
         case NotBot(RamTerm, Boxed -> Boxed -> Bool, Boxed)
         case Leq(Boxed, RowVar, RelSym)
         case Eq(RamTerm, RamTerm)
-        case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm)
         case Guard2(Boxed -> Boxed -> Bool, RamTerm, RamTerm)
         case Guard3(Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
@@ -227,7 +238,6 @@ mod Fixpoint.Ast.Ram {
                 case BoolExp.NotBot(term, _, _) => "(${term}) ≠ ⊥"
                 case BoolExp.Leq(elem, _, term) => "${elem} ≤ (${term})"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
-                case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
                 case BoolExp.Guard3(_, v1, v2, v3) => "<clo>(${v1}, ${v2}, ${v3})"
@@ -254,8 +264,6 @@ mod Fixpoint.Ast.Ram {
     /// `Meet(meet, term, (rv, relSym), id)` represents the meet of `term` with the lattice
     /// element of `rv`.
     ///
-    /// `App0(f)` represents `f()`.
-    ///
     /// `App1(f, term1)` represents `f(term1)`.
     ///
     /// `App2(f, term1, term2)` represents `f(term1, term2)`.
@@ -271,7 +279,6 @@ mod Fixpoint.Ast.Ram {
         case Lit(Boxed, RamId)
         case RowLoad(RowVar, Int32, RelSym)
         case Meet(Boxed -> Boxed -> Boxed, RamTerm, (RowVar, RelSym), RamId)
-        case App0(Unit -> Boxed, RamId)
         case App1(Boxed -> Boxed, RamTerm, RamId)
         case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
         case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamId)
@@ -287,7 +294,6 @@ mod Fixpoint.Ast.Ram {
         case RamTerm.Lit(_, id) => id
         case RamTerm.RowLoad(rv, index, _) => RamId.TuplePos(rv, index)
         case RamTerm.Meet(_, _, _, id) => id
-        case RamTerm.App0(_, id) => id
         case RamTerm.App1(_ , _, id) => id
         case RamTerm.App2(_, _, _, id) => id
         case RamTerm.App3(_, _, _, _, id) => id
@@ -308,7 +314,6 @@ mod Fixpoint.Ast.Ram {
             case RamTerm.Lit(v, _) => "%{v}"
             case RamTerm.RowLoad(var, index, _) => "${var}[${index}]"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
-            case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _) => "<clo>(${v})"
             case RamTerm.App2(_, v1, v2, _) => "<clo>(${v1}, ${v2})"
             case RamTerm.App3(_, v1, v2, v3, _) => "<clo>(${v1}, ${v2}, ${v3})"

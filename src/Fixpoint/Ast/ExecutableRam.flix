@@ -32,33 +32,36 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// A `RamProgram` consists of a statements, the EDB, predicate information,
-    /// the information about the indexes to be constructed, a summary of the arity
-    /// of to be used for the absolute positions of the interpreter, a summary of where
-    /// constants should be saved, and information about Boxing-information.
+    /// A `RamProgram` consists of a statements, the EDB, predicate information, the
+    /// information about the indexes to be constructed, a summary of the arity of to be
+    /// used for the absolute positions of the interpreter, a summary of where constants
+    /// should be saved, and information about Boxing-information.
     /// 
     pub enum RamProgram {
         case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.BoxingTypes.RamIdToPos)
     }
     ///
-    /// The EDB of a program
+    /// The EDB of a program.
     ///
     pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
 
     ///
-    /// `ConstWrites` describes constants used for queries and the position they should be written to.
-    /// Explicitly for `(id1, id2, val)` we have that `searchEnv[id1][id2] = val`
+    /// `ConstWrites` describes constants used for queries and the position they should be
+    /// written to. Explicitly for `(id1, id2, val)` we have that
+    /// `searchEnv[id1][id2] = val`.
     ///
     pub type alias ConstWrites = Vector[(Int32, Int32, Int64)]
 
     ///
-    /// `WriteTuple` describes where constants for a context-specified RowVar should be written to.
-    /// Explicitly for `(indexInFrom, indexTo, indexInTo)` we have that for the context-specified `RowVar`, `rv`,
-    /// write `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
+    /// `WriteTuple` describes where constants for a context-specified RowVar should be
+    /// written to. Explicitly for `(indexInFrom, indexTo, indexInTo)` we have that for
+    /// the context-specified `RowVar`, `rv`, write
+    /// `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
+    ///
     pub type alias WriteTuple = (Int32, Int32, Int32)
 
     ///
-    /// Describes the context which allows for unboxing by Boxing.flix
+    /// Describes the context which allows for unboxing by Boxing.flix.
     ///
     type alias IntToBox = Int32
 
@@ -73,24 +76,28 @@ mod Fixpoint.Ast.ExecutableRam {
 
 
     ///
-    /// `Insert(body)` represents an insert statement.
+    /// `Insert(body)` executes the RelOp `body`.
     ///
-    /// `MergeInto(r1, r2, den)` represents merging the facts of `r1` into `r2`
-    /// for a RelSym with denotation `den`
+    /// `MergeInto(r1, r2, den)` merges the facts of `r1` into `r2` for a RelSym with
+    /// denotation `den`.
     ///
-    /// `Swap(newPos, deltaPos)` represents swapping the facts of the indexes placed at `deltaPos` and `newPos`.
+    /// `Swap(newPos, deltaPos)` swaps the facts of the indexes placed at `newPos` and
+    /// `deltaPos`.
     ///
-    /// `Purge(pos)` represents removing all facts from the indexe saved at `rel`.
+    /// `Purge(pos)` removes all facts from the indexe at position `pos`.
     ///
-    /// `Seq(body)` represents a sequence of statments to be executed sequentially
+    /// `Seq(body)` is sequence of statements to be executed sequentially.
     ///
-    /// `Par(body)` represents a sequence of statments to be executed in parallel
+    /// `Par(body)` is a sequence of statments to be executed in parallel.
     ///
-    /// `Comment(string)` represents a comment for debugging
+    /// `Until(condition, body)` checks if `condition` is false and repeadetly executes
+    /// `body` until `condition` is `true`.
     ///
-    /// `EstimateJoinSize(indexPosition, savePosition, search)` represents an
-    /// instruction to estimate the size of the index at `indexPosition` as described
-    ///  by `search` and save the result to `savePosition`. For details see JoinOptimizer
+    /// `Comment(string)` is a comment for debugging.
+    ///
+    /// `EstimateJoinSize(indexPosition, savePosition, search)` estimates the size of the
+    /// index at `indexPosition` as described by `search` and save the result to
+    /// `savePosition`. For details see `JoinOptimizer.flix`.
     ///
     @Internal
     pub enum RamStmt {
@@ -111,13 +118,13 @@ mod Fixpoint.Ast.ExecutableRam {
             let nl = String.lineSeparator();
             match stmt {
                 case RamStmt.Insert(op) => ToString.toString(op)
-                case RamStmt.MergeInto(src, dst, _, _) => "merge indexes[${src}] into indexes[${dst}]"
+                case RamStmt.MergeInto(src, dst, _, _) => "Merge indexes[${src}] into indexes[${dst}]"
                 case RamStmt.Swap(lhs, rhs) => "Swap indexes[${lhs}] and indexes[${rhs}]"
-                case RamStmt.Purge(ramSym) => "purge indexes[${ramSym}]"
+                case RamStmt.Purge(ramSym) => "Purge indexes[${ramSym}]"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" ∧ ");
-                    "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
+                    "Until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "// ${comment}"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
                 case RamStmt.EstimateJoinSize(index, writeTo, attr) => 
@@ -130,25 +137,25 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
     
     ///
-    /// `Search(rvPos, indexPos, meet, den, writeTuple, body)` represents going
-    /// through each fact in the index at `indexPos` saving them at `rvPos`
-    /// and using the facts as context for `writeTuple`. If `den` is a latticenal
-    /// save the lattice element at `rvPos`. If `meet != rvPow` save the meet of
-    /// the lattice element and the element at rvPos.
-    /// For each fact execute `body`. For lattice element only exectue `body` for
-    /// non-bot elements
+    /// `Search(rvPos, indexPos, meet, den, writeTuple, body)` iterates the facts in the
+    /// index at `indexPos` saving them at `rvPos` and using the facts as context for
+    /// `writeTuple`. If `den` is a latticenal, saves the lattice element at `rvPos`. If
+    /// `meet != rvPow`, saves the meet of the lattice element and the element at rvPos.
+    /// For each fact executes `body`. For lattice element only executes `body` for
+    /// non-bot elements.
     ///
-    /// `Query(rvPos, indexPos, meet, den, writeTuple, body)` represents the same as
-    /// `Search`, except the facts will be filtered by the query for `rvPos`.
+    /// `Query(rvPos, indexPos, meet, den, writeTuple, body)` is the same as `Search`,
+    /// except the facts will be filtered by the query for `rvPos`.
     ///
-    /// `Functional(rv, f, input, writeTuple, body, unboxingInfo)` represents evaluating `f(input)`, for each result save it as `rv`
-    /// do writes as described by `writeTuple` and execute `body`. `unboxingInfo` can be used to unbox the values returned by `f`.
+    /// `Functional(rv, f, input, writeTuple, body, unboxingInfo)` evaluates `f(input)`,
+    /// for each result saves it as `rv`, does writes as described by `writeTuple` and
+    /// executes `body`. `unboxingInfo` can be used to unbox the values returned by `f`.
     ///
-    /// `Project(terms, newIndex, den)` represents inserting `terms` as a fact in `newIndex`.
-    /// For `den == Latticenal` we only insert if the lattice-value is greater than the current and we insert
-    /// with least uppber bound.
+    /// `Project(terms, newIndex, den)` constructs a tuple from `terms` and inserts it a
+    /// fact in index `newIndex`. For `den == Latticenal` we only insert if the
+    /// lattice-value is greater than the current and we insert with least uppber bound.
     ///
-    /// `If(bools, body)` represents evaluating `body` if `bools` is true.
+    /// `If(bools, body)` evaluates `body` if `bools` is true.
     ///
     @Internal
     pub enum RelOp {
@@ -188,22 +195,22 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// `Not(b)`: True if `b` is false
+    /// `Not(b)`: True if `b` is false.
     ///
-    /// `IsEmpty(index)`: True if there are no facts associated with the index at `index`
+    /// `IsEmpty(index)`: True if there are no facts in the index at `index`.
     ///
-    /// `NotMemberOf(terms, index, den)`: True if `terms` is not a fact in the facts placed at `index`
+    /// `NotMemberOf(terms, index, den)`: True if `terms` is not a fact in the facts
+    /// placed at `index`.
     ///
-    /// `Eq(t1, t2)`: True if `t1 == t2`
+    /// `Eq(t1, t2)`: True if `t1 == t2`.
     ///
     /// `Leq(const, pos)`: True if `const` is less than the lattice element of `pos`.
     ///
-    /// `Guard0(f)`: True if `f() == true`
-    /// `Guard1(f, term1)`: True if `f(term1) == true`
-    /// `Guard2(f, term1, term2)`: True if `f(term1, term2) == true`
-    /// `Guard3(f, term1, term2, term3)`: True if `f(term1, term2, term3) == true`
-    /// `Guard4(f, term1, term2, term3, term4)`: True if `f(term1, term2, term3, term4) == true`
-    /// `Guard5(f, term1, term2, term3, term4, term5)`: True if `f(term1, term2, term3, term4, term5) == true`
+    /// `Guard1(f, term1)`: True if `f(term1) == true`.
+    /// `Guard2(f, term1, term2)`: True if `f(term1, term2) == true`.
+    /// `Guard3(f, term1, term2, term3)`: True if `f(term1, term2, term3) == true`.
+    /// `Guard4(f, term1, term2, term3, term4)`: True if `f(term1, term2, term3, term4) == true`.
+    /// `Guard5(f, term1, term2, term3, term4, term5)`: True if `f(term1, term2, term3, term4, term5) == true`.
     ///
     @Internal
     pub enum BoolExp {
@@ -212,7 +219,6 @@ mod Fixpoint.Ast.ExecutableRam {
         case NotMemberOf(Vector[RamTerm], Int32, Denotation)
         case Eq(RamTerm, RamTerm)
         case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
-        case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, RamTerm)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
         case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
@@ -228,7 +234,6 @@ mod Fixpoint.Ast.ExecutableRam {
                 case BoolExp.NotMemberOf(terms, relSym, _) => "(${terms |> Vector.join(", ")}) ∉ indexes[${relSym}]"
                 case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
                 case BoolExp.Leq(lhs, _, rhs) => "${lhs} ≤ (${rhs})"
-                case BoolExp.Guard0(_) => "<clo>()"
                 case BoolExp.Guard1(_, v) => "<clo>(${v})"
                 case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
                 case BoolExp.Guard3(_, v1, v2, v3) => "<clo>(${v1}, ${v2}, ${v3})"
@@ -246,16 +251,14 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// Enums with a `RamId` can be reffered to by the `RamId`.
     ///
-    /// `Lit(val, id)` represents the literal `val` and its unboxed version
+    /// `Lit(val, id)` represents the literal `val` and its unboxed version.
     ///
-    /// `RowLoad(x, i, unboxingInfo)` represents an index into the tuple
-    /// bound to the local variable `x`, i.e. `x[i]`. `unboxingInfo` can be
-    /// used to rebox `x[i]`.
+    /// `RowLoad(x, i, unboxingInfo)` represents an index into the tuple bound to the
+    /// local variable `x`, i.e. `x[i]`. `unboxingInfo` can be used to rebox
+    /// `x[i]`. 
     ///
     /// `Meet(meet, term1, term2, unboxingInfo)` represents the meet of `term1` with `term2`
     /// Can be unboxed using `unboxingInfo`.
-    ///
-    /// `App0(f)` represents `f()`.
     ///
     /// `App1(f, term1, )` represents `f(term1)`.
     /// Can be unboxed using `unboxingInfo`.
@@ -272,14 +275,12 @@ mod Fixpoint.Ast.ExecutableRam {
     /// `App5(f, term1, term2, term3, term4, term5)` represents `f(term1, term2, term3, term4, term4)`.
     /// Can be unboxed using `unboxingInfo`.
     ///
-
     @Internal
     pub enum RamTerm {
         case Lit(Int64, Boxed)
         case LoadFromTuple(Int32, Int32, IntToBox)
         case LoadLatVar(Int32, IntToBox)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
-        case App0(Unit -> Boxed, IntToBox)
         case App1(Boxed -> Boxed, RamTerm, IntToBox)
         case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
         case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, IntToBox)
@@ -293,7 +294,6 @@ mod Fixpoint.Ast.ExecutableRam {
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) => "x${tupleIndex}[${indexInTuple}]"
             case RamTerm.LoadLatVar(i, _) => "LoadLatVar[${i}]"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
-            case RamTerm.App0(_, _) => "<clo>()"
             case RamTerm.App1(_, v, _) => "<clo>(${v})"
             case RamTerm.App2(_, v1, v2, _) => "<clo>(${v1}, ${v2})"
             case RamTerm.App3(_, v1, v2, v3, _) => "<clo>(${v1}, ${v2}, ${v3})"

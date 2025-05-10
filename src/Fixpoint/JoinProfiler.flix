@@ -17,7 +17,7 @@
 
 mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar}
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
     use Fixpoint.Helpers.unwrap

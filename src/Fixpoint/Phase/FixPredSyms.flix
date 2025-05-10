@@ -32,7 +32,7 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
     use Fixpoint.Ast.Datalog.BodyPredicate.{Functional}
-    use Fixpoint.Ast.Datalog.BodyPredicate.{Guard0, Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Datalog.BodyPredicate.{Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.isRelational
     use Fixpoint.Ast.Shared.PredSym

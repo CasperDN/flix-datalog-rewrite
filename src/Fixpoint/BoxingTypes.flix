@@ -6,6 +6,7 @@
 mod Fixpoint.BoxingTypes {
     use Fixpoint.Boxed
     use Fixpoint.Ast.Ram.RamId
+    import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
     import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
 
     /// 
@@ -36,6 +37,28 @@ mod Fixpoint.BoxingTypes {
         pub def unlockWrite(lock: Lock[r]): Unit \ r =
             let Lock(l) = lock;
             unchecked_cast((l.writeLock().unlock(): _ \ IO) as _ \ r)
+    }
+
+    /// 
+    /// A thread-safe counter.
+    /// 
+    @Internal
+    pub enum AtomicCounter[_: Region](JAtomicLong)
+
+    mod AtomicCounter {
+        import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
+        use Fixpoint.BoxingTypes.AtomicCounter
+
+        pub def mkCounter(_: Region[r], initialVal: Int64): AtomicCounter[r] \ r =
+            AtomicCounter(unchecked_cast((new JAtomicLong(initialVal): _ \ IO) as _ \ r))
+
+        pub def getAndIncrement(counter: AtomicCounter[r]): Int64 \ r =
+            let AtomicCounter(c) = counter;
+            unchecked_cast((c.getAndIncrement(): _ \ IO) as _ \ r)
+
+        pub def set(newVal: Int64, counter: AtomicCounter[r]): Unit \ r =
+            let AtomicCounter(c) = counter;
+            unchecked_cast((c.set(newVal): _ \ IO) as _ \ r)
     }
 
     ///
@@ -111,9 +134,9 @@ mod Fixpoint.BoxingTypes {
     ///
     @Internal
     pub type alias Boxing[r: Region] = (
-        Vector[MutList[Boxed, r]], // List of Boxed objects 
-        Vector[MutMap[Boxed, Int64, r]], // [RelSym->IndexInTyple->BoxedObject->Int64]
+        Vector[MutList[Boxed, r]],
+        Vector[MutMap[Boxed, Int64, r]],
         TypeInfo[r],
-        Vector[Lock[r]], // Locks on the MutList/MutMap.
+        Vector[Lock[r]]
     )
 }
