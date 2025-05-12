@@ -18,17 +18,18 @@
 mod Fixpoint.Helpers {
     use Fixpoint.Ast.Ram.{RamProgram, RowVar, RelSym, RamStmt, RelOp}
 
+    @Internal
     pub def unwrap(x: Option[a]): a = match x {
         case Some(v) => v
         case None => ???
     }
-
 
     // Simple passes used by 2 phases
 
     ///
     /// Returns a list `(RowVar, RelSym)` in `program` in the order of the nesting.
     ///
+    @Internal
     pub def collectRowVarRelSym(program: RamProgram): List[(RowVar, RelSym)] = match program {
         case RamProgram.Program(stmt, _, _, _) => 
             collectRowVarRelSymStmt(stmt)
@@ -68,5 +69,4 @@ mod Fixpoint.Helpers {
     pub def collectRowVarArity(program: RamProgram): List[(RowVar, Int32)] = 
         collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
 
-    
 }

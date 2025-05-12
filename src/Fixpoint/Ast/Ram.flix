@@ -35,7 +35,8 @@ mod Fixpoint.Ast.Ram {
     }
 
     ///
-    /// `Predicate` contains a set of `RelSym` and 1 + the maximal indentifier of the `RelSym`s.
+    /// Contains a set of `RelSym` representing the names of the relations in the program
+    ///  and 1 + the maximal identifier of the `RelSym`s.
     ///
     pub type alias Predicates = (Int64, Set[RelSym])
 
@@ -49,7 +50,7 @@ mod Fixpoint.Ast.Ram {
     /// created during the index selection phase and are used by indexes to store tuples
     /// for efficient retrieval in range queries.
     ///
-    /// For example, the datalog rule
+    /// For example, the Datalog rule
     /// 
     /// A(x) :- B(x), C(_, _, x).
     ///
@@ -63,20 +64,20 @@ mod Fixpoint.Ast.Ram {
     pub type alias Search = Vector[Int32]
 
     ///
-    /// `ConstructedIndexes` represents a map from list of indexes created for the RelSym.
+    /// Maps to the set of `Search` for a `RelSym` in the Datalog program. It represents
+    /// the indexes that will be created for `RelSym` during program evaluation.
     ///
-    pub type alias ConstructedIndexes = Map[RelSym, Vector[Search]]
+    pub type alias Indexes = Map[RelSym, Vector[Search]]
 
     ///
-    /// `IndexPositions` represents a map from RelSym and its place in the vector of
-    /// ConstructedIndexes to its final position in memory.
+    /// Maps a `RelSym` and its place in `Indexes[RelSym]` to its final position in memory.
     ///
     pub type alias IndexPositions = Map[(RelSym, Int32), Int32]
 
     ///
-    /// `IndexInformation` contains the combined information about indexes in a program.
+    /// The indexes to be created during program evaluation and their positions in memory.
     ///
-    pub type alias IndexInformation = (ConstructedIndexes, IndexPositions)
+    pub type alias IndexInformation = (Indexes, IndexPositions)
 
     /////////////////////////////////////////////////////////////////////////////
     // RamStmt                                                                 //
@@ -131,10 +132,10 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.Comment(comment) => "// ${comment}"
+                case RamStmt.Comment(comment) => "/* ${comment} */"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
-                case RamStmt.EstimateJoinSize(relSym, index, writeTo, attr) =>
-                    "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"
+                case RamStmt.EstimateJoinSize(relSym, _, _, attr) =>
+                    "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}})"
             }
     }
 
@@ -253,7 +254,7 @@ mod Fixpoint.Ast.Ram {
     ///
     /// Represents a RAM term.
     ///
-    /// Enums with a `RamId` can be reffered to by the `RamId`.
+    /// Enums with a `RamId` can be referred to by the `RamId`.
     ///
     /// `Lit(val, id)` represents the literal `val`.
     ///

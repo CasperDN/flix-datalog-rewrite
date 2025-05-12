@@ -164,7 +164,7 @@ mod Test.Exp.Fixpoint.Solve.Lattice {
         Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39+39))
 
     @test
-    def testFixpointLattice11(): Bool =
+    pub def testFixpointLattice11(): Bool =
         let m = solve #{
             LitStm("a", 39).
             LitStm("b", 12).

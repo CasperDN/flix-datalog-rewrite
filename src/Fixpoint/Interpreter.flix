@@ -104,7 +104,7 @@ mod Fixpoint.Interpreter {
                     Vector.forEachWithIndex(num -> search -> {
                         let pos = match Map.get((relSym, num), posMap) {
                             case Some(v) => v
-                            case None => bug!("In Interpreter.interpret: ${relSym} has no index!")
+                            case None => bug!("In Fixpoint.Interpreter.interpret: ${relSym} has no index!")
                         };
                         Array.put(mkIndex(rc, relSym, search, tuples), pos, indexes)
                     }, searches)

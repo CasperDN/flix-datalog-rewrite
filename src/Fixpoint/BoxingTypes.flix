@@ -56,13 +56,17 @@ mod Fixpoint.BoxingTypes {
             let AtomicCounter(c) = counter;
             unchecked_cast((c.getAndIncrement(): _ \ IO) as _ \ r)
 
+        pub def peek(counter: AtomicCounter[r]): Int64 \ r =
+            let AtomicCounter(c) = counter;
+            unchecked_cast((c.get(): _ \ IO) as _ \ r)
+
         pub def set(newVal: Int64, counter: AtomicCounter[r]): Unit \ r =
             let AtomicCounter(c) = counter;
             unchecked_cast((c.set(newVal): _ \ IO) as _ \ r)
     }
 
     ///
-    /// `Types` represent the different types a program can contain
+    /// `Types` represent the different types a program can contain.
     ///
     @Internal
     pub enum Types {
@@ -79,21 +83,22 @@ mod Fixpoint.BoxingTypes {
     }
 
     ///
-    /// Describes the placement of type-information of a group of values that share the same type
+    /// Describes the placement of type-information of a group of values that share the
+    /// same type.
     ///
     @Internal
     pub type alias UnifiedTypePos = Int32    
 
     ///
-    /// `RamIdToMarshal` maps `RamId` to the `UnifiedTypePos`. It facilitates getting the type-information
-    /// of a `RamTerm`.
+    /// Maps `RamId`'s to the `UnifiedTypePos`. It facilitates getting the type
+    /// information of a `RamTerm`.
     ///
     @Internal
     pub type alias RamIdToPos = Map[RamId, UnifiedTypePos]
 
     /// 
-    /// `TypeInfo` describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`
-    /// the type of a specific value can be found
+    /// Describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`
+    /// the type of a specific value can be found.
     /// 
     enum TypeInfo[r: Region] {
         case TypeInfo(Array[Types, r])
@@ -135,7 +140,7 @@ mod Fixpoint.BoxingTypes {
     @Internal
     pub type alias Boxing[r: Region] = (
         Vector[MutList[Boxed, r]],
-        Vector[MutMap[Boxed, Int64, r]],
+        Vector[BPlusTree[Boxed, Int64, r]],
         TypeInfo[r],
         Vector[Lock[r]]
     )

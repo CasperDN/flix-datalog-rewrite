@@ -173,7 +173,7 @@ mod Fixpoint.PrecedenceGraph {
                 if (Array.get(v, colors) == Color.White) 
                     topologicalSortVisit(g, colors, sorted, v)
                 else if (Array.get(v, colors) == Color.Gray)
-                    bug!("In PrecedenceGraph.MutGraph.topologicalSortVisit: Cycle detected")
+                    bug!("In Fixpoint.PrecedenceGraph.MutGraph.topologicalSortVisit: Cycle detected")
                 else ()
             });
             Array.put(Color.Black, u, colors);

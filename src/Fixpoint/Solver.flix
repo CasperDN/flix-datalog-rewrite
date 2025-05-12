@@ -94,7 +94,6 @@ mod Fixpoint.Solver {
             Fixpoint.Phase.Hoisting.hoistProgram |> 
             Fixpoint.Phase.IndexSelection.indexProgram |> 
             Fixpoint.Phase.Lowering.lowerProgram(rc) |>
-            Fixpoint.Debugging.notifyPreInterpret |> 
             Fixpoint.Interpreter.estimateJoinSizes(rc);
         expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector
     }

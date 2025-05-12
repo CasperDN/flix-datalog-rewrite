@@ -36,6 +36,10 @@ mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.JoinProfiler
     use Fixpoint.JoinProfiler.JoinProfile
 
+    ///
+    /// Optimizes the join-order of the rules in `program`. This is done by running the
+    /// program with a smaller representative input.
+    ///
     @Internal
     pub def scheduleProgram(program: RamProgram): RamProgram = 
         if (disableJoinOptimizer()) program
@@ -139,7 +143,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             Set.toList |>
             List.toVector;
         let (costToJoinPrev, _) = MutMap.get(relations, optimal) |> unwrap;
-        let ith = // TODO: Maybe multiply by arity
+        let ith = 
             Vector.zip(
                 MutMap.get(relations, tuplesFromJoin) |> unwrap, 
                 Map.get((s, attr), expectedJoinSize) |> unwrap
@@ -147,7 +151,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             Vector.map(match (x, y) -> x * y);
         MutMap.put(s :: relations, ith, tuplesFromJoin);
         let sum = ith |> Vector.foldLeft(acc -> val -> acc + val, 0i64);
-        costToJoinPrev + Int32.toInt64(arity) * sum
+        costToJoinPrev + Int32.toInt64(arity) * sum // TODO: Maybe don't multiply by arity
     
     def powerSetOfSize(size: Int32, set: List[a]): List[List[a]] = region rc {
         let len = List.length(set);
@@ -188,7 +192,7 @@ mod Fixpoint.Phase.JoinOptimizer {
     }
 
     @Test
-    pub def testPowerSet(): Bool = 
+    pub def testPowerSetOfSize(): Bool = 
         let k = 17;
         List.range(2,k) |> 
         List.forAll(i -> 
@@ -205,6 +209,7 @@ mod Fixpoint.Phase.JoinOptimizer {
         arities: Map[RowVar, Int32],
         relations: List[RowVar]
     ): List[RowVar] = region rc {
+        // The optimal solution is kept in reverse order, but expected in true order.
         let optimal: MutMap[List[RowVar], (Int64, List[RowVar]), rc] = MutMap.empty(rc);
         let tuplesFromJoin: MutMap[List[RowVar], Vector[Int64], rc] = MutMap.empty(rc);
         relations |> List.forEach(rel -> {
@@ -236,6 +241,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             }
         };
         loop(2);
-        MutMap.get(relations, optimal) |> unwrap |> snd
+        // Reverse to get true order.
+        MutMap.get(relations, optimal) |> unwrap |> snd |> List.reverse
     }
 }

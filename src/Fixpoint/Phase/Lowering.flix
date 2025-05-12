@@ -17,37 +17,29 @@
 
 mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.ExecutableRam.{ConstWrites => EConstWrites}
-    use Fixpoint.Boxed.BoxedBool
-    use Fixpoint.Ast.Ram.IndexInformation
-    use Fixpoint.Ast.Ram.Search
-    use Fixpoint.UniqueInts
+    use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram, RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
+    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
+    use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
+    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
     use Fixpoint.Ast.ExecutableRam.WriteTuple
-    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos};
-    use Fixpoint.Interpreter.DatabaseExternal
+    use Fixpoint.Ast.Ram.{IndexInformation, Search}
     use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat}
     use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
     use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
     use Fixpoint.Ast.Ram.BoolExp.{Not => ANot, IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Leq => ALeq, Eq => AEq, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, Meet => AMeet, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
-
-
-    use Fixpoint.Ast.ExecutableRam.{RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
-    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
-    use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
-    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
-
-    use Fixpoint.Ast.Ram
-    use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram}
-
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
-
-    use Fixpoint.Boxing.Equality
-    use Fixpoint.Boxing
     use Fixpoint.Boxed
-    use Fixpoint.Debugging
-
+    use Fixpoint.Boxed.BoxedBool
+    use Fixpoint.Boxing
+    use Fixpoint.Boxing.Equality
+    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos};
     use Fixpoint.Counter
     use Fixpoint.Counter.Counter
+    use Fixpoint.Debugging
+    use Fixpoint.Helpers.unwrap
+    use Fixpoint.Interpreter.DatabaseExternal
+    use Fixpoint.UniqueInts
 
     // Maps RowVars to their memory-position.
     type alias IdToIndex[r: Region] = UniqueInts.IndexState[RowVar, r]
@@ -63,36 +55,36 @@ mod Fixpoint.Phase.Lowering {
 
     @Internal
     pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
-        case AProgram.Program(stmt, facts, meta, indexInfo) =>
+        case AProgram.Program(stmt, _, meta, indexInfo) =>
             let idToIndex = UniqueInts.empty(rc);
-            let (marshall, idToMarshall) = Boxing.initialize(rc, program);
+            let (marshall, newFacts, idToMarshall) = Boxing.initialize(rc, program);
             let writeTo = (MutMap.empty(rc), MutMap.empty(rc));
             let loweredStmt = lowerStmt(stmt, rc, idToIndex, (idToMarshall, marshall), writeTo, indexInfo);
-            // Lower facts
-            let newFacts =
-                facts |>
-                Map.mapWithKey(k -> values ->
-                    let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
-                    values |> 
-                    Vector.map(vec -> match den {
-                        case Denotation.Relational =>
-                            let tuple = vec |>
-                                Vector.mapWithIndex(i -> v -> {
-                                    Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
-                                });
-                            (tuple, Boxed.None)
-                        case Denotation.Latticenal(_, _, _ ,_) =>
-                            let len = Vector.length(vec);
-                            let tuple = Array.empty(rc, len - 1);
-                            vec |> Vector.forEachWithIndex(i -> term -> {
-                                if (i < len - 1)
-                                    Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
-                                else ()
-                            });
-                            let latVal = Vector.get(len - 1, vec);
-                            (Array.toVector(tuple), latVal)
-                    })
-                );
+            // // Lower facts
+            // let newFacts =
+            //     facts |>
+            //     Map.mapWithKey(k -> values ->
+            //         let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
+            //         values |> 
+            //         Vector.map(vec -> match den {
+            //             case Denotation.Relational =>
+            //                 let tuple = vec |>
+            //                     Vector.mapWithIndex(i -> v -> {
+            //                         Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
+            //                     });
+            //                 (tuple, Boxed.None)
+            //             case Denotation.Latticenal(_, _, _ ,_) =>
+            //                 let len = Vector.length(vec);
+            //                 let tuple = Array.empty(rc, len - 1);
+            //                 vec |> Vector.forEachWithIndex(i -> term -> {
+            //                     if (i < len - 1)
+            //                         Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
+            //                     else ()
+            //                 });
+            //                 let latVal = Vector.get(len - 1, vec);
+            //                 (Array.toVector(tuple), latVal)
+            //         })
+            //     );
 
             let constWrites = snd(writeTo) |> MutMap.foldWithKey(acc1 -> outerPos -> inner ->
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)
@@ -374,10 +366,5 @@ mod Fixpoint.Phase.Lowering {
             if (v1 != v2) 
                 bug!("Bug in Fixpoint.Lowering: Different value for position. Should have been removed by Hoisting")
             else v1, toIndex, value)
-
-    def unwrap(opt: Option[a]): a = match opt {
-        case None => bug!("Unwrap None in Lowering")
-        case Some(v) => v
-    }
 
 }

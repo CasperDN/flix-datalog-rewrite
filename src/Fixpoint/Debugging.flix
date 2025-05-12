@@ -118,19 +118,10 @@ mod Fixpoint.Debugging {
     pub def notifyPreInterpret(
         input: (ExecutableRam.RamProgram, BoxingTypes.Boxing[rc])
     ): (ExecutableRam.RamProgram, BoxingTypes.Boxing[rc]) = match fst(input) {
-        case ExecutableRam.RamProgram.Program(stmt, facts, _meta, (index, indexPos), _, _) => unchecked_cast({
+        case ExecutableRam.RamProgram.Program(stmt, _, _, (index, indexPos), _, _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
                 let psh = s -> MutList.push(s, strings);
-                if (Fixpoint.Options.enableDebugPrintFacts()) {
-                    String.repeat(80, "*") |> psh;
-                    "** Facts" |> psh;
-                    String.repeat(80, "*") |> psh;
-                    "" |> psh;
-                    String.indent(4, "${unchecked_cast(facts as Map[Fixpoint.Ast.Ram.RelSym, Vector[(Vector[Int64], Fixpoint.Boxed)]])}") |> psh;
-                    String.indent(4, "${Debug.stringify(facts)}") |> psh;
-                    "" |> psh
-                } else ();
                 String.repeat(80, "*") |> psh;
                 "** Executable Relation Algebra Machine AST" |> psh;
                 String.repeat(80, "*") |> psh;

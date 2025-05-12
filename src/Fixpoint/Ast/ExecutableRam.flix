@@ -125,7 +125,7 @@ mod Fixpoint.Ast.ExecutableRam {
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" ∧ ");
                     "Until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.Comment(comment) => "// ${comment}"
+                case RamStmt.Comment(comment) => "/* ${comment} */"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
                 case RamStmt.EstimateJoinSize(index, writeTo, attr) => 
                     "EstimateJoinSize(<optimized out>, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"

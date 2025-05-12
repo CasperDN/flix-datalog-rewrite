@@ -24,109 +24,183 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxed
     use Fixpoint.Boxable
     use Fixpoint.Ast.Ram
-    use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym, RamProgram, arityOfNonLat}
+    use Fixpoint.Ast.Ram.{RamId, RamStmt, RelOp, RamTerm, BoolExp, RelSym, RamProgram, arityOf, arityOfNonLat, toDenotation}
     use Fixpoint.Ast.ExecutableRam.{Facts => EFacts}
     use Fixpoint.Ast.Datalog.{Datalog}
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
     use Fixpoint.Predicates.relSymsOfProgram
-    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Lock, Types, setType, getType, RamIdToPos, AtomicCounter}
-    import java.lang.{Float, Double, Object, Character}
-
-    @Internal
-    pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToPos) \ r =
-        let mapping = Equality.computeMapping(program);
-        let boxingInfo = initializeInternal(rc, program, mapping);
-        // let facts = initializeFacts(rc, program, boxingInfo, mapping);
-        (boxingInfo, mapping)
+    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Lock, Types, setType, getType, RamIdToPos, AtomicCounter, UnifiedTypePos}
+    import java.lang.{Float, Double, Object, Character, Runtime}
 
     // @Internal
-    // pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], EFacts, RamIdToPos) \ r =
+    // pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], RamIdToPos) \ r =
     //     let mapping = Equality.computeMapping(program);
     //     let boxingInfo = initializeInternal(rc, program, mapping);
     //     // let facts = initializeFacts(rc, program, boxingInfo, mapping);
     //     (boxingInfo, mapping)
 
-    // def initializeFacts(rc1: Region[r], program: RamProgram, boxingInfo: Boxing[r], mapping: RamIdToPos): EFacts \ r = region rc2 {        
-    //     let Program(_, facts, _, _) = program;
-    //     let factsAsVec = Map.toVector(facts);
-    //     let counters = initializeCounters(boxingInfo);
-    //     unchecked_cast(() ->
-    //         Vector.forEach(match (relSym, factVec) ->
-    //             spawn unchecked_cast(() -> (mapAllFacts(relSym, factVec, boxingInfo, counters, mapping): _ \ r) as _ \ IO)() @ rc2
-    //         )
-    //         as _ \ r
-    //     )
-    //     // let newFacts =
-    //     //     facts |>
-    //     //         Map.mapWithKey(k -> values ->
-    //     //             let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
-    //     //             values |> 
-    //     //             Vector.map(vec -> match den {
-    //     //                 case Denotation.Relational =>
-    //     //                     let tuple = vec |>
-    //     //                         Vector.mapWithIndex(i -> v -> {
-    //     //                             Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
-    //     //                         });
-    //     //                     (tuple, Boxed.None)
-    //     //                 case Denotation.Latticenal(_, _, _ ,_) =>
-    //     //                     let len = Vector.length(vec);
-    //     //                     let tuple = Array.empty(rc, len - 1);
-    //     //                     vec |> Vector.forEachWithIndex(i -> term -> {
-    //     //                         if (i < len - 1)
-    //     //                             Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
-    //     //                         else ()
-    //     //                     });
-    //     //                     let latVal = Vector.get(len - 1, vec);
-    //     //                     (Array.toVector(tuple), latVal)
-    //     //             })
-    //     //         );
+    @Internal
+    pub def initialize(rc: Region[r], program: RamProgram): (Boxing[r], EFacts, RamIdToPos) \ r =
+        let mapping = Equality.computeMapping(program);
+        let boxingInfo = initializeInternal(rc, program, mapping);
+        let (facts, newBoxingInfo) = initializeFacts(rc, program, boxingInfo, mapping);
+        (newBoxingInfo, facts, mapping)
 
-    // }
+    def initializeFacts(rc1: Region[r], program: RamProgram, boxingInfo: Boxing[r], mapping: RamIdToPos): (EFacts, Boxing[r]) \ r = region rc2 {        
+        let RamProgram.Program(_, facts, _, _) = program;
+        let factsAsVec = Map.toVector(facts);
+        let counters = initializeCounters(rc1, boxingInfo);
+        let newFacts = Array.empty(rc2, Vector.length(factsAsVec));
+        let funcsToBeRun = factsAsVec |> Vector.mapWithIndex(i -> match (relSym, factVec) -> () -> {
+            let mappedResult = mapAllFacts(rc1, relSym, factVec, boxingInfo, counters, mapping);
+            Array.put((relSym, mappedResult), i, newFacts)
+        });
+        spawnFuncs(funcsToBeRun);
+        let newBoxing = fixBoxingAfterInit(rc1, counters, boxingInfo);
+        (Array.toMap(newFacts), newBoxing)
+    }
 
-    // ///
-    // /// Returns the number of threads to use for parallel evaluation.
-    // ///
-    // /// # SAFETY:
-    // /// This accesses the runtime environment, which is an effect.
-    // /// It is assumed that this function is only used in contexts
-    // /// where this effect is not observable outside of the RedBlackTree module.
-    // ///
-    // /// Copy pasted from RedBlackTree.flix.
-    // ///
-    // def threads(): Int32 = unsafe {
-    //     // Note: We use a multiple of the number of physical cores for better performance.
-    //     let multiplier = 4;
-    //     multiplier * Runtime.getRuntime().availableProcessors()
-    // }
+    def fixBoxingAfterInit(rc: Region[r], counters: Vector[AtomicCounter[r]], boxingInfo: Boxing[r]): Boxing[r] \ r = {
+        let (_, boxToRepVec, typeInfo, locks) = boxingInfo;
+        let newBoxedArr = counters |> Vector.map(c -> Array.empty(rc, unwrap(Int64.tryToInt32(AtomicCounter.peek(c)))));
+        let funcsToBeRun = newBoxedArr |>
+            Vector.mapWithIndex(i -> writeTo -> () -> {
+                match getType(i, typeInfo) {
+                    case Types.Object =>
+                        let boxToRep = Vector.get(i, boxToRepVec);
+                        boxToRep |> BPlusTree.forEach(val -> pos -> Array.put(val, unwrap(Int64.tryToInt32(pos)), writeTo))
+                    case _ => ()
+                }
+            });
+        spawnFuncs(funcsToBeRun);
+        let newMutLists = newBoxedArr |> Vector.map(Array.toMutList(rc));
+        (newMutLists, boxToRepVec, typeInfo, locks)
+    }
 
+    def spawnFuncs(funcs: Vector[Unit -> Unit \ ef]): Unit \ ef = region rc2 {
+        unchecked_cast({
+            let _: Unit = spawn unchecked_cast(
+                funcs |> Vector.forEach(f -> f())
+            as _ \ IO) @ rc2;
+            ()
+        } as _ \ ef)
+    }
 
-    // def mapAllFacts(rc1: Region[r], relSymFacts: (RelSym, Vector[Vector[Boxed]]), boxingInfo: Boxing[r], counters: Vector[AtomicCounter], mapping: RamIdToPos): RelSym {
-    //     let (relSym, facts) = relSymFacts;
-    //     let threadNum = threads();
-    //     let resultArr = Array.empty(rc1, Vector.length(facts));
-    //     if(Vector.length(facts) <= threadNum) {
+    ///
+    /// Returns the number of threads to use for parallel evaluation.
+    ///
+    /// # SAFETY:
+    /// This accesses the runtime environment, which is an effect.
+    /// It is assumed that this function is only used in contexts
+    /// where this effect is not observable outside of the RedBlackTree module.
+    ///
+    /// Copy pasted from RedBlackTree.flix.
+    ///
+    def threads(): Int32 = unsafe {
+        // Note: We use a multiple of the number of physical cores for better performance.
+        let multiplier = 4;
+        multiplier * Runtime.getRuntime().availableProcessors()
+    }
 
-    //     } else {
+            // let newFacts =
+            //     facts |>
+            //     Map.mapWithKey(k -> values ->
+            //         let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
+            //         values |> 
+            //         Vector.map(vec -> match den {
+            //             case Denotation.Relational =>
+            //                 let tuple = vec |>
+            //                     Vector.mapWithIndex(i -> v -> {
+            //                         Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
+            //                     });
+            //                 (tuple, Boxed.None)
+            //             case Denotation.Latticenal(_, _, _ ,_) =>
+            //                 let len = Vector.length(vec);
+            //                 let tuple = Array.empty(rc, len - 1);
+            //                 vec |> Vector.forEachWithIndex(i -> term -> {
+            //                     if (i < len - 1)
+            //                         Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
+            //                     else ()
+            //                 });
+            //                 let latVal = Vector.get(len - 1, vec);
+            //                 (Array.toVector(tuple), latVal)
+            //         })
+            //     );
 
-    //     }
-    // }
+    def mapAllFacts(rc1: Region[r],
+        relSym: RelSym,
+        facts: Vector[Vector[Boxed]],
+        boxingInfo: Boxing[r],
+        counters: Vector[AtomicCounter[r]],
+        mapping: RamIdToPos
+    ): Vector[(Vector[Int64], Boxed)] \ r = {
+        let relSymId = Ram.toId(relSym);
+        let positions = Vector.range(0, arityOf(relSym)) |>
+            Vector.map(i -> unwrap(Map.get(RamId.RelPos(relSymId, i), mapping)));
+        let threadNum = threads();
+        let numOfFacts = Vector.length(facts);
+        let resultArr = Array.empty(rc1, numOfFacts);
+        if(numOfFacts <= threadNum) {
+            mapPartOfVector(facts, 0, numOfFacts, isRelational(toDenotation(relSym)), resultArr, boxingInfo, counters, positions)
+        } else {
+            let inc = numOfFacts / threadNum;
+            let limits = Array.init(rc1, i -> (i * inc, (i + 1) * inc), threadNum);
+            Array.put((fst(Array.get(threadNum - 1, limits)), numOfFacts), threadNum, limits);
+            let funcsToBeRun = limits |>
+            Array.toVector |>
+            Vector.map(match (lower, upper) ->
+                () -> mapPartOfVector(facts, lower, upper, isRelational(toDenotation(relSym)), resultArr, boxingInfo, counters, positions)
+            );
+            spawnFuncs(funcsToBeRun)
+        };
+        Array.toVector(resultArr)
+    }
 
-    // def mapPartOfVector(rc: Region[r], relSym: RelSym, factVec: Vector[Vector[Boxed]], from_: Int32, to_: Int32, collectionArr: Array[Int64], boxingInfo: Boxing[r], counters: Vector[AtomicCounter], mapping: RamIdToPos): Unit \ r = {
-    //     def loop(i) =
-    //         if(to_ >= i) ()
-    //         else
+    def mapPartOfVector(
+        factVec: Vector[Vector[Boxed]],
+        from_: Int32,
+        to_: Int32,
+        isRelational: Bool,
+        collectionArr: Array[(Vector[Int64], Boxed), r],
+        boxingInfo: Boxing[r],
+        counters: Vector[AtomicCounter[r]],
+        unifiedPositions: Vector[UnifiedTypePos]
+    ): Unit \ r = {
+        def loop(i) =
+            if(i >= to_) ()
+            else {
+                let fullTuple = Vector.get(i, factVec);
+                let (tuple, boxed) = if(isRelational) {
+                    (fullTuple, Boxed.None)
+                } else {
+                    (Vector.dropRight(1, fullTuple), Vector.get(Vector.length(fullTuple) - 1, fullTuple))
+                };
+                let savedVec = tuple |>
+                    Vector.mapWithIndex(index -> boxedVal ->
+                        let unifiedPos = Vector.get(index, unifiedPositions);
+                        match boxedVal {
+                            case BoxedObject(_, _) =>
+                                let (_, boxToRepVec, symInfo, _) = boxingInfo;
+                                setType(Types.Object, unifiedPos, symInfo);
+                                let boxToRep = Vector.get(unifiedPos, boxToRepVec);
+                                let counter = Vector.get(unifiedPos, counters);
+                                let rep = BPlusTree.computeIfAbsent(() -> AtomicCounter.getAndIncrement(counter), boxedVal, boxToRep);
+                                rep
+                            case _ => unboxWith(boxedVal, unifiedPos, boxingInfo)
+                        }
+                    );
+                Array.put((savedVec, boxed), from_ + i, collectionArr);
+                loop(i + 1)
+            };
+        loop(from_)
+    }
 
-    //             loop(i)
-    //     loop(0)
-    // }
-
-    // def initializeCounters(rc: Region[r], boxingInfo: Boxing[r]): Vector[AtomicCounter] = {
-    //     let (boxedVecList, _, _, _) = boxingInfo;
-    //     let atomicCounters =
-    //         boxedVecList |>
-    //         Vector.map(listOfBoxed ->  AtomicCounter.mkCounter(rc, MutList.length(listOfBoxed)))
-    // }
+    def initializeCounters(rc: Region[r], boxingInfo: Boxing[r]): Vector[AtomicCounter[r]] \ r = {
+        let (boxedVecList, _, _, _) = boxingInfo;
+        boxedVecList |>
+            Vector.map(listOfBoxed ->  AtomicCounter.mkCounter(rc, Int32.toInt64(MutList.length(listOfBoxed))))
+    }
 
     // def getMaxUnifiedTypePos(boxingInfo: Boxing[r]): UnifiedTypePos = {
     //     let (_, _, _, locks) = boxingInfo;
@@ -136,7 +210,7 @@ mod Fixpoint.Boxing {
     def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToPos): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
-        let boxToInt = Vector.init(_ -> MutMap.empty(rc), max);
+        let boxToInt = Vector.init(_ -> BPlusTree.empty(rc), max);
         let locks = Vector.init(_ -> Lock.mkLock(rc), max);
         let posToIndex = Array.empty(rc, max);
         let info = (intToBox, boxToInt, TypeInfo.TypeInfo(posToIndex), locks);
@@ -165,7 +239,7 @@ mod Fixpoint.Boxing {
         let objectMap = Vector.get(index, vecObjectMap);
         let lock = Vector.get(index, locks);
         Lock.readLock(lock);
-        match MutMap.get(box, objectMap) {
+        match BPlusTree.get(box, objectMap) {
             case Some(id) => 
                 Lock.unlockRead(lock);
                 id
@@ -174,7 +248,7 @@ mod Fixpoint.Boxing {
                 Lock.writeLock(lock);
                 let id = getNextIndex(objectList);
                 MutList.insert(box, id, objectList);
-                MutMap.put(box, Int32.toInt64(id), objectMap);
+                BPlusTree.put(box, Int32.toInt64(id), objectMap);
                 Lock.unlockWrite(lock);
                 Int32.toInt64(id)
         }
@@ -223,18 +297,16 @@ mod Fixpoint.Boxing {
         use Fixpoint.Ast.Ram.{RamId, Predicates, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
         use Fixpoint.Predicates.{PredType, idToFullPredID, fullIDtoPredType, relSymsOfProgram}
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
+        use Fixpoint.BoxingTypes.RamIdToPos
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Counter
         use Fixpoint.Counter.Counter
 
-        pub def computeMapping(d: RamProgram): Map[RamId, Int32] = region rc {
+        pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
             let RamProgram.Program(s, _, predTrack, _) = d;
-            computeDisjointStmt(s, predTrack, disjointSet);
+            computeDisjoint(d, disjointSet);
             let relSyms = relSymsOfProgram(d);
-            List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
-                Vector.forEach(i -> MutDisjointSets.makeSet(RamId.RelPos(id, i), disjointSet), Vector.range(0, arity))
-            }, relSyms);
             let mutMap = MutMap.empty(rc);
             let counter = Counter.fresh(rc);
             List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
@@ -244,6 +316,15 @@ mod Fixpoint.Boxing {
             }, relSyms);
             computeMappingStmt(s, predTrack, disjointSet, mutMap, counter);
             MutMap.toMap(mutMap)
+        }
+
+        def computeDisjoint(d: RamProgram, set: MutDisjointSets[RamId, r]): Unit \ r = match d {
+            case RamProgram.Program(stmt, _, predTrack, _) =>
+                let relSyms = relSymsOfProgram(d);
+                List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
+                    unifyPredTypes(id, arity, predTrack, set)
+                }, relSyms);
+                computeDisjointStmt(stmt, predTrack, set)
         }
 
         def computeDisjointStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r = match s {
@@ -354,10 +435,10 @@ mod Fixpoint.Boxing {
                 computeDisjointTerm(term5, predTrack, set)
         }
 
-        def unifyPredicates(predSym1: RelSym, predSym2: RelSym, set: MutDisjointSets[RamId, r]): Unit \ r =
-            let arity = Ram.arityOf(predSym1);
-            let id1 = Ram.toId(predSym1);
-            let id2 = Ram.toId(predSym2);
+        def unifyPredicates(relSym1: RelSym, relSym2: RelSym, set: MutDisjointSets[RamId, r]): Unit \ r =
+            let arity = Ram.arityOf(relSym1);
+            let id1 = Ram.toId(relSym1);
+            let id2 = Ram.toId(relSym2);
             Vector.forEach(i -> {
                 MutDisjointSets.makeSet(RamId.RelPos(id1, i), set);
                 MutDisjointSets.makeSet(RamId.RelPos(id2, i), set);

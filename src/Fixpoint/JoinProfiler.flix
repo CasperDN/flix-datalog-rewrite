@@ -92,7 +92,8 @@ mod Fixpoint.JoinProfiler {
                 let boundByJ = MutSet.empty(rc);
                 Vector.range(0, arity) |>
                 Vector.forEach(i -> {
-                    match MutMap.get((rvj, i), equivalentMap) {
+                    let rep = unwrap(MutDisjointSets.find((rvj, i), equalities));
+                    match MutMap.get(rep, equivalentMap) {
                         case None => ()
                         case Some(v) => 
                             v |>
@@ -103,9 +104,7 @@ mod Fixpoint.JoinProfiler {
                             )
                     }
                 });
-                // We should never encounter rvj again with rvi.
                 MutMap.put(rvj, boundByJ, mapForI);
-                // MutMap.putWith(_ -> old -> MutSet.add(boundByJ, old), rvj, boundByJ, mapForI);
                 MutSet.add(MutSet.toList(boundByJ), boundForI)
             });
             let result = MutSet.empty(rc);
@@ -127,7 +126,8 @@ mod Fixpoint.JoinProfiler {
                     loop(nextIndex, newVal)
                 })
             };
-        loop(0, Set.empty())
+        Vector.range(0, Vector.length(values) + 1) |>
+        Vector.forEach(i -> loop(i, Set.empty()))
 
     def estimateToCollect(rc: Region[r], toEstimate: Map[(RowVar, RelSym), List[Search]], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]): Unit \ r =
         Map.forEach(match (rowVar, relSym) -> val -> {
