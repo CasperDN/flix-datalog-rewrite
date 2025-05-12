@@ -33,7 +33,7 @@ mod Fixpoint.Solver {
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
-    use Fixpoint.Interpreter.DatabaseExternal
+    use Fixpoint.Interpreter.Database
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -54,7 +54,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        // Some of this code is duplicated in `runJoinProfilerWithStratification`.
+        // Some of this code is duplicated in `runJoinProfiler`.
         def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
             Fixpoint.Phase.Compiler.compile(cs, db, stf)
             |> Fixpoint.Debugging.notifyPreLowering("Compiler")
@@ -783,7 +783,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModelWithRenaming(dbMeta: (DatabaseExternal[r], Predicates)): Datalog \ r =
+    def toModelWithRenaming(dbMeta: (Database[r], Predicates)): Datalog \ r =
         let (db, meta) = dbMeta;
         let fst = MutMap.toMap(db); 
         let snd = Map.map(MutMap.toMap, fst);
@@ -798,7 +798,7 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModel(db: DatabaseExternal[r]): Datalog \ r =
+    def toModel(db: Database[r]): Datalog \ r =
         MutMap.toMap(db) |>
         Map.map(MutMap.toMap) |>
         Model

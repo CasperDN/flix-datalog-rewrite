@@ -19,12 +19,14 @@ mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
-    use Fixpoint.Counter.Counter
-    use Fixpoint.Helpers.unwrap
-    use Fixpoint.Phase.Hoisting.unifyEqualitiesOp
+    use Fixpoint.Helpers.{unwrap, unifyEqualitiesOp}
     use Fixpoint.Solver
     use Fixpoint.Helpers.{collectRowVarRelSymOp}
 
+    ///
+    /// Represents statistics about relation sizes and the expected number of tuples
+    /// resulting from a particular join order as a result of program execution. 
+    ///
     @Internal
     pub enum JoinProfile {
         case Profile(
@@ -36,13 +38,22 @@ mod Fixpoint.JoinProfiler {
     instance ToString[JoinProfile] {
         pub def toString(x: JoinProfile): String = match x {
             case JoinProfile.Profile(sizePerIter, expectedJoinSize) =>
-                "JoinProfile(\n${sizePerIter}\n${expectedJoinSize}\n)"
+                let sizePerIterStr = sizePerIter |> 
+                    Map.joinWith(k -> v -> "    ${k} => ${v}", "\n");
+                let expectedJoinSizeStr = expectedJoinSize |> 
+                    Map.joinWith(k -> v -> "    ${k} => ${v}", "\n");
+                "JoinProfile(\n  ${sizePerIterStr}\n  ${expectedJoinSizeStr}\n)"
         }
     }
     
     // (non-recursive, recursive rules)
     type alias Rules = (List[RelOp], List[RelOp])
 
+    ///
+    /// Returns a profile about `program` by a version of `program` instrumented with
+    /// `EstimateJoinSize` statements. Additionally, returns a map used to infer which 
+    /// `RowVar`'s bind which attributes in another `RowVar`.
+    ///
     @Internal
     pub def profileProgram(program: RamProgram): (JoinProfile, Map[RowVar, Map[RowVar, Set[Int32]]]) = region rc {
         let (instrumentedProgram, attributeMap, rowVarToPos) = instrumentProgram(rc, program); 
@@ -61,6 +72,9 @@ mod Fixpoint.JoinProfiler {
         (profile, attributeMap)
     }
 
+    ///
+    /// Collects the
+    ///
     def collectBoundVars(
         rc: Region[r], 
         vars: List[(RowVar, RelSym)], 
@@ -139,7 +153,7 @@ mod Fixpoint.JoinProfiler {
 
     def collectedToEstimateStmts(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]): List[RamStmt] \ r =
         collectFor |> MutMap.foldLeftWithKey(acc -> match (relSym, search) -> rowVars -> {
-            let savePos = Counter.getNewID(counter);
+            let savePos = Counter.getAndIncrement(counter);
             MutSet.forEach(rowVar -> MutMap.put((rowVar, search), savePos, rowVarToPos), rowVars);
             RamStmt.EstimateJoinSize(relSym, -1, savePos, search) :: acc
         }, Nil)

@@ -19,7 +19,7 @@ mod Fixpoint.Phase.IndexSelection {
     use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, Indexes, IndexInformation, RowVar, arityOf, arityOfNonLat};
     use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
     use Fixpoint.UniqueInts
-    use Fixpoint.UniqueInts.IndexState
+    use Fixpoint.UniqueInts.UniqueInts
     
     type alias Searches[r: Eff] = MutMap[RelSym, List[Search], r]
 
@@ -105,8 +105,8 @@ mod Fixpoint.Phase.IndexSelection {
                     UniqueInts.getIndex((relSym, 0), indexState);
                     ()
                 }, indexes);
-                let (finalState, _) = indexState;
-                (indexedStmt, MutMap.toMap(finalState))
+                let finalState = UniqueInts.toMap(indexState);
+                (indexedStmt, finalState)
             };
             RamProgram.Program(indexedStmt, facts, meta, (indexes, indexPlacement))
     }
@@ -114,7 +114,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// Propagates the appropriate indexes to `Query` ops.
     ///
-    def indexStmt(stmt: RamStmt, constructedIndexes: Indexes, indexState: IndexState[(RelSym, Int32), r]): RamStmt \ r = match stmt {
+    def indexStmt(stmt: RamStmt, constructedIndexes: Indexes, indexState: UniqueInts[(RelSym, Int32), r]): RamStmt \ r = match stmt {
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
         case RamStmt.Insert(op) => RamStmt.Insert(indexOp(op, constructedIndexes, indexState))
         case RamStmt.MergeInto(_, _) => stmt
@@ -158,7 +158,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// Updates `Query` ops with their corresponding index location in memory.
     ///
-    def indexOp(op: RelOp, constructedIndexes: Indexes, indexState: IndexState[(RelSym, Int32), r]): RelOp \ r = match op {
+    def indexOp(op: RelOp, constructedIndexes: Indexes, indexState: UniqueInts[(RelSym, Int32), r]): RelOp \ r = match op {
         case RelOp.Search(rowVar, relSym, body) =>
             RelOp.Search(rowVar, relSym, indexOp(body, constructedIndexes, indexState))
         case RelOp.Query(rowVar, relSym, boolExps, _, body) =>

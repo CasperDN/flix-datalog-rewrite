@@ -37,8 +37,14 @@ mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.JoinProfiler.JoinProfile
 
     ///
-    /// Optimizes the join-order of the rules in `program`. This is done by running the
-    /// program with a smaller representative input.
+    /// Optimizes the join order of the rules in `program`. This is done by first running
+    /// the program using the join profiler with a smaller representative input. This
+    /// produces statistics about relation sizes which are used to derive a cost function.
+    /// Selinger's algorithm is then used using the cost function to compute the optimal
+    /// join order.
+    ///
+    /// If the number of facts in the program is smaller than `profilerMinimumFacts`, this
+    /// phase is skipped.
     ///
     @Internal
     pub def scheduleProgram(program: RamProgram): RamProgram = 
@@ -51,6 +57,14 @@ mod Fixpoint.Phase.JoinOptimizer {
             } else scheduleProgramInternal(program)
         }
         
+    ///
+    /// Performs join reordering of the statements in `program` by running the join
+    /// profiler on a representative input. The representative input is generated for each
+    /// relation by flipping a biased coin with `p = profilerDiscrimination` for every
+    /// input fact in that relation. If the number of chosen facts for a relation is less
+    /// than `profilerFactLowerBound`, the facts in that relation are shuffled and the
+    /// first `profilerFactLowerBound` facts are chosen.
+    ///
     def scheduleProgramInternal(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predState, indexInfo) => 
             let takeRandomFacts = fs -> {
@@ -73,6 +87,9 @@ mod Fixpoint.Phase.JoinOptimizer {
             }
     }
 
+    ///
+    /// Reorders the `RelOp`'s in `stmt` based on `getOptimalJoin`.
+    ///
     def scheduleStmt(getOptimalJoin: List[RowVar] -> List[RowVar], stmt: RamStmt): RamStmt = match stmt {
         case RamStmt.Insert(op) => RamStmt.Insert(scheduleOp(getOptimalJoin, Nil, Nil, Nil, op))
         case RamStmt.MergeInto(_, _) => stmt
@@ -85,6 +102,21 @@ mod Fixpoint.Phase.JoinOptimizer {
         case RamStmt.EstimateJoinSize(_, _, _, _) => unreachable!()
     }
 
+    ///
+    /// Reorders `op` according to the the optimal join order given by `getOptimalJoin`
+    /// and places `RelOp`'s that are independent of the join order at the bottom of the
+    /// nesting.
+    ///
+    /// `getOptimalJoin` is a function that returns the optimal join order of the given
+    /// list of `RowVar`'s'.
+    ///
+    /// `independent` are `RelOp`'s whose order are decided in a later phase (e.g.
+    /// Hoisting).
+    ///
+    /// `ops` is the list of `RelOp` to be reordered.
+    ///
+    /// `rowVars` is the list of `RowVar`'s associated with `ops`.
+    ///
     def scheduleOp(
         getOptimalJoin: List[RowVar] -> List[RowVar], 
         independent: List[RelOp], 
@@ -126,6 +158,10 @@ mod Fixpoint.Phase.JoinOptimizer {
             scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
     }
     
+    ///
+    /// Returns the cost to join `s` with `relations`, given the previous optimal joins
+    /// and their cost, and the statistics returned from the join profiler.
+    ///
     def costToJoin(
         relations: List[RowVar], 
         optimal: MutMap[List[RowVar], (Int64, List[RowVar]), r], 
@@ -153,7 +189,11 @@ mod Fixpoint.Phase.JoinOptimizer {
         let sum = ith |> Vector.foldLeft(acc -> val -> acc + val, 0i64);
         costToJoinPrev + Int32.toInt64(arity) * sum // TODO: Maybe don't multiply by arity
     
-    def powerSetOfSize(size: Int32, set: List[a]): List[List[a]] = region rc {
+    ///
+    /// Returns the subset of the powerset of `set` where each element has length `size`.
+    ///
+    @Internal
+    pub def powerSetOfSize(size: Int32, set: List[a]): List[List[a]] = region rc {
         let len = List.length(set);
         if (size > len) {
             bug!("Size greater than len")
@@ -184,24 +224,10 @@ mod Fixpoint.Phase.JoinOptimizer {
         }
     }
 
-    def powerSet(list: List[a]): List[List[a]] = match list {
-        case Nil => Nil :: Nil
-        case x :: xs => 
-            let ps = powerSet(xs);
-            ps ::: List.map(ss -> x :: ss, ps)
-    }
-
-    @Test
-    pub def testPowerSetOfSize(): Bool = 
-        let k = 17;
-        List.range(2,k) |> 
-        List.forAll(i -> 
-            let set = List.range(0, i);
-            let ps1 = powerSet(set) |> List.filter(x -> List.length(x) == i) |> List.sort;
-            let ps2 = powerSetOfSize(i, set);
-            ps1 == ps2
-        )
-
+    ///
+    /// Returns the optimal join order of the `RowVar`'s in `relations` given the
+    /// statistics from the join profiler.
+    ///
     def getOptimalJoinWith(
         expectedJoinSize: Map[(RowVar, Vector[Int32]), Vector[Int64]],
         sizePerIter: Map[RowVar, Vector[Int64]],

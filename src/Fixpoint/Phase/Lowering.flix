@@ -35,14 +35,13 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Boxing.Equality
     use Fixpoint.BoxingTypes.{Boxing, RamIdToPos};
     use Fixpoint.Counter
-    use Fixpoint.Counter.Counter
     use Fixpoint.Debugging
     use Fixpoint.Helpers.unwrap
-    use Fixpoint.Interpreter.DatabaseExternal
     use Fixpoint.UniqueInts
+    use Fixpoint.UniqueInts.UniqueInts
 
     // Maps RowVars to their memory-position.
-    type alias IdToIndex[r: Region] = UniqueInts.IndexState[RowVar, r]
+    type alias IdToIndex[r: Region] = UniqueInts[RowVar, r]
     type alias WriteTos[r: Region] = MutMap[RowVar, List[WriteTuple], r]
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])

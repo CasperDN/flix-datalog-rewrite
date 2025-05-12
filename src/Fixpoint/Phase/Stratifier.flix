@@ -29,8 +29,13 @@ mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Shared.PredSym
 
     ///
+    /// Array allowing lookup of the id-part of `PredSym` to name-part of `PredSym`.
     ///
+    type alias PredIdToName[r: Region] = Array[String, r]
+
     ///
+    /// Computes the stratification of `d`. The result is a map from `PredSym`
+    /// their strata.
     ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, Int32] = region rc {
@@ -53,45 +58,70 @@ mod Fixpoint.Phase.Stratifier {
         MutMap.toMap(result)
     }
 
-    type alias AdjecencyMap[r: Region] = MutGraph[r]
-    type alias PredMap[r: Region] = Array[String, r]
-
-
+    ///
+    /// Insert edges into `graph` for the dependencies in the Datalog program `d`.
+    /// `A(x) :- B(x), A(x), -C(x).` inserts the edge `B -> A` and `C -> A` in `graph`.
+    ///
     def mkDepGraphInternal(graph: MutGraph[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(precedenceHelper(graph), rules)
         case Model(_) => ()
         case Join(d1, d2) => mkDepGraphInternal(graph, d1); mkDepGraphInternal(graph, d2)
     }
 
+    ///
+    /// Inserts edges into `graph` for the dependencies in the constraints `cnst`.
+    ///
+    /// See `mkDepGraphInternal`.
+    ///
     def precedenceHelper(graph: MutGraph[r], cnst: Constraint): Unit \ r = match cnst {
         case Constraint(head, body) => Vector.forEach(mkDepEdge(graph, head), body)
     }
 
+    ///
+    /// Inserts edges into `graph` for the found dependency between `dst`
+    /// and `src`. No edge is inserted if `dst == src`.
+    ///
+    /// See `mkDepGraphInternal`.
+    ///
     def mkDepEdge(graph: MutGraph[r], dst: HeadPredicate, src: BodyPredicate): Unit \ r = match (dst, src) {
         case (HeadAtom(PredSym.PredSym(_, dstId), _, _), BodyAtom(PredSym.PredSym(_, srcId), _, _, _, _)) => {
             if(dstId != srcId) {
                 MutGraph.addEdge(to32(srcId), to32(dstId), graph)
             } else (
-                // We still register the edge, as it is needed later
+                // We still register the vertex, as it is needed later.
                 MutGraph.addVertex(to32(dstId), graph)
             )
         }
         case _ => ()
     }
 
-    def collectPredSym(predMap: PredMap[r], d: Datalog): Unit \ r = match d {
+    ///
+    /// Collects the names of the `PredSym`s of `d`. A `PredSym` `(name, id)`
+    /// in `d` will ensure that `predMap[id] == name`.
+    ///
+    def collectPredSym(predMap: PredIdToName[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(predSymHelper(predMap), rules)
         case Model(_) => ()
         case Join(d1, d2) => collectPredSym(predMap, d1); collectPredSym(predMap, d2)
     }
 
-    def predSymHelper(predMap: PredMap[r], cnst: Constraint): Unit \ r = match cnst {
+    ///
+    /// Collects the names of the `PredSym`s of `cnst`.
+    /// 
+    /// See `collectPredSym`.
+    ///
+    def predSymHelper(predMap: PredIdToName[r], cnst: Constraint): Unit \ r = match cnst {
         case Constraint(HeadPredicate.HeadAtom(PredSym.PredSym(name, id), _, _), body) =>
             Array.put(name, to32(id), predMap);
             Vector.forEach(collectEdge(predMap), body)
     }
 
-    def collectEdge(predMap: PredMap[r], body: BodyPredicate): Unit \ r = match body {
+    ///
+    /// Collects the names of the `PredSym`s of `body`.
+    /// 
+    /// See `collectPredSym`.
+    ///
+    def collectEdge(predMap: PredIdToName[r], body: BodyPredicate): Unit \ r = match body {
         case (BodyAtom(PredSym.PredSym(name, id), _, _, _, _)) => {
             Array.put(name, to32(id), predMap);
             ()
@@ -99,5 +129,8 @@ mod Fixpoint.Phase.Stratifier {
         case _ => ()
     }
 
+    ///
+    /// Cast `i` to an `Int32`. Will only fail if there are more than 2^32 `PredSyms`s.
+    ///
     def to32(i: Int64): Int32 = unwrap(Int64.tryToInt32(i))
 }

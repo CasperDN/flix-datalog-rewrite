@@ -103,31 +103,6 @@ mod Fixpoint.Boxing {
         multiplier * Runtime.getRuntime().availableProcessors()
     }
 
-            // let newFacts =
-            //     facts |>
-            //     Map.mapWithKey(k -> values ->
-            //         let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
-            //         values |> 
-            //         Vector.map(vec -> match den {
-            //             case Denotation.Relational =>
-            //                 let tuple = vec |>
-            //                     Vector.mapWithIndex(i -> v -> {
-            //                         Boxing.unboxWith(v, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
-            //                     });
-            //                 (tuple, Boxed.None)
-            //             case Denotation.Latticenal(_, _, _ ,_) =>
-            //                 let len = Vector.length(vec);
-            //                 let tuple = Array.empty(rc, len - 1);
-            //                 vec |> Vector.forEachWithIndex(i -> term -> {
-            //                     if (i < len - 1)
-            //                         Array.put(Boxing.unboxWith(term, unwrap(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
-            //                     else ()
-            //                 });
-            //                 let latVal = Vector.get(len - 1, vec);
-            //                 (Array.toVector(tuple), latVal)
-            //         })
-            //     );
-
     def mapAllFacts(rc1: Region[r],
         relSym: RelSym,
         facts: Vector[Vector[Boxed]],
@@ -146,7 +121,7 @@ mod Fixpoint.Boxing {
         } else {
             let inc = numOfFacts / threadNum;
             let limits = Array.init(rc1, i -> (i * inc, (i + 1) * inc), threadNum);
-            Array.put((fst(Array.get(threadNum - 1, limits)), numOfFacts), threadNum, limits);
+            Array.put((fst(Array.get(threadNum - 1, limits)), numOfFacts), threadNum - 1, limits);
             let funcsToBeRun = limits |>
             Array.toVector |>
             Vector.map(match (lower, upper) ->
@@ -159,8 +134,8 @@ mod Fixpoint.Boxing {
 
     def mapPartOfVector(
         factVec: Vector[Vector[Boxed]],
-        from_: Int32,
-        to_: Int32,
+        lb: Int32,
+        ub: Int32,
         isRelational: Bool,
         collectionArr: Array[(Vector[Int64], Boxed), r],
         boxingInfo: Boxing[r],
@@ -168,14 +143,15 @@ mod Fixpoint.Boxing {
         unifiedPositions: Vector[UnifiedTypePos]
     ): Unit \ r = {
         def loop(i) =
-            if(i >= to_) ()
+            if(i >= ub) ()
             else {
                 let fullTuple = Vector.get(i, factVec);
-                let (tuple, boxed) = if(isRelational) {
-                    (fullTuple, Boxed.None)
-                } else {
-                    (Vector.dropRight(1, fullTuple), Vector.get(Vector.length(fullTuple) - 1, fullTuple))
-                };
+                let (tuple, boxed) = 
+                    if(isRelational) {
+                        (fullTuple, Boxed.None)
+                    } else {
+                        (Vector.dropRight(1, fullTuple), Vector.get(Vector.length(fullTuple) - 1, fullTuple))
+                    };
                 let savedVec = tuple |>
                     Vector.mapWithIndex(index -> boxedVal ->
                         let unifiedPos = Vector.get(index, unifiedPositions);
@@ -185,15 +161,14 @@ mod Fixpoint.Boxing {
                                 setType(Types.Object, unifiedPos, symInfo);
                                 let boxToRep = Vector.get(unifiedPos, boxToRepVec);
                                 let counter = Vector.get(unifiedPos, counters);
-                                let rep = BPlusTree.computeIfAbsent(() -> AtomicCounter.getAndIncrement(counter), boxedVal, boxToRep);
-                                rep
+                                BPlusTree.computeIfAbsent(() -> AtomicCounter.getAndIncrement(counter), boxedVal, boxToRep)
                             case _ => unboxWith(boxedVal, unifiedPos, boxingInfo)
                         }
                     );
-                Array.put((savedVec, boxed), from_ + i, collectionArr);
+                Array.put((savedVec, boxed), i, collectionArr);
                 loop(i + 1)
             };
-        loop(from_)
+        loop(lb)
     }
 
     def initializeCounters(rc: Region[r], boxingInfo: Boxing[r]): Vector[AtomicCounter[r]] \ r = {
@@ -300,7 +275,6 @@ mod Fixpoint.Boxing {
         use Fixpoint.BoxingTypes.RamIdToPos
         use Fixpoint.Ast.Shared.PredSym
         use Fixpoint.Counter
-        use Fixpoint.Counter.Counter
 
         pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
@@ -722,7 +696,7 @@ mod Fixpoint.Boxing {
             match MutMap.get(repID, map) {
                 case Some(v) => MutMap.put(id, v, map)
                 case None => 
-                    let newID = Counter.getNewID(counter);
+                    let newID = Counter.getAndIncrement(counter);
                     MutMap.put(id, newID, map);
                     MutMap.put(repID, newID, map)
             }

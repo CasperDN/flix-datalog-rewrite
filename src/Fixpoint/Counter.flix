@@ -14,29 +14,49 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
-mod Fixpoint.Counter {
-    pub type alias Counter[r: Eff] = Ref[Int32, r]
-    pub def fresh(rc: Region[r]): Counter[r] \ r = Ref.fresh(rc, 0)
 
-    pub def getNewID(c: Counter[r]): Int32 \ r =
-        let newID = Ref.get(c);
-        Ref.put(newID + 1, c);
-        newID
+///
+/// `Counter` is a wrapper around `Ref` for a simple increment-only counter.
+///
+/// Its primary use is for generating identifiers.
+///
+mod Fixpoint {
+    @Internal
+    pub enum Counter[r: Region] {
+        case Counter(Ref[Int32, r])
+    }
 
-    pub def resetTo(i: Int32, c: Counter[r]): Unit \ r =
-        Ref.put(i, c)
+    mod Counter {
+        use Fixpoint.Counter
+        use Fixpoint.Counter.Counter
 
-    pub def increment(c: Counter[r]): Unit \ r =
-        Ref.put(Ref.get(c) + 1, c);
-        ()
+        ///
+        /// Returns a fresh `Counter` initialized to `0`.
+        ///
+        @Internal
+        pub def fresh(rc: Region[r]): Counter[r] \ r = Counter(Ref.fresh(rc, 0))
 
-    pub def peek(c: Counter[r]): Int32 \ r =
-        Ref.get(c)
+        ///
+        /// Returns the state of `counter` and increments it.
+        ///
+        @Internal
+        pub def getAndIncrement(counter: Counter[r]): Int32 \ r =
+            let Counter(c) = counter; 
+            let newID = Ref.get(c);
+            Ref.put(newID + 1, c);
+            newID
 
-    pub def clone(c: Counter[r1], rc: Region[r2]): Counter[r2] \ {r1, r2} =
-        Ref.fresh(rc, Ref.get(c))
+        ///
+        /// Increments the state of `counter`.
+        ///
+        @Internal
+        pub def increment(counter: Counter[r]): Unit \ r =
+            getAndIncrement(counter);
+            ()
 
-    pub def ++(c: Counter[r]): Int32 \ r = getNewID(c)
-
+        @Internal
+        pub def peek(counter: Counter[r]): Int32 \ r =
+            let Counter(c) = counter; 
+            Ref.get(c)
+    }
 }

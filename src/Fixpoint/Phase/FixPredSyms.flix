@@ -15,16 +15,12 @@
  * limitations under the License.
  */
 
-/**
-Purpose of file:
-Apparently the rest of the Flix compiler does not use the int part of PredSym's at all
-Therefore remap all PredSym's such the int part can be used as an identifier, instead of the string.
-*/
+/// Purpose of phase: For `PredSym(name, id)` we want `id` to be unique, for the whole program.
+/// This phase passes over the Datalog-Ast and replaces the id and after everything is done
+/// recreates the old `PredSym`s for the resulting model.
+
 
 mod Fixpoint.Phase.FixPredSyms {
-    use Fixpoint.UniqueInts
-
-    use Fixpoint.Ast.Ram.{RelSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -33,16 +29,21 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
     use Fixpoint.Ast.Datalog.BodyPredicate.{Functional}
     use Fixpoint.Ast.Datalog.BodyPredicate.{Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.Shared.Denotation
-    use Fixpoint.Ast.Shared.isRelational
-    use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.Ast.Ram.RelSym
+    use Fixpoint.Ast.Shared.{Denotation, isRelational, PredSym}
     use Fixpoint.Ast.Shared.PredSym.PredSym
-    use Fixpoint.UniqueInts.{IndexState, ReverseState}
+    use Fixpoint.UniqueInts
+    use Fixpoint.ReverseUniqueInts
+    use Fixpoint.UniqueInts.UniqueInts
+    use Fixpoint.ReverseUniqueInts.ReverseUniqueInts
     use Fixpoint.Helpers.unwrap
 
+    type alias FixInformation = ReverseUniqueInts[PredSym]
 
-    pub type alias FixInformation = UniqueInts.ReverseState[PredSym]
-
+    ///
+    /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
+    /// program and information which `unfixPredSym` can use to recreate the original program.
+    ///
     @Internal
     pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = region rc {
         let mapping = UniqueInts.empty(rc);
@@ -50,8 +51,10 @@ mod Fixpoint.Phase.FixPredSyms {
         (fixed, UniqueInts.reverse(mapping))
     }
 
-    @Internal
-    pub def fixPredSymsInternal(d: Datalog, mapping: IndexState[PredSym, r]): Datalog \ r = match d {
+    ///
+    /// Recursively applies `mapping` to the different Datalog enums to make `PredSym`s unique.
+    ///
+    def fixPredSymsInternal(d: Datalog, mapping: UniqueInts[PredSym, r]): Datalog \ r = match d {
         case Datalog(facts, rules) =>
             let transformer = mapForward(mapping);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
@@ -66,7 +69,9 @@ mod Fixpoint.Phase.FixPredSyms {
         case _ => bug!("PredSym error")
     }
 
-
+    ///
+    /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
+    ///
     @Internal
     pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
@@ -81,33 +86,39 @@ mod Fixpoint.Phase.FixPredSyms {
         case _ => bug!("Bad argument of type 'Join' in PredSym renaming")
     }
     
-    @Internal
-    def mapBack(reversing: ReverseState[PredSym], pred: PredSym): PredSym = 
+    ///
+    /// Maps `pred` back to its original `PredSym` according to `reversing`.
+    ///
+    def mapBack(reversing: ReverseUniqueInts[PredSym], pred: PredSym): PredSym = 
         let PredSym(_, id) = pred;
-        match Map.get(unwrap(Int64.tryToInt32(id)), reversing) {
-            case Some(v) => v
-            case _ => bug!("Incomplete mapping given to when 'unfixing predicates'")
-        }
-    
+        ReverseUniqueInts.fromIndex(unwrap(Int64.tryToInt32(id)), reversing)
 
-    @Internal
-    def mapForward(state: IndexState[PredSym, r], pred: PredSym): PredSym \ r = 
+    ///
+    /// Maps `pred` back to its new `PredSym` according to `state`.
+    ///
+    def mapForward(state: UniqueInts[PredSym, r], pred: PredSym): PredSym \ r = 
         let PredSym(name, _) = pred;
         let index = UniqueInts.getIndex(pred, state);
         PredSym(name, Int32.toInt64(index))
 
-    @Internal
+    ///
+    /// Maps `PredSym`s of `constraints` according to `transformer`.
+    ///
     def remapConstraints(constraints: Vector[Constraint], transformer: PredSym -> PredSym \ r): Vector[Constraint] \ r = {
-        Vector.map(match Constraint(head, body) -> Constraint(remapHead(head, transformer), Vector.map(x -> remapBody(x, transformer), body)), constraints)
+        Vector.map(match Constraint(head, body) -> Constraint(remapHead(transformer, head), Vector.map(remapBody(transformer), body)), constraints)
     }
 
-    @Internal
-    def remapHead(head: HeadPredicate, transformer: PredSym -> PredSym \ r): HeadPredicate \ r = match head {
+    ///
+    /// Maps `PredSym`s of `head` according to `transformer`.
+    ///
+    def remapHead(transformer: PredSym -> PredSym \ r, head: HeadPredicate): HeadPredicate \ r = match head {
         case HeadAtom(pred, den, terms) => HeadAtom(transformer(pred), den, terms)
     }
     
-    @Internal
-    def remapBody(body: BodyPredicate, transformer: PredSym -> PredSym \ r): BodyPredicate \ r = match body {
+    ///
+    /// Maps `PredSym`s of `body` according to `transformer`.
+    ///
+    def remapBody(transformer: PredSym -> PredSym \ r, body: BodyPredicate): BodyPredicate \ r = match body {
         case BodyAtom(pred, den, pol, fixed, terms) => BodyAtom(transformer(pred), den, pol, fixed, terms)
         case _ => body
     }
