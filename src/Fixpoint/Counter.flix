@@ -28,7 +28,6 @@ mod Fixpoint {
 
     mod Counter {
         use Fixpoint.Counter
-        use Fixpoint.Counter.Counter
 
         ///
         /// Returns a fresh `Counter` initialized to `0`.

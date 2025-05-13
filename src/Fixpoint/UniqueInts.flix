@@ -37,7 +37,6 @@ mod Fixpoint {
         use Fixpoint.ReverseUniqueInts
         use Fixpoint.ReverseUniqueInts.ReverseUniqueInts
         use Fixpoint.UniqueInts
-        use Fixpoint.UniqueInts.UniqueInts
 
         ///
         /// Returns an empty mapping from `k` to identifiers.
@@ -89,7 +88,6 @@ mod Fixpoint {
 
     mod ReverseUniqueInts {
         use Fixpoint.ReverseUniqueInts
-        use Fixpoint.ReverseUniqueInts.ReverseUniqueInts
         use Fixpoint.Helpers.unwrap
 
         ///

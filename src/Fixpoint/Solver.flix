@@ -47,26 +47,37 @@ mod Fixpoint.Solver {
         Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat), fixInfo)
 
     ///
+    /// Returns the minimal model of the given Datalog program `d` with provenance
+    /// annotations to facilitate provenance queries.
+    ///
+    @Internal
+    pub def runProvSolver(d: Datalog): Datalog =
+        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
+        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
+        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat), fixInfo)
+
+    ///
     /// Returns the minimal model of the given Datalog program `d`.
     /// The minimal model is given by the model semantics for Datalog programs with stratified negation.
     /// A stratification of `d` is given by `stf`.
     ///
     @Internal
-    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = region rc {
+    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32], withProv: Bool): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfiler`.
         def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
-            Fixpoint.Phase.Compiler.compile(cs, db, stf)
-            |> Fixpoint.Debugging.notifyPreLowering("Compiler")
-            |> Fixpoint.Phase.Simplifier.simplifyProgram
-            |> Fixpoint.Debugging.notifyPreLowering("Simplifier")
-            |> Fixpoint.Phase.JoinOptimizer.scheduleProgram
-            |> Fixpoint.Debugging.notifyPreLowering("Join Optimizer")
-            |> Fixpoint.Phase.Hoisting.hoistProgram
-            |> Fixpoint.Debugging.notifyPreLowering("Hoisting")
-            |> Fixpoint.Phase.IndexSelection.indexProgram
-            |> Fixpoint.Debugging.notifyPreLowering("Index Selection")
-            |> Fixpoint.Phase.Lowering.lowerProgram(rc)
+            Fixpoint.Phase.Compiler.compile(cs, db, stf) |> 
+            Fixpoint.Debugging.notifyPreLowering("Compiler")
+            Fixpoint.Phase.Simplifier.simplifyProgram |> 
+            Fixpoint.Debugging.notifyPreLowering("Simplifier") |> 
+            Fixpoint.Phase.JoinOptimizer.scheduleProgram |> 
+            Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |> 
+            Fixpoint.Phase.Hoisting.hoistProgram |> 
+            Fixpoint.Debugging.notifyPreLowering("Hoisting") |>
+            Fixpoint.Phase.IndexSelection.indexProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
+            Fixpoint.Phase.Provenance(withProv) |>
+            Fixpoint.Phase.Lowering.lowerProgram(rc)
         };
         let model = match d {
             case Datalog(_, _) =>
