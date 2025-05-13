@@ -31,7 +31,7 @@ leading to choosing an unsound join order.
 
 mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
-    use Fixpoint.Helpers.{unwrap, collectRowVarRelSym}
+    use Fixpoint.Helpers.{unwrapOrCrash, collectRowVarRelSym}
     use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound, disableJoinOptimizer}
     use Fixpoint.JoinProfiler
     use Fixpoint.JoinProfiler.JoinProfile
@@ -136,7 +136,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             let opsInJoinOrder = region rc {
                 let asArr = Array.empty(rc, List.length(ops));
                 rowVars |> List.forEachWithIndex(i -> rv -> {
-                    let pos = List.indexOf(rv, joinOrder) |> unwrap;
+                    let pos = List.indexOf(rv, joinOrder) |> unwrapOrCrash;
                     Array.put(Vector.get(i, opsAsVec), pos, asArr)
                 });
                 Array.reverse(asArr);
@@ -171,18 +171,18 @@ mod Fixpoint.Phase.JoinOptimizer {
         arity: Int32,
         s: RowVar
     ): Int64 \ r =
-        let map = Map.get(s, attributeMap) |> unwrap;
+        let map = Map.get(s, attributeMap) |> unwrapOrCrash;
         // Requires that Set orders its elements
         let attr = 
             relations |> 
-            List.foldLeft(acc -> rel -> Set.union(acc, Map.get(rel, map) |> unwrap), Set#{}) |>
+            List.foldLeft(acc -> rel -> Set.union(acc, Map.get(rel, map) |> unwrapOrCrash), Set#{}) |>
             Set.toList |>
             List.toVector;
-        let (costToJoinPrev, _) = MutMap.get(relations, optimal) |> unwrap;
+        let (costToJoinPrev, _) = MutMap.get(relations, optimal) |> unwrapOrCrash;
         let ith = 
             Vector.zip(
-                MutMap.get(relations, tuplesFromJoin) |> unwrap, 
-                Map.get((s, attr), expectedJoinSize) |> unwrap
+                MutMap.get(relations, tuplesFromJoin) |> unwrapOrCrash, 
+                Map.get((s, attr), expectedJoinSize) |> unwrapOrCrash
             ) |>
             Vector.map(match (x, y) -> x * y);
         MutMap.put(s :: relations, ith, tuplesFromJoin);
@@ -240,7 +240,7 @@ mod Fixpoint.Phase.JoinOptimizer {
         let tuplesFromJoin: MutMap[List[RowVar], Vector[Int64], rc] = MutMap.empty(rc);
         relations |> List.forEach(rel -> {
             MutMap.put(rel :: Nil, (0i64, rel :: Nil), optimal);
-            let sizePerIterForRel = Map.get(rel, sizePerIter) |> unwrap;
+            let sizePerIterForRel = Map.get(rel, sizePerIter) |> unwrapOrCrash;
             MutMap.put(rel :: Nil, sizePerIterForRel, tuplesFromJoin)
         });
         let max = List.length(relations);
@@ -253,14 +253,14 @@ mod Fixpoint.Phase.JoinOptimizer {
                         let (ls, right) = List.splitAt(i, set);
                         let rs = List.drop(1, right);
                         let withoutX = ls ::: rs;
-                        let prevJoin = MutMap.get(withoutX, optimal) |> unwrap |> snd;
+                        let prevJoin = MutMap.get(withoutX, optimal) |> unwrapOrCrash |> snd;
                         let optJoin = x :: prevJoin;
-                        let arity = Map.get(x, arities) |> unwrap;
+                        let arity = Map.get(x, arities) |> unwrapOrCrash;
                         let cost = costToJoin(
                             withoutX, optimal, tuplesFromJoin, expectedJoinSize, attributeMap, arity, x
                         );
                         (cost, optJoin)
-                    }) |> List.minimumBy(x -> y -> fst(x) <=> fst(y)) |> unwrap;
+                    }) |> List.minimumBy(x -> y -> fst(x) <=> fst(y)) |> unwrapOrCrash;
                     MutMap.put(set, opt, optimal)
                 });
                 loop(num + 1)
@@ -268,6 +268,6 @@ mod Fixpoint.Phase.JoinOptimizer {
         };
         loop(2);
         // Reverse to get true order.
-        MutMap.get(relations, optimal) |> unwrap |> snd |> List.reverse
+        MutMap.get(relations, optimal) |> unwrapOrCrash |> snd |> List.reverse
     }
 }

@@ -23,7 +23,7 @@ mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Shared.PredSym
-    use Fixpoint.Helpers.unwrap
+    use Fixpoint.Helpers.unwrapOrCrash
     use Fixpoint.PrecedenceGraph
     use Fixpoint.PrecedenceGraph.MutGraph
     use Fixpoint.Ast.Shared.PredSym
@@ -132,5 +132,5 @@ mod Fixpoint.Phase.Stratifier {
     ///
     /// Cast `i` to an `Int32`. Will only fail if there are more than 2^32 `PredSyms`s.
     ///
-    def to32(i: Int64): Int32 = unwrap(Int64.tryToInt32(i))
+    def to32(i: Int64): Int32 = unwrapOrCrash(Int64.tryToInt32(i))
 }

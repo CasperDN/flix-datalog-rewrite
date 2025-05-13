@@ -25,7 +25,7 @@ mod Fixpoint.Helpers {
     /// Causes runtime hole error when `x` is `None`.
     ///
     @Internal
-    pub def unwrap(x: Option[a]): a = match x {
+    pub def unwrapOrCrash(x: Option[a]): a = match x {
         case Some(v) => v
         case None => ???
     }

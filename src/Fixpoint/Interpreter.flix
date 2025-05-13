@@ -25,7 +25,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Boxing.{boxWith, unboxWith}
     use Fixpoint.BoxingTypes.{Boxing, RamIdToPos}
     use Fixpoint.Counter
-    use Fixpoint.Helpers.{unwrap}
+    use Fixpoint.Helpers.{unwrapOrCrash}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
     use Fixpoint.Predicates.{allFullRelSyms}
 
@@ -158,9 +158,9 @@ mod Fixpoint.Interpreter {
             let innerMap = MutMap.empty(rc);
             let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym)) |>
                 Vector.map(i ->
-                    unwrap(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+                    unwrapOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );
-            Array.get(unwrap(Map.get((relSym, 0), indexPos)), db) |>
+            Array.get(unwrapOrCrash(Map.get((relSym, 0), indexPos)), db) |>
             BPlusTree.forEach(vec -> latticeElem -> {
                 let boxedVec = vec |> Vector.mapWithIndex(i -> val ->  boxWith(val, Vector.get(i, curBoxingInfo), boxing));
                 MutMap.put(boxedVec, latticeElem, innerMap)
@@ -238,9 +238,9 @@ mod Fixpoint.Interpreter {
                 Ref.put(Some(curr), prevRef);
                 Counter.increment(sizeRef)
             });
-            let size = Counter.peek(sizeRef);
-            let dup = Counter.peek(dupRef);
-            MutList.push((size, dup), Array.get(writeTo, unwrap(expectedJoinSize)))
+            let size = Counter.get(sizeRef);
+            let dup = Counter.get(dupRef);
+            MutList.push((size, dup), Array.get(writeTo, unwrapOrCrash(expectedJoinSize)))
     }
 
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
@@ -267,7 +267,7 @@ mod Fixpoint.Interpreter {
             case RelOp.Project(terms, rel, Relational) =>
                 let relIndex = lookupIndex(rel, db);
                 let tuple = Vector.map(evalTerm(env, boxing), terms);
-                BPlusTree.put(tuple, Boxed.None, relIndex)
+                BPlusTree.put(tuple, Boxed.NoValue, relIndex)
             case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 lookupIndex(searchIndex, db) |> 
                 BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
@@ -388,8 +388,8 @@ mod Fixpoint.Interpreter {
                 let len = Vector.length(terms);
                 let tuple = evalTermsWithLat(ctxt, terms);
                 let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
-                let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.None, relIndex);
-                if(curLatVal == Boxed.None)
+                let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.NoValue, relIndex);
+                if(curLatVal == Boxed.NoValue)
                     true
                 else
                     not (latVal `leq` curLatVal)
@@ -514,4 +514,5 @@ mod Fixpoint.Interpreter {
                 let boxed5 = evalBoxedT(t5);
                 unboxWith(f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5), i, boxing)
         }
+
 }

@@ -27,7 +27,7 @@ mod Fixpoint.PrecedenceGraph {
         use Fixpoint.Counter
         use Fixpoint.Counter.{Counter}
         use Fixpoint.PrecedenceGraph.Vertex
-        use Fixpoint.Helpers.unwrap
+        use Fixpoint.Helpers.unwrapOrCrash
 
         enum Color with Eq {
             case White,
@@ -117,8 +117,8 @@ mod Fixpoint.PrecedenceGraph {
             g->adjList |> MutMap.forEach(u -> neighbors -> 
                 neighbors |> 
                 List.forEach(v -> 
-                    let uSCC = unwrap(MutMap.get(u, rootMap));
-                    let vSCC = unwrap(MutMap.get(v, rootMap));
+                    let uSCC = unwrapOrCrash(MutMap.get(u, rootMap));
+                    let vSCC = unwrapOrCrash(MutMap.get(v, rootMap));
                     if(uSCC != vSCC) {
                         addEdge(uSCC, vSCC, contractedGraph)
                     } else ()
@@ -127,7 +127,7 @@ mod Fixpoint.PrecedenceGraph {
             let inverseRootMap = MutMap.empty(rc);
             MutMap.forEach(k -> v -> MutMap.put(v, k, inverseRootMap), rootMap);
             let sorted = topologicalSort(contractedGraph) |> 
-                List.map(u ->  unwrap(MutMap.get(unwrap(MutMap.get(u, inverseRootMap)), componentMap)));
+                List.map(u ->  unwrapOrCrash(MutMap.get(unwrapOrCrash(MutMap.get(u, inverseRootMap)), componentMap)));
             let stratums = MutList.empty(rc);
             def loop(list) = match list {
                 case s1 :: s2 :: rest =>
@@ -219,8 +219,8 @@ mod Fixpoint.PrecedenceGraph {
             g: MutGraph[r1],
             u: Vertex
         ): Unit \ r0 + r1 = {
-            Array.put(Counter.peek(time), u, disc);
-            Array.put(Counter.peek(time), u, low);
+            Array.put(Counter.get(time), u, disc);
+            Array.put(Counter.get(time), u, low);
             Counter.increment(time);
             Array.put(true, u, onStack);
             MutList.push(u, stack);
@@ -262,4 +262,3 @@ mod Fixpoint.PrecedenceGraph {
     }
 
 }
-

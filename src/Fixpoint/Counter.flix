@@ -57,7 +57,7 @@ mod Fixpoint {
         /// Returns the state of `counter`.
         ///
         @Internal
-        pub def peek(counter: Counter[r]): Int32 \ r =
+        pub def get(counter: Counter[r]): Int32 \ r =
             let Counter(c) = counter; 
             Ref.get(c)
 
@@ -69,4 +69,5 @@ mod Fixpoint {
             let Counter(c) = counter;
             Ref.put(i, c)
     }
+
 }

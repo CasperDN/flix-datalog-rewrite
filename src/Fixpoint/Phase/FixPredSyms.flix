@@ -36,7 +36,7 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.ReverseUniqueInts
     use Fixpoint.UniqueInts.UniqueInts
     use Fixpoint.ReverseUniqueInts.ReverseUniqueInts
-    use Fixpoint.Helpers.unwrap
+    use Fixpoint.Helpers.unwrapOrCrash
 
     type alias FixInformation = ReverseUniqueInts[PredSym]
 
@@ -91,7 +91,7 @@ mod Fixpoint.Phase.FixPredSyms {
     ///
     def mapBack(reversing: ReverseUniqueInts[PredSym], pred: PredSym): PredSym = 
         let PredSym(_, id) = pred;
-        ReverseUniqueInts.fromIndex(unwrap(Int64.tryToInt32(id)), reversing)
+        ReverseUniqueInts.fromIndex(unwrapOrCrash(Int64.tryToInt32(id)), reversing)
 
     ///
     /// Maps `pred` back to its new `PredSym` according to `state`.

@@ -71,9 +71,9 @@ mod Fixpoint {
         /// Returns the maximal assigned identifier of `state`.
         ///
         @Internal
-        pub def peek(state: UniqueInts[k, r]): Int32 \ r = {
+        pub def get(state: UniqueInts[k, r]): Int32 \ r = {
             let UniqueInts(_, counter) = state;
-            Counter.peek(counter)
+            Counter.get(counter)
         }
 
         ///
@@ -88,7 +88,7 @@ mod Fixpoint {
 
     mod ReverseUniqueInts {
         use Fixpoint.ReverseUniqueInts
-        use Fixpoint.Helpers.unwrap
+        use Fixpoint.Helpers.unwrapOrCrash
 
         ///
         /// Returns an `ReverseUniqueInts` the value was assigned
@@ -96,6 +96,7 @@ mod Fixpoint {
         ///
         pub def fromIndex(val: Int32, reverseState: ReverseUniqueInts[k]): k = 
             let ReverseUniqueInts(r) = reverseState;
-            unwrap(Map.get(val, r))
+            unwrapOrCrash(Map.get(val, r))
     }
+
 }

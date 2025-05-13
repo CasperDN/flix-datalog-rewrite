@@ -23,6 +23,9 @@ mod Fixpoint {
     ///
     /// Represents a boxed value.
     ///
+    /// `NoValue` is used for relational predicates which do not map to anything and therefore
+    /// contain no value.
+    ///
     pub enum Boxed {
         case BoxedBool(Bool)
         case BoxedChar(Char)
@@ -32,7 +35,7 @@ mod Fixpoint {
         case BoxedInt64(Int64)
         case BoxedFloat32(Float32)
         case BoxedFloat64(Float64)
-        case None
+        case NoValue
         case BoxedObject(
             Object,
             (Object, Object) -> Comparison
@@ -50,9 +53,9 @@ mod Fixpoint {
             case (Boxed.BoxedFloat32(v1),      Boxed.BoxedFloat32(v2))   => v1 == v2
             case (Boxed.BoxedFloat64(v1),      Boxed.BoxedFloat64(v2))   => v1 == v2
             case (Boxed.BoxedObject(v1, cmp1), Boxed.BoxedObject(v2, _)) => cmp1(v1, v2) == Comparison.EqualTo
-            case (Boxed.None, Boxed.None)                                => true
-            case (Boxed.None, _)                                         => false
-            case (_, Boxed.None)                                         => false
+            case (Boxed.NoValue, Boxed.NoValue)                                => true
+            case (Boxed.NoValue, _)                                         => false
+            case (_, Boxed.NoValue)                                         => false
             case _                                                       => bug!("Mismatched types.")
         }
     }
@@ -83,7 +86,8 @@ mod Fixpoint {
             case Boxed.BoxedFloat32(v)   => ToString.toString(v)
             case Boxed.BoxedFloat64(v)   => ToString.toString(v)
             case Boxed.BoxedObject(v, _) => Debug.stringify(v)
-            case Boxed.None              => "Boxed.None"
+            case Boxed.NoValue              => "Boxed.NoValue"
         }
     }
+    
 }

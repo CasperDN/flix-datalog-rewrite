@@ -47,8 +47,9 @@ mod Fixpoint {
         /// Returns the current state of `counter`.
         ///
         @Internal
-        pub def peek(counter: AtomicCounter[r]): Int64 \ r =
+        pub def get(counter: AtomicCounter[r]): Int64 \ r =
             let AtomicCounter(c) = counter;
             unchecked_cast((c.get(): _ \ IO) as _ \ r)
     }
+
 }

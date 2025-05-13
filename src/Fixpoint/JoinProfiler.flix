@@ -19,7 +19,7 @@ mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
-    use Fixpoint.Helpers.{unwrap, unifyEqualitiesOp}
+    use Fixpoint.Helpers.{unwrapOrCrash, unifyEqualitiesOp}
     use Fixpoint.Solver
     use Fixpoint.Helpers.{collectRowVarRelSymOp}
 
@@ -91,7 +91,7 @@ mod Fixpoint.JoinProfiler {
             Vector.range(0, arity) |>
             Vector.forEach(i -> 
                 let load = (rv, i);
-                let rep = unwrap(MutDisjointSets.find(load, equalities));
+                let rep = unwrapOrCrash(MutDisjointSets.find(load, equalities));
                 MutMap.putWith(_ -> oldVal -> load :: oldVal, rep, load :: Nil, equivalentMap)
             )
         });
@@ -106,7 +106,7 @@ mod Fixpoint.JoinProfiler {
                 let boundByJ = MutSet.empty(rc);
                 Vector.range(0, arity) |>
                 Vector.forEach(i -> {
-                    let rep = unwrap(MutDisjointSets.find((rvj, i), equalities));
+                    let rep = unwrapOrCrash(MutDisjointSets.find((rvj, i), equalities));
                     match MutMap.get(rep, equivalentMap) {
                         case None => ()
                         case Some(v) => 
