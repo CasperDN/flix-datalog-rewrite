@@ -23,6 +23,7 @@
 
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
+    use Fixpoint.BoxingTypes.UnifiedTypePos;
     use Fixpoint.Ast.Ram.{Predicates, RelSym, Search, IndexInformation}
     use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
     use Fixpoint.SubstitutePredSym
@@ -61,11 +62,6 @@ mod Fixpoint.Ast.ExecutableRam {
     pub type alias WriteTuple = (Int32, Int32, Int32)
 
     ///
-    /// Describes the context which allows for unboxing by Boxing.flix.
-    ///
-    type alias IntToBox = Int32
-
-    ///
     /// Describes the arity-information for a program.
     ///
     type alias Arities = Vector[Int32]
@@ -102,8 +98,8 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
-        // Boxed -> Boxed -> Boxed and IntToBox here only means something for lattice-tuples.
-        case MergeInto(Int32, Int32, Boxed -> Boxed -> Boxed, IntToBox)
+        // Boxed -> Boxed -> Boxed and UnifiedTypePos here only means something for lattice-tuples.
+        case MergeInto(Int32, Int32, Boxed -> Boxed -> Boxed, UnifiedTypePos)
         case Swap(Int32, Int32)
         case Purge(Int32)
         case Seq(Vector[RamStmt])
@@ -164,7 +160,7 @@ mod Fixpoint.Ast.ExecutableRam {
         // (RowVar: EnvPos, searchIndex, meetWith(only relevant for lattices), Denotation, writeTuple, body)
         case Query(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
         // The first is from the second is to.
-        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[IntToBox])
+        case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[UnifiedTypePos])
         // (Vector of terms to be inserted, Bot, leq, lub, Boxing info for lattice elem (-1 for Relational))
         case Project(Vector[RamTerm], Int32, Denotation)
         case If(Vector[BoolExp], RelOp)
@@ -278,14 +274,14 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamTerm {
         case Lit(Int64, Boxed)
-        case LoadFromTuple(Int32, Int32, IntToBox)
-        case LoadLatVar(Int32, IntToBox)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
-        case App1(Boxed -> Boxed, RamTerm, IntToBox)
-        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, IntToBox)
-        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, IntToBox)
-        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox)
-        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, IntToBox)
+        case LoadFromTuple(Int32, Int32, UnifiedTypePos)
+        case LoadLatVar(Int32, UnifiedTypePos)
+        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case App1(Boxed -> Boxed, RamTerm, UnifiedTypePos)
+        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
     }
 
     instance ToString[RamTerm] {

@@ -4,66 +4,10 @@
 ///
 
 mod Fixpoint.BoxingTypes {
+    use Fixpoint.AtomicCounter
+    use Fixpoint.ReadWriteLock
     use Fixpoint.Boxed
     use Fixpoint.Ast.Ram.RamId
-    import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
-    import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
-
-    /// 
-    /// A simple lock used for protecting correctness for multi-threaded programs.
-    /// 
-    @Internal
-    pub enum Lock[_: Region](JReadWriteLock)
-
-    mod Lock {
-        import java.util.concurrent.locks.{ReentrantReadWriteLock => JReadWriteLock}
-        use Fixpoint.BoxingTypes.Lock
-
-        pub def mkLock(_: Region[r]): Lock[r] \ r =
-            Lock(unchecked_cast((new JReadWriteLock(): _ \ IO) as _ \ r))
-
-        pub def readLock(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.readLock().lock(): _ \ IO) as _ \ r)
-
-        pub def writeLock(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.writeLock().lock(): _ \ IO) as _ \ r)
-
-        pub def unlockRead(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.readLock().unlock(): _ \ IO) as _ \ r)
-
-        pub def unlockWrite(lock: Lock[r]): Unit \ r =
-            let Lock(l) = lock;
-            unchecked_cast((l.writeLock().unlock(): _ \ IO) as _ \ r)
-    }
-
-    /// 
-    /// A thread-safe counter.
-    /// 
-    @Internal
-    pub enum AtomicCounter[_: Region](JAtomicLong)
-
-    mod AtomicCounter {
-        import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
-        use Fixpoint.BoxingTypes.AtomicCounter
-
-        pub def mkCounter(_: Region[r], initialVal: Int64): AtomicCounter[r] \ r =
-            AtomicCounter(unchecked_cast((new JAtomicLong(initialVal): _ \ IO) as _ \ r))
-
-        pub def getAndIncrement(counter: AtomicCounter[r]): Int64 \ r =
-            let AtomicCounter(c) = counter;
-            unchecked_cast((c.getAndIncrement(): _ \ IO) as _ \ r)
-
-        pub def peek(counter: AtomicCounter[r]): Int64 \ r =
-            let AtomicCounter(c) = counter;
-            unchecked_cast((c.get(): _ \ IO) as _ \ r)
-
-        pub def set(newVal: Int64, counter: AtomicCounter[r]): Unit \ r =
-            let AtomicCounter(c) = counter;
-            unchecked_cast((c.set(newVal): _ \ IO) as _ \ r)
-    }
 
     ///
     /// `Types` represent the different types a program can contain.
@@ -100,48 +44,45 @@ mod Fixpoint.BoxingTypes {
     /// Describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`
     /// the type of a specific value can be found.
     /// 
-    enum TypeInfo[r: Region] {
-        case TypeInfo(Array[Types, r])
-    }
+    type alias TypeInfo[r: Region] = Array[Types, r]
 
     ///
     /// Store the type `t` of a value saved at `index` in `typeInfo`.
     ///
     @Internal
-    pub def setType(t: Types, index: UnifiedTypePos, typeInfo: TypeInfo[r]): Unit \ r = match typeInfo {
-        case TypeInfo.TypeInfo(arr) => Array.put(t, index, arr)
-    }
+    pub def setType(t: Types, index: UnifiedTypePos, typeInfo: TypeInfo[r]): Unit \ r =
+        Array.put(t, index, typeInfo)
 
     ///
     /// Return the type of value saved at `index` in `typeInfo`.
     ///
     @Internal
-    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r = match typeInfo {
-        case TypeInfo.TypeInfo(arr) => Array.get(index, arr)
-    }
+    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r = 
+        Array.get(index, typeInfo)
 
     ///
-    /// `Boxing=(values, valueToRep, typeInfo, locks)` represents the combined knowledge
-    /// that is needed to convert between Boxed objects and their Int64 representation
-    /// 
+    /// `Boxing=(values, valueToRep, typeInfo, locks)` contains the information needed to
+    /// convert between Boxed objects and their Int64 representation
+    ///
     /// The i'th value of each Vector belongs to a specific `UnifiedTypePos`. The
     /// description of the values will be for some `i`.
     /// 
-    /// `valueToRep` maps Boxed objects to their Int64 representation.
+    /// `valueToRep` maps Boxed objects to their `Int64` representation.
     ///
     /// `values` contains the Boxed objects being stored.
     ///
     /// The following invariant is kept `values(valueToRep[boxedValue]) == boxedValue`. This
     /// design limits us to 2^32 objects of a given type.
     ///
-    /// `locks[i]` must be acquired before a specific `values[i]` or `valueToRep[i]` can be
-    /// interacted with. 
+    /// Furthermore for lattice `Bot` should be represented by `0`.
+    ///
+    /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with. 
     ///
     @Internal
     pub type alias Boxing[r: Region] = (
         Vector[MutList[Boxed, r]],
         Vector[BPlusTree[Boxed, Int64, r]],
         TypeInfo[r],
-        Vector[Lock[r]]
+        Vector[ReadWriteLock[r]]
     )
 }
