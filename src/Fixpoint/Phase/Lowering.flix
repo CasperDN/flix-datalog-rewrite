@@ -20,14 +20,14 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram, RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
     use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
     use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
-    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
+    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, ProvMax => EProvMax, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
     use Fixpoint.Ast.ExecutableRam.WriteTuple
     use Fixpoint.Ast.Ram.{IndexInformation, Search}
     use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat}
     use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
     use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
     use Fixpoint.Ast.Ram.BoolExp.{Not => ANot, IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Leq => ALeq, Eq => AEq, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
-    use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, Meet => AMeet, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
+    use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, ProvMax => AProvMax, Meet => AMeet, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
     use Fixpoint.Boxed
     use Fixpoint.Boxed.BoxedBool
@@ -221,7 +221,7 @@ mod Fixpoint.Phase.Lowering {
                     Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms), 
                     thisWriteTo, loweredBody, to
                 )
-            case AProject(terms, s) => 
+            case AProject(terms, s, _) => 
                 let (_, placements) = indexInfo;
                 let newRelPos = unwrap(Map.get((s, 0), placements));
                 let den = toDenotation(s);
@@ -281,6 +281,10 @@ mod Fixpoint.Phase.Lowering {
                             ELoadLatVar(UniqueInts.getIndex(rv, idToIndex), termToM(term))
                         }
                 }
+            case AProvMax(vec) =>
+                vec |>
+                Vector.map(match (rv, i) -> (UniqueInts.getIndex(rv, idToIndex), i)) |>
+                EProvMax
             case AMeet(_, _, _, _) =>
                 let representingRowVar = lowerMeet(term, idToIndex, meetWithMap);
                 let pos = computeLatticeMeetPos(representingRowVar, idToIndex, meetWithMap);

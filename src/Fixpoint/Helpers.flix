@@ -62,7 +62,7 @@ mod Fixpoint.Helpers {
         case RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
-        case RelOp.Project(_, _) => Nil
+        case RelOp.Project(_, _, _) => Nil
         case RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
     }
 
@@ -126,7 +126,7 @@ mod Fixpoint.Helpers {
         case RelOp.Functional(rowVar, _, _, body, arity) => 
             collectLoads(rowVar, arity, equalitySets);
             unifyEqualitiesOp(equalitySets, constEqualities, body)
-        case RelOp.Project(_, _) => ()
+        case RelOp.Project(_, _, _) => ()
         case RelOp.If(boolExps, body) =>
             Vector.forEach(unifyBoolExp(equalitySets, constEqualities), boolExps);
             unifyEqualitiesOp(equalitySets, constEqualities, body)

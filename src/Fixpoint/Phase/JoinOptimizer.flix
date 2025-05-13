@@ -130,7 +130,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             scheduleOp(getOptimalJoin, independent, op :: ops, rowVar :: rowVars, body)
         case RelOp.Functional(_, _, _, body, _) => 
             scheduleOp(getOptimalJoin, op :: independent, ops, rowVars, body)
-        case RelOp.Project(_, _) =>
+        case RelOp.Project(_, _, _) =>
             let joinOrder = List.sort(rowVars) |> getOptimalJoin;
             let opsAsVec = List.toVector(ops);
             let opsInJoinOrder = region rc {
@@ -151,7 +151,7 @@ mod Fixpoint.Phase.JoinOptimizer {
                 case RelOp.Search(f1, f2, _) => RelOp.Search(f1, f2, acc)
                 case RelOp.Query(f1, f2, f3, f4, _) => RelOp.Query(f1, f2, f3, f4, acc)
                 case RelOp.Functional(f1, f2, f3, _, f5) => RelOp.Functional(f1, f2, f3, acc, f5)
-                case RelOp.Project(_, _) => opInOrder
+                case RelOp.Project(_, _, _) => opInOrder
                 case RelOp.If(f1, _) => RelOp.If(f1, acc)
             }, base)
         case RelOp.If(_, body) => 

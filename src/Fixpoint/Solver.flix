@@ -44,7 +44,7 @@ mod Fixpoint.Solver {
     pub def runSolver(d: Datalog): Datalog =
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat), fixInfo)
+        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, false), fixInfo)
 
     ///
     /// Returns the minimal model of the given Datalog program `d` with provenance
@@ -54,7 +54,7 @@ mod Fixpoint.Solver {
     pub def runProvSolver(d: Datalog): Datalog =
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat), fixInfo)
+        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, true), fixInfo)
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -66,17 +66,17 @@ mod Fixpoint.Solver {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfiler`.
         def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
-            Fixpoint.Phase.Compiler.compile(cs, db, stf) |> 
-            Fixpoint.Debugging.notifyPreLowering("Compiler")
-            Fixpoint.Phase.Simplifier.simplifyProgram |> 
-            Fixpoint.Debugging.notifyPreLowering("Simplifier") |> 
-            Fixpoint.Phase.JoinOptimizer.scheduleProgram |> 
-            Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |> 
-            Fixpoint.Phase.Hoisting.hoistProgram |> 
+            Fixpoint.Phase.Compiler.compile(cs, db, stf) |>
+            Fixpoint.Debugging.notifyPreLowering("Compiler") |>
+            Fixpoint.Phase.Simplifier.simplifyProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Simplifier") |>
+            Fixpoint.Phase.JoinOptimizer.scheduleProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |>
+            Fixpoint.Phase.Hoisting.hoistProgram |>
             Fixpoint.Debugging.notifyPreLowering("Hoisting") |>
             Fixpoint.Phase.IndexSelection.indexProgram |>
             Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
-            Fixpoint.Phase.Provenance(withProv) |>
+            Fixpoint.Phase.Provenance.augmentProgram(withProv) |>
             Fixpoint.Phase.Lowering.lowerProgram(rc)
         };
         let model = match d {

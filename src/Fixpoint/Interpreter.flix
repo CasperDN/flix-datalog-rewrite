@@ -249,9 +249,6 @@ mod Fixpoint.Interpreter {
             case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
                 lookupIndex(searchIndex, db) |>
                 BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
-            case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
-                lookupIndex(searchIndex, db) |> 
-                BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
@@ -262,6 +259,18 @@ mod Fixpoint.Interpreter {
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
                     unchecked_cast((Vector.get(tuplePos, maxEnv): Array[Int64, r]) as Tuple)
                 )
+            case RelOp.If(test, then) =>
+                if (evalBoolExps(ctxt, test))
+                    evalOp(rc, ctxt, then)
+                else
+                    ()
+            case RelOp.Project(terms, rel, Relational) =>
+                let relIndex = lookupIndex(rel, db);
+                let tuple = Vector.map(evalTerm(env, boxing), terms);
+                BPlusTree.put(tuple, Boxed.None, relIndex)
+            case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
+                lookupIndex(searchIndex, db) |> 
+                BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
             case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
@@ -272,6 +281,13 @@ mod Fixpoint.Interpreter {
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
                     unchecked_cast((Vector.get(tuplePos, maxEnv): Array[Int64, r]) as Tuple)
                 )
+            case RelOp.Project(terms, rel, Latticenal(bot, leq, lub, _)) =>
+                let relIndex = lookupIndex(rel, db);
+                let len = Vector.length(terms);
+                let tuple = evalTermsWithLat(ctxt, terms);
+                let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
+                if (latVal `leq` bot) ()
+                else BPlusTree.putWith(lub, tuple, latVal, relIndex)
             case RelOp.Functional(tupleIndex, f, terms, writes, body, i2) =>
                 let args = 
                     terms |> 
@@ -290,22 +306,6 @@ mod Fixpoint.Interpreter {
                     Array.put(t, tupleIndex, tupleEnv);
                     evalOp(rc, ctxt, body)
                 })
-            case RelOp.Project(terms, rel, Relational) =>
-                let relIndex = lookupIndex(rel, db);
-                let tuple = Vector.map(evalTerm(env, boxing), terms);
-                BPlusTree.put(tuple, Boxed.None, relIndex)
-            case RelOp.Project(terms, rel, Latticenal(bot, leq, lub, _)) =>
-                let relIndex = lookupIndex(rel, db);
-                let len = Vector.length(terms);
-                let tuple = evalTermsWithLat(ctxt, terms);
-                let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
-                if (latVal `leq` bot) ()
-                else BPlusTree.putWith(lub, tuple, latVal, relIndex)
-            case RelOp.If(test, then) =>
-                if (evalBoolExps(ctxt, test))
-                    evalOp(rc, ctxt, then)
-                else
-                    ()
         }
 
     def handleWriteTuples(
@@ -434,6 +434,7 @@ mod Fixpoint.Interpreter {
                 let (_, _, tupleEnv, _) = env;
                 let unboxed = Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv));
                 boxWith(unboxed, i, boxing)
+            case RamTerm.ProvMax(_) => Boxed.BoxedInt64(evalTerm(env, boxing, term))
             case RamTerm.LoadLatVar(index, _) =>
                 let (_, _, _, latEnv) = env;
                 Array.get(index, latEnv)
@@ -478,6 +479,11 @@ mod Fixpoint.Interpreter {
             case RamTerm.LoadLatVar(index, boxingPos) => 
                 let (_, _, _, latEnv) = env;
                 unboxWith(Array.get(index, latEnv), boxingPos, boxing)
+            case RamTerm.ProvMax(vec) =>
+                let (_, _, tupleEnv, _) = env;
+                Vector.foldLeft(acc -> match (tupleIndex, indexInTuple) -> 
+                    acc `Int64.max` Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
+                , -1i64, vec)
             case RamTerm.Meet(cap, lhs, rhs, i) =>
                 let boxed1 = evalBoxedT(lhs);
                 let boxed2 = evalBoxedT(rhs);

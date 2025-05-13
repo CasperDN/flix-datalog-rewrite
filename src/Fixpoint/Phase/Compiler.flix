@@ -45,21 +45,34 @@ mod Fixpoint.Phase.Compiler {
     ///
     @Internal
     pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, Int32]): RamProgram = match d {
-        case Datalog(facts, rules) => region rc {
+        case Datalog(facts, _) => region rc {
             let predSymMaps = Predicates.initialize(d, db);
             let stmts = MutList.empty(rc);
             let compiledFacts = compileFacts(facts, db, predSymMaps);
             // Create map of stratum to list of rules in stratum
             let counter = Counter.fresh(rc);
-            Vector.foldRight(rule -> match rule {
+            let ruleNums = enumerateRules(d);
+            Vector.foldRight(match (num, rule) -> match rule {
                 case Constraint(HeadAtom(p, _, _), _) =>
                     let ruleStratum = Map.getWithDefault(p, 0, strat);
-                    Map.insertWith(List.append, ruleStratum, rule :: Nil)
-            }, Map#{}, rules) |>
-            Map.forEach((_, s) -> compileStratum(stmts, s, predSymMaps, counter));
+                    Map.insertWith(List.append, ruleStratum, (num, rule) :: Nil)
+            }, Map#{}, ruleNums) |>
+            Map.forEach(_ -> enumeratedRules -> {
+                let (nums, s) = List.unzip(enumeratedRules);
+                compileStratum(stmts, s, nums, predSymMaps, counter)
+            });
             RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, (Map.empty(), Map.empty()))
         }
         case _ => bug!("Datalog Boxing bug")
+    }
+
+    ///
+    /// Collect all rules in `d` and their number
+    ///
+    @Internal
+    pub def enumerateRules(d: Datalog): Vector[(Int32, Constraint)] = match d {
+        case Datalog(_, rules) => Vector.mapWithIndex(i -> r -> (i, r), rules)
+        case _ => unreachable!()
     }
 
     ///
@@ -102,7 +115,7 @@ mod Fixpoint.Phase.Compiler {
     /// Note that Eval-Rule is the code emitted by `compileRule`
     /// and Eval-Rule-Incr is the code emitted by `compileRuleIncr`.
     ///
-    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = region rc {
+    def compileStratum(stmts: MutList[RamStmt, r1], stratum: List[Constraint], ruleNums: List[Int32], predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = region rc {
         let idb = List.foldRight(match Constraint(head, _) -> {
             Set.insert(Predicates.headAtomToRelSym(head, Full, predSymMaps))
         }, Set#{}, stratum);
@@ -112,7 +125,7 @@ mod Fixpoint.Phase.Compiler {
 
         // Construct the inserts for step 1.
         let inserts = MutList.empty(rc);
-        List.forEach(x -> compileRule(inserts, x, predSymMaps, counter), stratum);
+        List.forEach(match (x, i) -> compileRule(inserts, x, i, predSymMaps, counter), List.zip(stratum, ruleNums));
         let optPar = 
             if(MutList.size(inserts) > 1) {
                 Some(RamStmt.Par(MutList.toVector(inserts)))
@@ -135,7 +148,7 @@ mod Fixpoint.Phase.Compiler {
                 }, idb);
 
                 let loopInserts = MutList.empty(rc);
-                List.forEach(x -> compileRuleIncr(loopInserts, x, idbIds, predSymMaps, counter), stratum);
+                List.forEach(match (x, i) -> compileRuleIncr(loopInserts, x, i, idbIds, predSymMaps, counter), List.zip(stratum, ruleNums));
                 let loopParOpt = 
                     if (MutList.size(loopInserts) > 1) {
                         Some(RamStmt.Par(MutList.toVector(loopInserts)))
@@ -200,13 +213,13 @@ mod Fixpoint.Phase.Compiler {
     ///         end
     ///     end
     ///
-    def compileRule(stmts: MutList[RamStmt, r1], rule: Constraint, predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
+    def compileRule(stmts: MutList[RamStmt, r1], rule: Constraint, ruleNum: Int32, predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(headAtom, body) =>
             let HeadAtom(_, _, headTerms) = headAtom;
             let augBody = augmentBody(body, counter);
             let env = unifyVars(predSymMaps, counter, augBody);
             let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
-            let projection = RelOp.Project(ramTerms, Predicates.headAtomToRelSym(headAtom, New, predSymMaps));
+            let projection = RelOp.Project(ramTerms, Predicates.headAtomToRelSym(headAtom, New, predSymMaps), ruleNum);
             match compileBody(env, augBody, predSymMaps, counter) {
                 case None => ()
                 case Some(join) => 
@@ -263,7 +276,7 @@ mod Fixpoint.Phase.Compiler {
     // Note: This has been modified to only generate using the delta-relations for the current strata.
     // Reasoning: The older delta-relations will all be empty so it is a simple optimization that can also allow optimizations for index selection (of the delta relations).
 
-    def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, idbSet: Set[Int64], predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
+    def compileRuleIncr(stmts: MutList[RamStmt, r1], rule: Constraint, ruleNum: Int32, idbSet: Set[Int64], predSymMaps: Predicates, counter: Counter[r2]): Unit \ r1 + r2 = match rule {
         case Constraint(headAtom, body) =>
             let HeadAtom(_, _, headTerms) = headAtom;
             let compileSomething = deltaIndex -> { // `delta` designates the focused atom.
@@ -271,7 +284,7 @@ mod Fixpoint.Phase.Compiler {
                 let delta = snd(Vector.get(deltaIndex, augBody));
                 let env = unifyVars(predSymMaps, counter, augBody);
                 let ramTerms = Vector.map(compileHeadTerm(env, counter), headTerms);
-                let projection = RelOp.Project(ramTerms, Predicates.headAtomToRelSym(headAtom, New, predSymMaps));
+                let projection = RelOp.Project(ramTerms, Predicates.headAtomToRelSym(headAtom, New, predSymMaps), ruleNum);
                 match compileBody(env, augBody, predSymMaps, counter) {
                     case None => ()
                     case Some(join) => 

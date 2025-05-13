@@ -140,7 +140,7 @@ mod Fixpoint.Phase.Simplifier {
             forM(
                 newBody <- simplifyOp(body)
             ) yield RelOp.Functional(rowVar, f, terms, newBody, arity)
-        case RelOp.Project(_, _)    => Some(op)
+        case RelOp.Project(_, _, _)    => Some(op)
     }
 
     def isOnlyMergeSwapPurge(r: RamStmt): Bool = match r {

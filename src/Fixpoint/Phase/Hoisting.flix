@@ -19,7 +19,7 @@ mod Fixpoint.Phase.Hoisting {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, arityOfNonLat}
     use Fixpoint.Ast.Ram.RelOp.{Search, Query, Functional, Project, If}
     use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint.Ast.Ram.RamTerm.{Lit, RowLoad, Meet, App1, App2, App3, App4, App5}
+    use Fixpoint.Ast.Ram.RamTerm.{Lit, ProvMax, RowLoad, Meet, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
     use Fixpoint.Helpers.{unwrap, unifyEqualitiesStmt}
     use MutDisjointSets.MutDisjointSets
@@ -155,7 +155,7 @@ mod Fixpoint.Phase.Hoisting {
         case RelOp.Search(_, relSym, body) => relSym :: collectRelSymsOp(body)
         case RelOp.Query(_, relSym, _, _, body) => relSym :: collectRelSymsOp(body)
         case RelOp.Functional(_, _, _, body, _) => collectRelSymsOp(body)
-        case RelOp.Project(_, _) => Nil
+        case RelOp.Project(_, _, _) => Nil
         case RelOp.If(_, body) => collectRelSymsOp(body)
     }
 
@@ -247,7 +247,7 @@ mod Fixpoint.Phase.Hoisting {
                         }
                     }
                 }
-            case Project(_, _) => Some(op)
+            case Project(_, _, _) => Some(op)
             case If(boolExps, body) => 
                 Vector.forEach(b -> {
                     let vars = collectBoolVariables(b);
@@ -291,14 +291,23 @@ mod Fixpoint.Phase.Hoisting {
     /// Returns the set of `RowVar` in `term`.
     ///
     def collectTermVariables(term: RamTerm): Set[RowVar] = match term {
-        case Lit(_, _)                              => Set#{}
-        case RowLoad(rv, _, _)                      => Set#{rv}
-        case Meet(_, t1, (rv, _), _)                => Set.union(collectTermVariables(t1), Set#{rv})
-        case App1(_, t1, _)                         => collectTermVariables(t1)
-        case App2(_, t1, t2, _)                     => Set.union(collectTermVariables(t1), collectTermVariables(t2))
-        case App3(_, t1, t2, t3, _)                 => Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3))
-        case App4(_, t1, t2, t3, t4, _)             => Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4))
-        case App5(_, t1, t2, t3, t4, t5, _)         => Set.union(Set.union(Set.union(Set.union(collectTermVariables(t1), collectTermVariables(t2)), collectTermVariables(t3)), collectTermVariables(t4)), collectTermVariables(t5))
+        case Lit(_, _)               => Set#{}
+        case ProvMax(vec)            => Vector.foldLeft(acc -> match (rv, _) -> Set.insert(rv, acc), Set#{}, vec)
+        case RowLoad(rv, _, _)       => Set#{rv}
+        case Meet(_, t1, (rv, _), _) => Set.union(collectTermVariables(t1), Set#{rv})
+        case App1(_, t1, _)          => collectTermVariables(t1)
+        case App2(_, t1, t2, _) =>
+            Vector#{t1, t2} |>
+            Vector.foldRight(collectTermVariables >> Set.union, Set#{})
+        case App3(_, t1, t2, t3, _) =>
+            Vector#{t1, t2, t3} |>
+            Vector.foldRight(collectTermVariables >> Set.union, Set#{})
+        case App4(_, t1, t2, t3, t4, _) =>
+            Vector#{t1, t2, t3, t4} |>
+            Vector.foldRight(collectTermVariables >> Set.union, Set#{})
+        case App5(_, t1, t2, t3, t4, t5, _) => 
+            Vector#{t1, t2, t3, t4, t5} |>
+            Vector.foldRight(collectTermVariables >> Set.union, Set#{})
     }
 
     ///
@@ -342,6 +351,10 @@ mod Fixpoint.Phase.Hoisting {
         let termGround = isTermGround(termMap, equalitySets);
         match term {
             case Lit(_, _) => true
+            case ProvMax(loads) => 
+                loads |> Vector.forAll(load -> {
+                    MutMap.memberOf(MutDisjointSets.find(load, equalitySets) |> unwrap, termMap)
+                })
             case RowLoad(rv, i, _) =>
                 MutMap.memberOf(unwrap(MutDisjointSets.find((rv, i), equalitySets)), termMap)
             case Meet(_, t1, (rv, relSym), _) => termGround(t1) and MutMap.memberOf(unwrap(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
