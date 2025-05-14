@@ -31,8 +31,8 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxable
     use Fixpoint.Boxed
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
-    use Fixpoint.BoxingTypes.{Boxing, TypeInfo, Types, setType, getType, RamIdToPos, UnifiedTypePos}
-    use Fixpoint.Helpers.unwrapOrCrash
+    use Fixpoint.BoxingType.{Boxing, TypeInfo, Types, setType, getType, RamIdToPos, UnifiedTypePos}
+    use Fixpoint.Util.getOrCrash
     use Fixpoint.Predicates.relSymsOfProgram
     use Fixpoint.ReadWriteLock
 
@@ -70,13 +70,13 @@ mod Fixpoint.Boxing {
     ///
     def fixBoxingAfterInit(rc: Region[r], counters: Vector[AtomicCounter[r]], boxingInfo: Boxing[r]): Boxing[r] \ r = {
         let (_, boxToRepVec, typeInfo, locks) = boxingInfo;
-        let newBoxedArr = counters |> Vector.map(c -> Array.empty(rc, unwrapOrCrash(Int64.tryToInt32(AtomicCounter.get(c)))));
+        let newBoxedArr = counters |> Vector.map(c -> Array.empty(rc, getOrCrash(Int64.tryToInt32(AtomicCounter.get(c)))));
         let funcsToBeRun = newBoxedArr |>
             Vector.mapWithIndex(i -> writeTo -> () -> {
                 match getType(i, typeInfo) {
                     case Types.Object =>
                         let boxToRep = Vector.get(i, boxToRepVec);
-                        boxToRep |> BPlusTree.forEach(val -> pos -> Array.put(val, unwrapOrCrash(Int64.tryToInt32(pos)), writeTo))
+                        boxToRep |> BPlusTree.forEach(val -> pos -> Array.put(val, getOrCrash(Int64.tryToInt32(pos)), writeTo))
                     case _ => ()
                 }
             });
@@ -122,7 +122,7 @@ mod Fixpoint.Boxing {
     ): Vector[(Vector[Int64], Boxed)] \ r = {
         let relSymId = Ram.toId(relSym);
         let positions = Vector.range(0, arityOf(relSym)) |>
-            Vector.map(i -> unwrapOrCrash(Map.get(RamId.RelPos(relSymId, i), mapping)));
+            Vector.map(i -> getOrCrash(Map.get(RamId.RelPos(relSymId, i), mapping)));
         let threadNum = threads();
         let numOfFacts = Vector.length(facts);
         let resultArr = Array.empty(rc1, numOfFacts);
@@ -199,7 +199,7 @@ mod Fixpoint.Boxing {
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
                 case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) =>
-                    unboxWith(bot, unwrapOrCrash(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
+                    unboxWith(bot, getOrCrash(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
                 case _ => bug!("Should have been filtered out")
         });
         info
@@ -208,7 +208,7 @@ mod Fixpoint.Boxing {
         let (objectList, _, _, locks) = info;
         let lock = Vector.get(index, locks);
         ReadWriteLock.readLock(lock);
-        let res = unwrapOrCrash(MutList.nth(unwrapOrCrash(Int64.tryToInt32(value)), Vector.get(index, objectList)));
+        let res = getOrCrash(MutList.nth(getOrCrash(Int64.tryToInt32(value)), Vector.get(index, objectList)));
         ReadWriteLock.unlockRead(lock);
         res
     }
@@ -250,12 +250,12 @@ mod Fixpoint.Boxing {
         let (_, _, symInfo, _) = info;
         match getType(index, symInfo) {
             case Types.Bool      => Boxed.BoxedBool(not(v == 0i64))
-            case Types.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(unwrapOrCrash(Int64.tryToInt32(v)))) as _ \ {}))
-            case Types.Int8      => BoxedInt8(unwrapOrCrash(Int64.tryToInt8(v)))
-            case Types.Int16     => BoxedInt16(unwrapOrCrash(Int64.tryToInt16(v)))
-            case Types.Int32     => BoxedInt32(unwrapOrCrash(Int64.tryToInt32(v)))
+            case Types.Char      => BoxedChar(unchecked_cast(Array.get(0, Character.toChars(getOrCrash(Int64.tryToInt32(v)))) as _ \ {}))
+            case Types.Int8      => BoxedInt8(getOrCrash(Int64.tryToInt8(v)))
+            case Types.Int16     => BoxedInt16(getOrCrash(Int64.tryToInt16(v)))
+            case Types.Int32     => BoxedInt32(getOrCrash(Int64.tryToInt32(v)))
             case Types.Int64     => BoxedInt64(v)
-            case Types.Float32   => BoxedFloat32(Float.intBitsToFloat(unwrapOrCrash(Int64.tryToInt32(v))))
+            case Types.Float32   => BoxedFloat32(Float.intBitsToFloat(getOrCrash(Int64.tryToInt32(v))))
             case Types.Float64   => BoxedFloat64(Double.longBitsToDouble(v))
             case Types.Object    => deMarshalObject(v, index, info)
             case Types.Unknown   => bug!("Unormalizing value, which has never been normalized")
@@ -270,9 +270,9 @@ mod Fixpoint.Boxing {
         use Fixpoint.Ast.Ram.{RamId, Predicates, RamStmt, RelOp, RamTerm, BoolExp, RamProgram, RowVar}
         use Fixpoint.Ast.Ram.{RelSym, RamProgram}
         use Fixpoint.Ast.Shared.PredSym
-        use Fixpoint.BoxingTypes.RamIdToPos
+        use Fixpoint.BoxingType.RamIdToPos
         use Fixpoint.Counter
-        use Fixpoint.Helpers.unwrapOrCrash
+        use Fixpoint.Util.getOrCrash
         use Fixpoint.Predicates.{PredType, idToFullPredID, fullIDtoPredType, relSymsOfProgram}
 
         pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
@@ -626,7 +626,7 @@ mod Fixpoint.Boxing {
             map: MutMap[RamId, Int32, r], 
             counter: Counter[r]
         ): Unit \ r = 
-            let repID = unwrapOrCrash(MutDisjointSets.find(id, disjoint)); 
+            let repID = getOrCrash(MutDisjointSets.find(id, disjoint)); 
             match MutMap.get(repID, map) {
                 case Some(v) => MutMap.put(id, v, map)
                 case None => 

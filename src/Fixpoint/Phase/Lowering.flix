@@ -33,12 +33,11 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Boxed.BoxedBool
     use Fixpoint.Boxing
     use Fixpoint.Boxing.Equality
-    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos};
+    use Fixpoint.BoxingType.{Boxing, RamIdToPos};
     use Fixpoint.Counter
     use Fixpoint.Debugging
-    use Fixpoint.Helpers.unwrapOrCrash
+    use Fixpoint.Util.getOrCrash
     use Fixpoint.UniqueInts
-    use Fixpoint.UniqueInts.UniqueInts
 
     // Maps RowVars to their memory-position.
     type alias IdToIndex[r: Region] = UniqueInts[RowVar, r]
@@ -49,7 +48,7 @@ mod Fixpoint.Phase.Lowering {
     def relSymToLatticeBoxingInfo(relSym: RelSym, idToMarshall: RamIdToPos): Int32 = match relSym {
         case RelSym.Symbol(_, _, Denotation.Relational) => -1
         case RelSym.Symbol(PredSym.PredSym(_, id), arity, Denotation.Latticenal(_, _, _, _)) =>
-            unwrapOrCrash(Map.get(RamId.RelPos(id, arity - 1), idToMarshall))
+            getOrCrash(Map.get(RamId.RelPos(id, arity - 1), idToMarshall))
     }
 
     @Internal
@@ -69,7 +68,7 @@ mod Fixpoint.Phase.Lowering {
             //             case Denotation.Relational =>
             //                 let tuple = vec |>
             //                     Vector.mapWithIndex(i -> v -> {
-            //                         Boxing.unboxWith(v, unwrapOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
+            //                         Boxing.unboxWith(v, getOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
             //                     });
             //                 (tuple, Boxed.NoValue)
             //             case Denotation.Latticenal(_, _, _ ,_) =>
@@ -77,7 +76,7 @@ mod Fixpoint.Phase.Lowering {
             //                 let tuple = Array.empty(rc, len - 1);
             //                 vec |> Vector.forEachWithIndex(i -> term -> {
             //                     if (i < len - 1)
-            //                         Array.put(Boxing.unboxWith(term, unwrapOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
+            //                         Array.put(Boxing.unboxWith(term, getOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
             //                     else ()
             //                 });
             //                 let latVal = Vector.get(len - 1, vec);
@@ -89,7 +88,7 @@ mod Fixpoint.Phase.Lowering {
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)
             , Nil) |> List.toVector;
             // Compute arities
-            let arityInformation = Fixpoint.Helpers.collectRowVarArity(program);
+            let arityInformation = Fixpoint.Util.collectRowVarArity(program);
             let numOfArities = UniqueInts.get(idToIndex);
             let arities = Array.empty(rc, numOfArities);
             arityInformation |> List.forEach(match (rv, arity) -> Array.put(arity, UniqueInts.getIndex(rv, idToIndex), arities));
@@ -110,15 +109,15 @@ mod Fixpoint.Phase.Lowering {
             // For all of these we have to do the operation for all indexes created for the relations.
             case ARamStmt.MergeInto(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
-                let newRelPos = unwrapOrCrash(Map.get((newRel, 0), placements));
+                let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
                 let lub = match toDenotation(newRel) {
                     case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
                 let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
-                let deltaRels = Vector.length(unwrapOrCrash(Map.get(deltaRel, constructed)));
-                let merges = Vector.map(index -> lowerToMerge(unwrapOrCrash(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
+                let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
+                let merges = Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
                 if(Vector.length(merges) == 1) {
                     Vector.get(0, merges)
                 } else {
@@ -126,21 +125,21 @@ mod Fixpoint.Phase.Lowering {
                 }
             case ARamStmt.Swap(newRel, deltaRel) => 
                 let (constructed, placements) = indexInfo;
-                let newRelPos = unwrapOrCrash(Map.get((newRel, 0), placements));
+                let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
                 let lub = match toDenotation(newRel) {
                     case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
                     case Denotation.Latticenal(_, _, lub, _) => lub
                 };
                 let idToMarshall = fst(marshalling);
                 let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
-                let deltaRels = Vector.length(unwrapOrCrash(Map.get(deltaRel, constructed)));
-                let swapPart = ERamStmt.Swap(newRelPos, unwrapOrCrash(Map.get((deltaRel, 0), placements)));
+                let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
+                let swapPart = ERamStmt.Swap(newRelPos, getOrCrash(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {
                     swapPart
                 } else {
                     let merges = 
                         Vector.range(1, deltaRels) |>
-                        Vector.map(index -> lowerToMerge(unwrapOrCrash(Map.get((deltaRel, index), placements))));
+                        Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))));
                     if(Vector.length(merges) == 1) {
                         ERamStmt.Seq(Vector#{Vector.get(0, merges), swapPart})
                     } else {
@@ -149,8 +148,8 @@ mod Fixpoint.Phase.Lowering {
                 }
             case ARamStmt.Purge(s) =>
                 let (constructed, placements) = indexInfo;
-                let indexNums = Vector.range(0, Vector.length(unwrapOrCrash(Map.get(s, constructed))));
-                let purges = Vector.map(i -> ERamStmt.Purge(unwrapOrCrash(Map.get((s, i), placements))), indexNums);
+                let indexNums = Vector.range(0, Vector.length(getOrCrash(Map.get(s, constructed))));
+                let purges = Vector.map(i -> ERamStmt.Purge(getOrCrash(Map.get((s, i), placements))), indexNums);
                 if (Vector.length(purges) == 1) {
                     Vector.get(0, purges)
                 } else {
@@ -207,12 +206,12 @@ mod Fixpoint.Phase.Lowering {
                 let loweredBody = lowerOpRecNewRowVar(rv, body);
                 let thisWriteTo = getWriteTo(rv, writeTo);
                 let placements = snd(indexInfo);
-                let relPos = unwrapOrCrash(Map.get((relSym, 0), placements));
+                let relPos = getOrCrash(Map.get((relSym, 0), placements));
                 let oldPos = computeMeetWithPos(rv, relSym, idToIndex, meetWithMap);
                 ESearch(lowerRowVar(rv, idToIndex), relPos, oldPos, den, thisWriteTo, loweredBody)
             case AFunctional(rv, f, terms, body, arity) =>
                 let (idToMarshall, _) = marshalling;
-                let idToMarhsalled = id -> unwrapOrCrash(Map.get(id, idToMarshall));
+                let idToMarhsalled = id -> getOrCrash(Map.get(id, idToMarshall));
                 let loweredBody = lowerOpRec(body);
                 let thisWriteTo = getWriteTo(rv, writeTo);
                 let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
@@ -223,7 +222,7 @@ mod Fixpoint.Phase.Lowering {
                 )
             case AProject(terms, s, _) => 
                 let (_, placements) = indexInfo;
-                let newRelPos = unwrapOrCrash(Map.get((s, 0), placements));
+                let newRelPos = getOrCrash(Map.get((s, 0), placements));
                 let den = toDenotation(s);
                 let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
                 EProject(
@@ -245,11 +244,11 @@ mod Fixpoint.Phase.Lowering {
                         addWriteTo(rv2, i2, rv1, i1, idToIndex, writeTo);
                         None
                     case ABoolExp.Eq(ARamTerm.RowLoad(rv1, i, _), ARamTerm.Lit(val, id)) if rv == rv1 =>
-                        let unboxed = Boxing.unboxWith(val, unwrapOrCrash(Map.get(id, idToMarshall)), marshall);
+                        let unboxed = Boxing.unboxWith(val, getOrCrash(Map.get(id, idToMarshall)), marshall);
                         addConstWriteTo(unboxed, rv, i, idToIndex, writeTo, rc);
                         None
                     case ABoolExp.Eq(ARamTerm.Lit(val, id), ARamTerm.RowLoad(rv1, i, _)) if rv == rv1 =>
-                        let unboxed = Boxing.unboxWith(val, unwrapOrCrash(Map.get(id, idToMarshall)), marshall);
+                        let unboxed = Boxing.unboxWith(val, getOrCrash(Map.get(id, idToMarshall)), marshall);
                         addConstWriteTo(unboxed, rv, i, idToIndex, writeTo, rc);
                         None
                     case _ => Some(x)
@@ -268,9 +267,9 @@ mod Fixpoint.Phase.Lowering {
     ): ERamTerm \ r =
         let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
         let (idToMarshall, marshall) = marshalling;
-        let termToM = t -> unwrapOrCrash(Map.get(getTermRamId(t), idToMarshall));
+        let termToM = t -> getOrCrash(Map.get(getTermRamId(t), idToMarshall));
         match term {
-            case ALit(val, id) => ELit(Boxing.unboxWith(val, unwrapOrCrash(Map.get(id, idToMarshall)), marshall), val)
+            case ALit(val, id) => ELit(Boxing.unboxWith(val, getOrCrash(Map.get(id, idToMarshall)), marshall), val)
             case ARowLoad(rv, index, RelSym.Symbol(_, arity, den)) => 
                 match den {
                     case Denotation.Relational => ELoadFromTuple(UniqueInts.getIndex(rv, idToIndex), index, termToM(term))
@@ -324,12 +323,12 @@ mod Fixpoint.Phase.Lowering {
                 Option.map(ENot)
             case AIsEmpty(s) =>
                 let (_, placements) = indexInfo;
-                let sPos = unwrapOrCrash(Map.get((s, 0), placements));
+                let sPos = getOrCrash(Map.get((s, 0), placements));
                 Some(EIsEmpty(sPos))
             case ANotMemberOf(terms, s) => 
                 let (_, placements) = indexInfo;
                 let den = toDenotation(s);
-                let sPos = unwrapOrCrash(Map.get((s, 0), placements));
+                let sPos = getOrCrash(Map.get((s, 0), placements));
                 Some(ENotMemberOf(Vector.map(lowerT, terms), sPos, den))
             case ANotBot(t1, _, _) => 
                 lowerMeet(t1, idToIndex, meetWithMap);

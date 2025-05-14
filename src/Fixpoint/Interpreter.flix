@@ -23,9 +23,9 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
     use Fixpoint.Boxing.{boxWith, unboxWith}
-    use Fixpoint.BoxingTypes.{Boxing, RamIdToPos}
+    use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
-    use Fixpoint.Helpers.{unwrapOrCrash}
+    use Fixpoint.Util.{getOrCrash}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
     use Fixpoint.Predicates.{allFullRelSyms}
 
@@ -158,9 +158,9 @@ mod Fixpoint.Interpreter {
             let innerMap = MutMap.empty(rc);
             let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym)) |>
                 Vector.map(i ->
-                    unwrapOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+                    getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );
-            Array.get(unwrapOrCrash(Map.get((relSym, 0), indexPos)), db) |>
+            Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
             BPlusTree.forEach(vec -> latticeElem -> {
                 let boxedVec = vec |> Vector.mapWithIndex(i -> val ->  boxWith(val, Vector.get(i, curBoxingInfo), boxing));
                 MutMap.put(boxedVec, latticeElem, innerMap)
@@ -240,7 +240,7 @@ mod Fixpoint.Interpreter {
             });
             let size = Counter.get(sizeRef);
             let dup = Counter.get(dupRef);
-            MutList.push((size, dup), Array.get(writeTo, unwrapOrCrash(expectedJoinSize)))
+            MutList.push((size, dup), Array.get(writeTo, getOrCrash(expectedJoinSize)))
     }
 
     def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 

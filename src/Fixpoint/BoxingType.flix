@@ -49,7 +49,7 @@
 /// to keep the `MutList` and `BPlusTree` for objects, as transforming the simple types 
 /// requires less information.
 ///
-mod Fixpoint.BoxingTypes {
+mod Fixpoint.BoxingType {
     use Fixpoint.AtomicCounter
     use Fixpoint.ReadWriteLock
     use Fixpoint.Boxed
@@ -63,7 +63,7 @@ mod Fixpoint.BoxingTypes {
     /// `P(1)`)
     ///
     @Internal
-    pub enum Types {
+    enum Types {
         case Unknown
         case Bool
         case Char

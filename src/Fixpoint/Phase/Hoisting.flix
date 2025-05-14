@@ -21,7 +21,7 @@ mod Fixpoint.Phase.Hoisting {
     use Fixpoint.Ast.Ram.BoolExp.{Not, IsEmpty, NotMemberOf, Eq, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit, ProvMax, RowLoad, Meet, App1, App2, App3, App4, App5}
     use Fixpoint.Boxed
-    use Fixpoint.Helpers.{unwrapOrCrash, unifyEqualitiesStmt}
+    use Fixpoint.Util.{getOrCrash, unifyEqualitiesStmt}
     use MutDisjointSets.MutDisjointSets
 
     ///
@@ -62,7 +62,7 @@ mod Fixpoint.Phase.Hoisting {
             let termMap = MutMap.empty(rc);
             let impossible = MutSet.empty(rc);
             MutMap.forEach(load -> listOfPairs -> List.forEach(match (val, id) -> {
-                let rep = unwrapOrCrash(MutDisjointSets.find(load, equalitySets));
+                let rep = getOrCrash(MutDisjointSets.find(load, equalitySets));
                 match MutMap.get(rep, termMap) {
                     case Some(RamTerm.Lit(v, _)) => 
                         if(v != val) MutSet.add(fst(rep), impossible)
@@ -199,7 +199,7 @@ mod Fixpoint.Phase.Hoisting {
                         let knownEqualities = MutList.empty(rc);
                         range |> Vector.forEach(i -> {match MutDisjointSets.find((rowVar, i), equalitySets) {
                             case None => ()
-                            case Some(rep) => match unwrapOrCrash(MutMap.get(rep, termMap)) {
+                            case Some(rep) => match getOrCrash(MutMap.get(rep, termMap)) {
                                 case RamTerm.RowLoad(rv, i1, rel) =>
                                     if (rv == rowVar) {
                                         MutMap.remove((rv, i1), termMap);
@@ -327,7 +327,7 @@ mod Fixpoint.Phase.Hoisting {
             case NotMemberOf(terms, _) => Vector.forAll(termGround, terms)
             case BoolExp.NotBot(t1, _, _) => termGround(t1)
             case BoolExp.Leq(_, rv, relSym) => 
-            MutMap.memberOf(unwrapOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
+            MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
             
             case Eq(term1, term2) => termGround(term1) and termGround(term2)
             case Guard1(_, term1) => termGround(term1)
@@ -353,11 +353,11 @@ mod Fixpoint.Phase.Hoisting {
             case Lit(_, _) => true
             case ProvMax(loads) => 
                 loads |> Vector.forAll(load -> {
-                    MutMap.memberOf(MutDisjointSets.find(load, equalitySets) |> unwrapOrCrash, termMap)
+                    MutMap.memberOf(MutDisjointSets.find(load, equalitySets) |> getOrCrash, termMap)
                 })
             case RowLoad(rv, i, _) =>
-                MutMap.memberOf(unwrapOrCrash(MutDisjointSets.find((rv, i), equalitySets)), termMap)
-            case Meet(_, t1, (rv, relSym), _) => termGround(t1) and MutMap.memberOf(unwrapOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
+                MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, i), equalitySets)), termMap)
+            case Meet(_, t1, (rv, relSym), _) => termGround(t1) and MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
             case App1(_, t1, _) => termGround(t1)
             case App2(_, t1, t2, _) => termGround(t1) and termGround(t2)
             case App3(_, t1, t2, t3, _) => termGround(t1) and termGround(t2) and termGround(t3)

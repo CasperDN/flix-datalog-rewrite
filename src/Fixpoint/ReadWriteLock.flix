@@ -20,8 +20,9 @@
 ///
 mod Fixpoint {
     import java.util.concurrent.locks.{ReadWriteLock => JReadWriteLock}
+
     @Internal
-    pub enum ReadWriteLock[_: Region](JReadWriteLock)
+    enum ReadWriteLock[_: Region](JReadWriteLock)
 
     mod ReadWriteLock {
         import java.util.concurrent.locks.{StampedLock => JStampedLock}

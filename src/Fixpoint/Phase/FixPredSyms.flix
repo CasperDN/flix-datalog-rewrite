@@ -34,22 +34,19 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.UniqueInts
     use Fixpoint.ReverseUniqueInts
-    use Fixpoint.UniqueInts.UniqueInts
-    use Fixpoint.ReverseUniqueInts.ReverseUniqueInts
-    use Fixpoint.Helpers.unwrapOrCrash
+    use Fixpoint.Util.getOrCrash
 
-    type alias FixInformation = ReverseUniqueInts[PredSym]
+    type alias FixInformation[r: Region] = ReverseUniqueInts[PredSym, r]
 
     ///
     /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
     /// program and information which `unfixPredSym` can use to recreate the original program.
     ///
     @Internal
-    pub def fixPredSyms(d: Datalog): (Datalog, FixInformation) = region rc {
+    pub def fixPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation[r]) \ r =
         let mapping = UniqueInts.empty(rc);
         let fixed = fixPredSymsInternal(d, mapping);
         (fixed, UniqueInts.reverse(mapping))
-    }
 
     ///
     /// Recursively applies `mapping` to the different Datalog enums to make `PredSym`s unique.
@@ -73,7 +70,7 @@ mod Fixpoint.Phase.FixPredSyms {
     /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
     ///
     @Internal
-    pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
+    pub def unfixPredSym(d: Datalog, fixing: FixInformation[r]): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
@@ -89,9 +86,9 @@ mod Fixpoint.Phase.FixPredSyms {
     ///
     /// Maps `pred` back to its original `PredSym` according to `reversing`.
     ///
-    def mapBack(reversing: ReverseUniqueInts[PredSym], pred: PredSym): PredSym = 
+    def mapBack(reversing: FixInformation[r], pred: PredSym): PredSym = 
         let PredSym(_, id) = pred;
-        ReverseUniqueInts.fromIndex(unwrapOrCrash(Int64.tryToInt32(id)), reversing)
+        ReverseUniqueInts.fromIndex(getOrCrash(Int64.tryToInt32(id)), reversing)
 
     ///
     /// Maps `pred` back to its new `PredSym` according to `state`.

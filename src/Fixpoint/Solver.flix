@@ -17,7 +17,7 @@
  */
 
 mod Fixpoint.Solver {
-    use Fixpoint.BoxingTypes.{Boxing}
+    use Fixpoint.BoxingType.{Boxing}
 
     import dev.flix.runtime.Global
 
@@ -41,21 +41,21 @@ mod Fixpoint.Solver {
     /// The stratification is computed automatically by the solver.
     ///
     @Internal
-    pub def runSolver(d: Datalog): Datalog =
-        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
+    pub def runSolver(d: Datalog): Datalog = region rc {
+        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
         Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, false), fixInfo)
-
+    }
     ///
     /// Returns the minimal model of the given Datalog program `d` with provenance
     /// annotations to facilitate provenance queries.
     ///
     @Internal
-    pub def runProvSolver(d: Datalog): Datalog =
-        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(d);
+    pub def runProvSolver(d: Datalog): Datalog = region rc {
+        let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
         Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, true), fixInfo)
-
+    }
     ///
     /// Returns the minimal model of the given Datalog program `d`.
     /// The minimal model is given by the model semantics for Datalog programs with stratified negation.

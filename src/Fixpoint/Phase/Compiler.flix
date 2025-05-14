@@ -30,7 +30,7 @@ mod Fixpoint.Phase.Compiler {
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxed
     use Fixpoint.Counter
-    use Fixpoint.Helpers.unwrapOrCrash
+    use Fixpoint.Util.getOrCrash
     use Fixpoint.Predicates
     use Fixpoint.Predicates.PredType.{Full, Delta, New}
 
@@ -195,7 +195,7 @@ mod Fixpoint.Phase.Compiler {
         if(MutList.size(merges) > 1)
             RamStmt.Par(MutList.toVector(merges))
         else if (MutList.size(merges) == 1)
-            unwrapOrCrash(MutList.head(merges))
+            getOrCrash(MutList.head(merges))
         else
             bug!("Bug in Fixpoint.Compiler: Stratum error. Stratum had no PredSyms")
     }
@@ -230,7 +230,7 @@ mod Fixpoint.Phase.Compiler {
                             case BodyAtom(_, _, Polarity.Positive, _, _) =>
                                 RelOp.Search(rowVar, Predicates.bodyAtomToRelSym(atom, Full, predSymMaps), acc)
                             case Functional(boundVars, f, freeVars) =>
-                                let terms = Vector.map(v -> unwrapOrCrash(Map.get(v, env)), freeVars);
+                                let terms = Vector.map(v -> getOrCrash(Map.get(v, env)), freeVars);
                                 RelOp.Functional(rowVar, f, terms, acc, Vector.length(boundVars))
                             case _ => acc
                         }, loopBody, augBody) |>
@@ -304,7 +304,7 @@ mod Fixpoint.Phase.Compiler {
                                     };
                                     RelOp.Search(rowVar, ramSym, acc)
                                 case Functional(boundVars, f, freeVars) =>
-                                    let terms = Vector.map(v -> unwrapOrCrash(Map.get(v, env)), freeVars);
+                                    let terms = Vector.map(v -> getOrCrash(Map.get(v, env)), freeVars);
                                     RelOp.Functional(rowVar, f, terms, acc, Vector.length(boundVars))
                                 case _ => acc
                             }, loopBody, augBody) |>
@@ -337,33 +337,33 @@ mod Fixpoint.Phase.Compiler {
     /// Substitute Datalog head term `term` for a RAM term according to the given substitution `env`.
     ///
     def compileHeadTerm(env: Map[VarSym, RamTerm], counter: Counter[r], term: HeadTerm): RamTerm \ r = match term {
-        case HeadTerm.Var(var) => unwrapOrCrash(Map.get(var, env))
+        case HeadTerm.Var(var) => getOrCrash(Map.get(var, env))
         case HeadTerm.Lit(v) => RamTerm.Lit(v, RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App0(f) => RamTerm.Lit(f(), RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App1(f, v) =>
-            let t = unwrapOrCrash(Map.get(v, env));
+            let t = getOrCrash(Map.get(v, env));
             RamTerm.App1(f, t, RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App2(f, v1, v2) =>
-            let t1 = unwrapOrCrash(Map.get(v1, env));
-            let t2 = unwrapOrCrash(Map.get(v2, env));
+            let t1 = getOrCrash(Map.get(v1, env));
+            let t2 = getOrCrash(Map.get(v2, env));
             RamTerm.App2(f, t1, t2, RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App3(f, v1, v2, v3) =>
-            let t1 = unwrapOrCrash(Map.get(v1, env));
-            let t2 = unwrapOrCrash(Map.get(v2, env));
-            let t3 = unwrapOrCrash(Map.get(v3, env));
+            let t1 = getOrCrash(Map.get(v1, env));
+            let t2 = getOrCrash(Map.get(v2, env));
+            let t3 = getOrCrash(Map.get(v3, env));
             RamTerm.App3(f, t1, t2, t3, RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App4(f, v1, v2, v3, v4) =>
-            let t1 = unwrapOrCrash(Map.get(v1, env));
-            let t2 = unwrapOrCrash(Map.get(v2, env));
-            let t3 = unwrapOrCrash(Map.get(v3, env));
-            let t4 = unwrapOrCrash(Map.get(v4, env));
+            let t1 = getOrCrash(Map.get(v1, env));
+            let t2 = getOrCrash(Map.get(v2, env));
+            let t3 = getOrCrash(Map.get(v3, env));
+            let t4 = getOrCrash(Map.get(v4, env));
             RamTerm.App4(f, t1, t2, t3, t4, RamId.Id(Counter.getAndIncrement(counter)))
         case HeadTerm.App5(f, v1, v2, v3, v4, v5) =>
-            let t1 = unwrapOrCrash(Map.get(v1, env));
-            let t2 = unwrapOrCrash(Map.get(v2, env));
-            let t3 = unwrapOrCrash(Map.get(v3, env));
-            let t4 = unwrapOrCrash(Map.get(v4, env));
-            let t5 = unwrapOrCrash(Map.get(v5, env));
+            let t1 = getOrCrash(Map.get(v1, env));
+            let t2 = getOrCrash(Map.get(v2, env));
+            let t3 = getOrCrash(Map.get(v3, env));
+            let t4 = getOrCrash(Map.get(v4, env));
+            let t5 = getOrCrash(Map.get(v5, env));
             RamTerm.App5(f, t1, t2, t3, t4, t5, RamId.Id(Counter.getAndIncrement(counter)))
     }
 
@@ -467,7 +467,7 @@ mod Fixpoint.Phase.Compiler {
         Vector.flatMap(match (atom, rowVar) ->
             let compileBodyTerm = j -> term -> match term {
                 case BodyTerm.Wild      => RamTerm.RowLoad(rowVar, j, toFullSym(atom))
-                case BodyTerm.Var(var)  => unwrapOrCrash(Map.get(var, env))
+                case BodyTerm.Var(var)  => getOrCrash(Map.get(var, env))
                 case BodyTerm.Lit(v)    => RamTerm.Lit(v, RamId.Id(Counter.getAndIncrement(counter)))
             };
             match atom {
@@ -490,29 +490,29 @@ mod Fixpoint.Phase.Compiler {
                 case Guard0(_) =>
                     Vector#{}
                 case Guard1(f, v) =>
-                    let t = unwrapOrCrash(Map.get(v, env));
+                    let t = getOrCrash(Map.get(v, env));
                     Vector#{BoolExp.Guard1(f, t)}
                 case Guard2(f, v1, v2) =>
-                    let t1 = unwrapOrCrash(Map.get(v1, env));
-                    let t2 = unwrapOrCrash(Map.get(v2, env));
+                    let t1 = getOrCrash(Map.get(v1, env));
+                    let t2 = getOrCrash(Map.get(v2, env));
                     Vector#{BoolExp.Guard2(f, t1, t2)}
                 case Guard3(f, v1, v2, v3) =>
-                    let t1 = unwrapOrCrash(Map.get(v1, env));
-                    let t2 = unwrapOrCrash(Map.get(v2, env));
-                    let t3 = unwrapOrCrash(Map.get(v3, env));
+                    let t1 = getOrCrash(Map.get(v1, env));
+                    let t2 = getOrCrash(Map.get(v2, env));
+                    let t3 = getOrCrash(Map.get(v3, env));
                     Vector#{BoolExp.Guard3(f, t1, t2, t3)}
                 case Guard4(f, v1, v2, v3, v4) =>
-                    let t1 = unwrapOrCrash(Map.get(v1, env));
-                    let t2 = unwrapOrCrash(Map.get(v2, env));
-                    let t3 = unwrapOrCrash(Map.get(v3, env));
-                    let t4 = unwrapOrCrash(Map.get(v4, env));
+                    let t1 = getOrCrash(Map.get(v1, env));
+                    let t2 = getOrCrash(Map.get(v2, env));
+                    let t3 = getOrCrash(Map.get(v3, env));
+                    let t4 = getOrCrash(Map.get(v4, env));
                     Vector#{BoolExp.Guard4(f, t1, t2, t3, t4)}
                 case Guard5(f, v1, v2, v3, v4, v5) =>
-                    let t1 = unwrapOrCrash(Map.get(v1, env));
-                    let t2 = unwrapOrCrash(Map.get(v2, env));
-                    let t3 = unwrapOrCrash(Map.get(v3, env));
-                    let t4 = unwrapOrCrash(Map.get(v4, env));
-                    let t5 = unwrapOrCrash(Map.get(v5, env));
+                    let t1 = getOrCrash(Map.get(v1, env));
+                    let t2 = getOrCrash(Map.get(v2, env));
+                    let t3 = getOrCrash(Map.get(v3, env));
+                    let t4 = getOrCrash(Map.get(v4, env));
+                    let t5 = getOrCrash(Map.get(v5, env));
                     Vector#{BoolExp.Guard5(f, t1, t2, t3, t4, t5)}
             }, body)
 

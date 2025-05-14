@@ -19,7 +19,6 @@ mod Fixpoint.Phase.IndexSelection {
     use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, Indexes, IndexInformation, RowVar, arityOf, arityOfNonLat};
     use Fixpoint.Predicates.{relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
     use Fixpoint.UniqueInts
-    use Fixpoint.UniqueInts.UniqueInts
     
     type alias Searches[r: Eff] = MutMap[RelSym, List[Search], r]
 

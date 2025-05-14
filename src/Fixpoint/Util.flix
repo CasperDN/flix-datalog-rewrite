@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Helpers {
+mod Fixpoint.Util {
     use Fixpoint.Ast.Ram.{RamProgram, RamTerm, RowVar, RelSym, RamStmt, RelOp, RamId, BoolExp}
     use Fixpoint.Boxed
 
@@ -25,9 +25,9 @@ mod Fixpoint.Helpers {
     /// Causes runtime hole error when `x` is `None`.
     ///
     @Internal
-    pub def unwrapOrCrash(x: Option[a]): a = match x {
+    pub def getOrCrash(x: Option[a]): a = match x {
         case Some(v) => v
-        case None => ???
+        case None => bug!("Attempted unwrapping none in getOrCrash")
     }
 
     ///

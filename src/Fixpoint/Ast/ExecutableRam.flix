@@ -23,7 +23,7 @@
 
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Boxed;
-    use Fixpoint.BoxingTypes.UnifiedTypePos;
+    use Fixpoint.BoxingType.UnifiedTypePos;
     use Fixpoint.Ast.Ram.{Predicates, RelSym, Search, IndexInformation}
     use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
     use Fixpoint.SubstitutePredSym
@@ -39,7 +39,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /// should be saved, and information about Boxing-information.
     /// 
     pub enum RamProgram {
-        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.BoxingTypes.RamIdToPos)
+        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.BoxingType.RamIdToPos)
     }
     ///
     /// The EDB of a program.
