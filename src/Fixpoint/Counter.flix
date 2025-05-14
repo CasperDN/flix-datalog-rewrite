@@ -23,7 +23,6 @@
 /// Not thread-safe.
 ///
 mod Fixpoint {
-    @Internal
     struct Counter[r: Region] {
         mut state: Int32
     }

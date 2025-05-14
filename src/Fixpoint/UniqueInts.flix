@@ -31,19 +31,12 @@
 mod Fixpoint {
     @Internal
     struct UniqueInts[k: Type, r: Region] {
-        rc: Region[r],
         map: MutMap[k, Int32, r],
         counter: Counter[r]
     }
 
-    @Internal
-    struct ReverseUniqueInts[k: Type, r: Region] {
-        map: Map[Int32, k]
-    }
-
     mod UniqueInts {
         use Fixpoint.Counter
-        use Fixpoint.ReverseUniqueInts
         use Fixpoint.UniqueInts
 
         ///
@@ -52,7 +45,6 @@ mod Fixpoint {
         @Internal
         pub def empty(rc: Region[r]): UniqueInts[k, r] \ r =
             new UniqueInts @ rc {
-                rc = rc,
                 map = MutMap.empty(rc),
                 counter = Counter.fresh(rc)
             }
@@ -93,24 +85,9 @@ mod Fixpoint {
         /// back to the values they represent.
         ///
         @Internal
-        pub def reverse(state: UniqueInts[k, r]): ReverseUniqueInts[k, r] \ r with Order[k] =
+        pub def reverse(state: UniqueInts[k, r]): Map[Int32, k] \ r with Order[k] =
             let map = state->map;
-            let rc = state->rc;
             let reverseMap = MutMap.foldLeftWithKey(acc -> key -> val -> Map.insert(val, key, acc), Map#{}, map);
-            new ReverseUniqueInts @ rc {map = reverseMap}
+            reverseMap
     }
-
-    mod ReverseUniqueInts {
-        use Fixpoint.ReverseUniqueInts
-        use Fixpoint.Util.getOrCrash
-
-        ///
-        /// Returns an `ReverseUniqueInts` the value was assigned
-        /// the identifier `val`
-        ///
-        pub def fromIndex(val: Int32, reverseState: ReverseUniqueInts[k, r]): k = 
-            let map = reverseState->map;
-            getOrCrash(Map.get(val, map))
-    }
-
 }

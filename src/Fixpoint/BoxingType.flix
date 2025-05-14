@@ -63,7 +63,7 @@ mod Fixpoint.BoxingType {
     /// `P(1)`)
     ///
     @Internal
-    enum Types {
+    pub enum Types {
         case Unknown
         case Bool
         case Char

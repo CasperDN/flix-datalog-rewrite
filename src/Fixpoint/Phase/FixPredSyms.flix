@@ -33,17 +33,16 @@ mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Shared.{Denotation, isRelational, PredSym}
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.UniqueInts
-    use Fixpoint.ReverseUniqueInts
     use Fixpoint.Util.getOrCrash
 
-    type alias FixInformation[r: Region] = ReverseUniqueInts[PredSym, r]
+    type alias FixInformation = Map[Int32, PredSym]
 
     ///
     /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
     /// program and information which `unfixPredSym` can use to recreate the original program.
     ///
     @Internal
-    pub def fixPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation[r]) \ r =
+    pub def fixPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
         let mapping = UniqueInts.empty(rc);
         let fixed = fixPredSymsInternal(d, mapping);
         (fixed, UniqueInts.reverse(mapping))
@@ -70,7 +69,7 @@ mod Fixpoint.Phase.FixPredSyms {
     /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
     ///
     @Internal
-    pub def unfixPredSym(d: Datalog, fixing: FixInformation[r]): Datalog = match d {
+    pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
@@ -86,9 +85,9 @@ mod Fixpoint.Phase.FixPredSyms {
     ///
     /// Maps `pred` back to its original `PredSym` according to `reversing`.
     ///
-    def mapBack(reversing: FixInformation[r], pred: PredSym): PredSym = 
+    def mapBack(reversing: FixInformation, pred: PredSym): PredSym = 
         let PredSym(_, id) = pred;
-        ReverseUniqueInts.fromIndex(getOrCrash(Int64.tryToInt32(id)), reversing)
+        getOrCrash(Map.get(getOrCrash(Int64.tryToInt32(id)), reversing))
 
     ///
     /// Maps `pred` back to its new `PredSym` according to `state`.

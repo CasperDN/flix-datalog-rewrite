@@ -472,7 +472,6 @@ mod Fixpoint.Boxing {
             case _ => unreachable!()
         }
 
-        @Internal
         def computeMappingStmt(s: RamStmt, predTrack: Predicates, set: MutDisjointSets[RamId, r], map: MutMap[RamId, Int32, r], counter: Counter[r]): Unit \ r = match s {
             case RamStmt.Insert(rest) => computeMappingOp(rest, predTrack, set, map, counter)
             case RamStmt.MergeInto(rel1, rel2) =>

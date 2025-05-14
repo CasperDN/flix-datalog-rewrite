@@ -39,6 +39,7 @@ mod Fixpoint.Predicates {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, Predicates, RamProgram, toId}
     use Fixpoint.Boxed
 
+    @Internal
     pub enum PredType with Eq {
         case Full,
         case Delta,
@@ -184,35 +185,4 @@ mod Fixpoint.Predicates {
             case PredType.Delta => fullId + max
             case PredType.New => fullId + 2i64 * max
     }
-
-    // pub def getNewRel(self: Predicates, predSym: PredSym, t: PredType): RelSym = match predSym {
-    //     case PredSym(_, id) => oldIDSymToRelSym(self, id, t)
-    // }
-
-    // pub def oldIDSymToRelSym(self: Predicates, id: Int64, t: PredType): RelSym = 
-    //     let (max, map, _) = self;
-    //     let new_ = oldIDSymToNewRelSymInternal(id, map);
-    //     match t {
-    //         case PredType.Full => new_
-    //         case PredType.Delta => addToRelSym(new_, max)
-    //         case PredType.New => addToRelSym(new_, 2i64 * max)
-    // }
-
-
-    // @Internal
-    // def addToRelSym(relSym: RelSym, c: Int64): RelSym = match relSym {
-    //     case RelSym.Symbol(pred, arity, den) => RelSym.Symbol(addToPredSym(pred, c), arity, den)
-    // }
-
-    // @Internal
-    // def addToPredSym(relSym: PredSym, c: Int64): PredSym = match relSym {
-    //     case PredSym(name, id) => PredSym(name, id + c)
-    // }
-    
-    // @Internal
-    // def oldIDSymToNewRelSymInternal(id: Int64, map: Map[Int64, RelSym]): RelSym = match Map.get(id, map) {
-    //         case Some(relSym) => relSym
-    //         case None => bug!("PredSymMap not initialized correctly?")
-    // }
-
 }

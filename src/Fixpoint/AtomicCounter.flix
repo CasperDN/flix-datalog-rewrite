@@ -21,7 +21,6 @@
 mod Fixpoint {
     import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
 
-    @Internal
     enum AtomicCounter[_: Region](JAtomicLong)
 
     mod AtomicCounter {
