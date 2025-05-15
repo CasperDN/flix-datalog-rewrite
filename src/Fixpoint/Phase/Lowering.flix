@@ -58,31 +58,6 @@ mod Fixpoint.Phase.Lowering {
             let (marshall, newFacts, idToMarshall) = Boxing.initialize(rc, program);
             let writeTo = (MutMap.empty(rc), MutMap.empty(rc));
             let loweredStmt = lowerStmt(stmt, rc, idToIndex, (idToMarshall, marshall), writeTo, indexInfo);
-            // // Lower facts
-            // let newFacts =
-            //     facts |>
-            //     Map.mapWithKey(k -> values ->
-            //         let RelSym.Symbol(PredSym.PredSym(_, id), _, den) = k;
-            //         values |> 
-            //         Vector.map(vec -> match den {
-            //             case Denotation.Relational =>
-            //                 let tuple = vec |>
-            //                     Vector.mapWithIndex(i -> v -> {
-            //                         Boxing.unboxWith(v, getOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall)
-            //                     });
-            //                 (tuple, Boxed.NoValue)
-            //             case Denotation.Latticenal(_, _, _ ,_) =>
-            //                 let len = Vector.length(vec);
-            //                 let tuple = Array.empty(rc, len - 1);
-            //                 vec |> Vector.forEachWithIndex(i -> term -> {
-            //                     if (i < len - 1)
-            //                         Array.put(Boxing.unboxWith(term, getOrCrash(Map.get(RamId.RelPos(id, i), idToMarshall)), marshall), i, tuple)
-            //                     else ()
-            //                 });
-            //                 let latVal = Vector.get(len - 1, vec);
-            //                 (Array.toVector(tuple), latVal)
-            //         })
-            //     );
 
             let constWrites = snd(writeTo) |> MutMap.foldWithKey(acc1 -> outerPos -> inner ->
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)

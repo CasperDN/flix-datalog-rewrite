@@ -16,16 +16,16 @@
  */
 
 ///
-/// Purpose of file: Low level representation of the program to be executed.
-/// It should be faster an less complex for the JVM to execute than if we
-/// directly tried to execute the abstract RAM.
+/// Purpose of `ExecutableRam`: Low level representation of the program to be executed.
+/// This representation is tightly coupled to the current interpreter e.g. `Ram`'s `NotBot`
+/// is removed since the interpreter handles it explicitly.
 ///
 
 mod Fixpoint.Ast.ExecutableRam {
-    use Fixpoint.Boxed;
-    use Fixpoint.BoxingType.UnifiedTypePos;
     use Fixpoint.Ast.Ram.{Predicates, RelSym, Search, IndexInformation}
     use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
+    use Fixpoint.Boxed;
+    use Fixpoint.BoxingType.UnifiedTypePos;
     use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
@@ -33,10 +33,8 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// A `RamProgram` consists of a statements, the EDB, predicate information, the
-    /// information about the indexes to be constructed, a summary of the arity of to be
-    /// used for the absolute positions of the interpreter, a summary of where constants
-    /// should be saved, and information about Boxing-information.
+    /// A `RamProgram` represents a further compiled Datalog program ready to be run
+    /// by the interpreter.
     /// 
     pub enum RamProgram {
         case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), Fixpoint.BoxingType.RamIdToPos)
@@ -44,6 +42,7 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// The EDB of a program.
     ///
+    @Internal
     pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
 
     ///
@@ -51,6 +50,10 @@ mod Fixpoint.Ast.ExecutableRam {
     /// written to. Explicitly for `(id1, id2, val)` we have that
     /// `searchEnv[id1][id2] = val`.
     ///
+    /// They come from rules with constants like `Head(x):- Body(4, x)`. We would here
+    /// a `ConstWrite` of `Vector#{(idOfBody, 0, 4)}`.
+    ///
+    @Internal
     pub type alias ConstWrites = Vector[(Int32, Int32, Int64)]
 
     ///
@@ -59,10 +62,17 @@ mod Fixpoint.Ast.ExecutableRam {
     /// the context-specified `RowVar`, `rv`, write
     /// `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
     ///
+    /// They come from rules with constants like `Head(x):- Body1(x), Body2(y, x)`. We would here
+    /// a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}`.
+    ///
+    @Internal
     pub type alias WriteTuple = (Int32, Int32, Int32)
 
     ///
-    /// Describes the arity-information for a program.
+    /// `Arities` describes the arity-information for a program.
+    ///
+    /// For e.g. `Head(x):- Body(x, _, _)`. Assuming `Head` gets position `0` and `Body` gets position `1`
+    /// We would here have `Vector#{1, 3}`.
     ///
     type alias Arities = Vector[Int32]
 
@@ -70,17 +80,17 @@ mod Fixpoint.Ast.ExecutableRam {
     // RamStmt                                                                 //
     /////////////////////////////////////////////////////////////////////////////
 
-
     ///
     /// `Insert(body)` executes the RelOp `body`.
     ///
-    /// `MergeInto(r1, r2, den)` merges the facts of `r1` into `r2` for a RelSym with
-    /// denotation `den`.
+    /// `MergeInto(posFrom, posTo, leq, isLatticenal)` merges the facts of the index at `posFrom`
+    /// into `posTo`. `isLatticenal` is describes whether lattice semantics should be used
+    /// and if so `leq` determines how to settle conflicts.
     ///
     /// `Swap(newPos, deltaPos)` swaps the facts of the indexes placed at `newPos` and
     /// `deltaPos`.
     ///
-    /// `Purge(pos)` removes all facts from the indexe at position `pos`.
+    /// `Purge(pos)` removes all facts from the index at position `pos`.
     ///
     /// `Seq(body)` is sequence of statements to be executed sequentially.
     ///
@@ -98,7 +108,6 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
-        // Boxed -> Boxed -> Boxed and UnifiedTypePos here only means something for lattice-tuples.
         case MergeInto(Int32, Int32, Boxed -> Boxed -> Boxed, UnifiedTypePos)
         case Swap(Int32, Int32)
         case Purge(Int32)
@@ -135,10 +144,13 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Search(rvPos, indexPos, meet, den, writeTuple, body)` iterates the facts in the
     /// index at `indexPos` saving them at `rvPos` and using the facts as context for
-    /// `writeTuple`. If `den` is a latticenal, saves the lattice element at `rvPos`. If
-    /// `meet != rvPow`, saves the meet of the lattice element and the element at rvPos.
-    /// For each fact executes `body`. For lattice element only executes `body` for
-    /// non-bot elements.
+    /// `writeTuple`.
+    ///
+    /// If `den` is a relational execute `body`.
+    ///
+    /// If `den` is a latticenal, saves the lattice element at `rvPos`. If
+    /// `meet != rvPos`, saves the meet of the lattice element and the element at `meet`.
+    /// If the value saved to `rvPos` is not `Bot` execute `body`.
     ///
     /// `Query(rvPos, indexPos, meet, den, writeTuple, body)` is the same as `Search`,
     /// except the facts will be filtered by the query for `rvPos`.
@@ -155,13 +167,9 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     @Internal
     pub enum RelOp {
-        // (RowVar: EnvPos, searchIndex, meetWith(only relevant for lattices), Denotation, writeTuple, body)
         case Search(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
-        // (RowVar: EnvPos, searchIndex, meetWith(only relevant for lattices), Denotation, writeTuple, body)
         case Query(Int32, Int32, Int32, Denotation, Vector[WriteTuple], RelOp)
-        // The first is from the second is to.
         case Functional(Int32, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], Vector[WriteTuple], RelOp, Vector[UnifiedTypePos])
-        // (Vector of terms to be inserted, Bot, leq, lub, Boxing info for lattice elem (-1 for Relational))
         case Project(Vector[RamTerm], Int32, Denotation)
         case If(Vector[BoolExp], RelOp)
     }
@@ -198,14 +206,18 @@ mod Fixpoint.Ast.ExecutableRam {
     /// `NotMemberOf(terms, index, den)`: True if `terms` is not a fact in the facts
     /// placed at `index`.
     ///
-    /// `Eq(t1, t2)`: True if `t1 == t2`.
-    ///
     /// `Leq(const, pos)`: True if `const` is less than the lattice element of `pos`.
     ///
+    /// `Eq(t1, t2)`: True if `t1 == t2`.
+    ///
     /// `Guard1(f, term1)`: True if `f(term1) == true`.
+    ///
     /// `Guard2(f, term1, term2)`: True if `f(term1, term2) == true`.
+    ///
     /// `Guard3(f, term1, term2, term3)`: True if `f(term1, term2, term3) == true`.
+    ///
     /// `Guard4(f, term1, term2, term3, term4)`: True if `f(term1, term2, term3, term4) == true`.
+    ///
     /// `Guard5(f, term1, term2, term3, term4, term5)`: True if `f(term1, term2, term3, term4, term5) == true`.
     ///
     @Internal
@@ -213,8 +225,8 @@ mod Fixpoint.Ast.ExecutableRam {
         case Not(BoolExp)
         case IsEmpty(Int32)
         case NotMemberOf(Vector[RamTerm], Int32, Denotation)
-        case Eq(RamTerm, RamTerm)
         case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
+        case Eq(RamTerm, RamTerm)
         case Guard1(Boxed -> Bool, RamTerm)
         case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
         case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
@@ -245,18 +257,16 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// Represents a RAM term.
     ///
-    /// Enums with a `RamId` can be reffered to by the `RamId`.
-    ///
-    /// `Lit(val, id)` represents the literal `val` and its unboxed version.
-    ///
-    /// `LoadFromTuple(memPos, i, unboxingInfo)` represents an index from the tuple stored at postion
-    /// `memPos`, i.e. `memory[memPos][i]`. `unboxingInfo` can be used to rebox the value.
-    ///
-    /// `LoadLatVar(memPos, unboxingInfo)` represents loading the lattice element from the tuple stored
-    /// at `memPos`. `unboxingInfo` can be used to rebox the value.
+    /// `Lit(rep, val)` represents the literal `val` and its unboxed version, `rep`.
     ///
     /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents 
     /// `max(memory[memPos1][i1], memory[memPos2][i2], ...)`
+    ///
+    /// `LoadFromTuple(memPos, i, unboxingInfo)` represents an index from the tuple stored at postion
+    /// `memPos`, i.e. `memory[memPos][i]`. Can be boxed using `unboxingInfo`.
+    ///
+    /// `LoadLatVar(memPos, unboxingInfo)` represents loading the lattice element from the tuple stored
+    /// at `memPos`. Can be unboxed using `unboxingInfo`.
     ///
     /// `Meet(meet, term1, term2, unboxingInfo)` represents the meet of `term1` with `term2`
     /// Can be unboxed using `unboxingInfo`.
@@ -279,9 +289,9 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamTerm {
         case Lit(Int64, Boxed)
+        case ProvMax(Vector[(Int32, Int32)])
         case LoadFromTuple(Int32, Int32, UnifiedTypePos)
         case LoadLatVar(Int32, UnifiedTypePos)
-        case ProvMax(Vector[(Int32, Int32)])
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
         case App1(Boxed -> Boxed, RamTerm, UnifiedTypePos)
         case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)

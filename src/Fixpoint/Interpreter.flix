@@ -177,11 +177,11 @@ mod Fixpoint.Interpreter {
     ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, relOp)
-        case RamStmt.MergeInto(srcIndex, dstIndex, lub, index) =>
+        case RamStmt.MergeInto(srcIndex, dstIndex, lub, isLatticenal) =>
             let (db, _, _) = ctxt;
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
-            if (index == -1) {
+            if (isLatticenal) {
                 BPlusTree.merge(src, dst)
             } else
                 BPlusTree.mergeWith(lub, src, dst)
