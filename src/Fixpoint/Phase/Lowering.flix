@@ -45,12 +45,6 @@ mod Fixpoint.Phase.Lowering {
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
-    def relSymToLatticeBoxingInfo(relSym: RelSym, idToMarshall: RamIdToPos): Int32 = match relSym {
-        case RelSym.Symbol(_, _, Denotation.Relational) => -1
-        case RelSym.Symbol(PredSym.PredSym(_, id), arity, Denotation.Latticenal(_, _, _, _)) =>
-            getOrCrash(Map.get(RamId.RelPos(id, arity - 1), idToMarshall))
-    }
-
     @Internal
     pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
         case AProgram.Program(stmt, _, meta, indexInfo) =>
@@ -85,12 +79,11 @@ mod Fixpoint.Phase.Lowering {
             case ARamStmt.MergeInto(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
-                let lub = match toDenotation(newRel) {
-                    case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
-                    case Denotation.Latticenal(_, _, lub, _) => lub
+                let (isLatticenal, lub) = match toDenotation(newRel) {
+                    case Denotation.Relational => (false, _ -> _ -> bug!("Using lattice logic on normal relation"))
+                    case Denotation.Latticenal(_, _, lub, _) => (true, lub)
                 };
-                let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, isLatticenal);
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let merges = Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
                 if(Vector.length(merges) == 1) {
@@ -101,12 +94,11 @@ mod Fixpoint.Phase.Lowering {
             case ARamStmt.Swap(newRel, deltaRel) => 
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
-                let lub = match toDenotation(newRel) {
-                    case Denotation.Relational => _ -> _ -> bug!("Using lattice logic on normal relation")
-                    case Denotation.Latticenal(_, _, lub, _) => lub
+                let (isLatticenal, lub) = match toDenotation(newRel) {
+                    case Denotation.Relational => (false, _ -> _ -> bug!("Using lattice logic on normal relation"))
+                    case Denotation.Latticenal(_, _, lub, _) => (true, lub)
                 };
-                let idToMarshall = fst(marshalling);
-                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, relSymToLatticeBoxingInfo(deltaRel, idToMarshall));
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, isLatticenal);
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, getOrCrash(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {

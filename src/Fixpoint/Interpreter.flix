@@ -182,9 +182,10 @@ mod Fixpoint.Interpreter {
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
             if (isLatticenal) {
-                BPlusTree.merge(src, dst)
-            } else
                 BPlusTree.mergeWith(lub, src, dst)
+            } else {
+                BPlusTree.merge(src, dst)
+            }
         case RamStmt.Swap(lhs, rhs) =>
             let (db, _, _) = ctxt;
             let temp = lookupIndex(lhs, db);
