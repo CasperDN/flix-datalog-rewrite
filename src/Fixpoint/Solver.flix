@@ -87,6 +87,8 @@ mod Fixpoint.Solver {
                 toModelWithRenaming
             case Model(_) => 
                 d
+            case Datalog.Provenance(_, _) => 
+                ???
             case Join(Model(m), cs) => 
                 compiler(cs, m) |> 
                 Fixpoint.Debugging.notifyPreInterpret |>
@@ -133,6 +135,7 @@ mod Fixpoint.Solver {
         case (Join(model, datalog), Model(_)) => Join(union(model, d2), datalog)
         case (Model(_), Join(model, datalog)) => Join(union(model, d1), datalog)
         case (Join(x, y), Join(z, w)) => Join(union(x, z), union(y, w))
+        case _ => ???
     }
 
     ///
@@ -153,6 +156,8 @@ mod Fixpoint.Solver {
             }, db) |>
             List.toMap |>
             Model
+        case Datalog.Provenance(_, _) => 
+            ???
         case Join(d1, d2) => union(projectSym(p, d1), projectSym(p, d2))
     }
 
@@ -778,6 +783,8 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Join(d1, d2) => Vector.append(factsOf(f, p, d1), factsOf(f, p, d2))
+        case Datalog.Provenance(_, _) => 
+            ???
     }
 
     ///

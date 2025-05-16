@@ -15,7 +15,6 @@
  * limitations under the License.
  */
  
-
 /**
 Purpose: We need to make more predicates (at most 3 times as many) than there are relations.
 Solution: The first n are the full relations, the next n are the delta relations, the last n are the temporary delta' relations.

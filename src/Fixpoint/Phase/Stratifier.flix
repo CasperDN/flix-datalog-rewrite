@@ -19,7 +19,7 @@
 mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.BodyPredicate.BodyAtom
     use Fixpoint.Ast.Datalog.Constraint.Constraint
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Shared.PredSym
@@ -78,6 +78,7 @@ mod Fixpoint.Phase.Stratifier {
         case Datalog(_, rules) => Vector.forEach(precedenceHelper(graph), rules)
         case Model(_) => ()
         case Join(d1, d2) => mkDepGraphInternal(graph, d1); mkDepGraphInternal(graph, d2)
+        case Provenance(_, _) => ()
     }
 
     ///
@@ -115,6 +116,7 @@ mod Fixpoint.Phase.Stratifier {
         case Datalog(_, rules) => Vector.forEach(predSymHelper(predMap), rules)
         case Model(_) => ()
         case Join(d1, d2) => collectPredSym(predMap, d1); collectPredSym(predMap, d2)
+        case Provenance(_, _) => ()
     }
 
     ///

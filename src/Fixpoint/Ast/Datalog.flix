@@ -33,11 +33,23 @@ mod Fixpoint.Ast.Datalog {
     // Datalog                                                                 //
     /////////////////////////////////////////////////////////////////////////////
 
+    ///
+    /// `Datalog(facts, rules)` is a Datalog program where `facts` and `rules` are the
+    /// facts and rules of the program, respectively.
+    ///
+    /// `Model(factsMap)` is a 
+    ///
+    /// `Join(p1, p2)` is the combination of Datalog programs `p1` and `p2`.
+    ///
+    /// `Provenance(facts, model)` is a Datalog model where `model` is a map from
+    /// computed facts to annotations of the form `(depth, ruleUsed)`.
+    ///
     @Internal
     pub enum Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
         case Model(Map[RelSym, Map[Vector[Boxed], Boxed]])
         case Join(Datalog, Datalog)
+        case Provenance(Vector[Constraint], Map[RelSym, Map[Vector[Boxed], (Int64, Int32)]])
     }
 
     instance PredSymsOf[Datalog] {
@@ -48,6 +60,7 @@ mod Fixpoint.Ast.Datalog {
                 factSyms ++ ruleSyms
             case Datalog.Model(m)              => Map.keysOf(m) |> Set.toList |> List.map(predSymsOf) |> Monoid.fold
             case Datalog.Join(v1, v2)          => predSymsOf(v1) ++ predSymsOf(v2)
+            case Datalog.Provenance(_, _)      => ???
         }
     }
 
@@ -64,6 +77,7 @@ mod Fixpoint.Ast.Datalog {
                 };
                 Datalog.Model(Map.foldLeftWithKey(f, Map.empty(), m))
             case Datalog.Join(v1, v2) => Datalog.Join(substitute(v1, s), substitute(v2, s))
+            case Datalog.Provenance(_, _) => ???
         }
     }
 
@@ -92,6 +106,7 @@ mod Fixpoint.Ast.Datalog {
                 let lineSep = String.lineSeparator();
                 "${d1}${lineSep}${d2}${lineSep}"
             }
+            case Datalog.Provenance(_, _) => ???
         }
     }
 
