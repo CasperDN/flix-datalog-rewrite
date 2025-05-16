@@ -496,6 +496,9 @@ pub def dumb(): Unit \ IO =
     let f1 = inject aFacts into A;
     let f2 = inject bFacts into B;
     let r = #{
+        A(x) :- D(x).
+        D(x) :- A(x).
+        B(x) :- D(x).
         C(x) :- A(x), B(x).
     };
     query f1, f2, r select x from C(x) |> Vector.head |> println;

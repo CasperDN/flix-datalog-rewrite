@@ -62,7 +62,7 @@ mod Fixpoint.Solver {
     /// A stratification of `d` is given by `stf`.
     ///
     @Internal
-    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32], withProv: Bool): Datalog = region rc {
+    def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfiler`.
         def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {

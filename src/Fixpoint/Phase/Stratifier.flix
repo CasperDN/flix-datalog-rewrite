@@ -24,9 +24,7 @@ mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Util.getOrCrash
-    use Fixpoint.PrecedenceGraph
-    use Fixpoint.PrecedenceGraph.MutGraph
-    use Fixpoint.Ast.Shared.PredSym
+    use Fixpoint.PrecedenceGraph.{MutGraph, getPseudoSCCs}
 
     ///
     /// Array allowing lookup of the id-part of `PredSym` to name-part of `PredSym`.
@@ -38,24 +36,38 @@ mod Fixpoint.Phase.Stratifier {
     /// their strata.
     ///
     @Internal
-    pub def stratify(d: Datalog): Map[PredSym, Int32] = region rc {
+    pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
         let graph = MutGraph.empty(rc);
         mkDepGraphInternal(graph, d);
-        let scc = MutGraph.getStratums(graph);
+        let scc = getPseudoSCCs(graph);
         let numberOfPredSyms = MutGraph.getSize(graph);
         let predSyms = Array.empty(rc, numberOfPredSyms);
         collectPredSym(predSyms, d);
         let result = MutMap.empty(rc);
-        scc |> List.forEachWithIndex(i -> set -> 
-            set |>
-            Set.forEach(x ->
-                result |>
-                MutMap.put(
-                    PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x)), i
-                )
+        scc |> List.forEachWithIndex(pseudoStrat -> list ->
+            list |> List.forEachWithIndex(strat -> set -> 
+                set |> Set.forEach(x -> {
+                    let predSym = PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x));
+                    MutMap.put(predSym, (pseudoStrat, strat), result)
+                })
             )
         );
         MutMap.toMap(result)
+    }
+
+    pub def main199(): Unit \ IO = region rc {
+        let g = MutGraph.empty(rc);
+        MutGraph.addEdge(0, 7, g);
+        MutGraph.addEdge(1, 3, g);
+        MutGraph.addEdge(2, 3, g);
+        MutGraph.addEdge(3, 4, g);
+        MutGraph.addEdge(4, 3, g);
+        MutGraph.addEdge(3, 6, g);
+        MutGraph.addEdge(5, 6, g);
+        MutGraph.addEdge(5, 7, g);
+        MutGraph.addEdge(6, 11, g);
+        MutGraph.addEdge(10, 11, g);
+        getPseudoSCCs(g) |> println
     }
 
     ///

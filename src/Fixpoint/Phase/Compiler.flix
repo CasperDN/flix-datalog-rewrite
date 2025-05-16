@@ -45,7 +45,7 @@ mod Fixpoint.Phase.Compiler {
     /// A rule belongs to the same stratum as its head predicate.
     ///
     @Internal
-    pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, Int32]): RamProgram = match d {
+    pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, (Int32, Int32)]): RamProgram = match d {
         case Datalog(facts, _) => region rc {
             let predSymMaps = Predicates.initialize(d, db);
             let stmts = MutList.empty(rc);
@@ -53,16 +53,30 @@ mod Fixpoint.Phase.Compiler {
             // Create map of stratum to list of rules in stratum
             let counter = Counter.fresh(rc);
             let ruleNums = enumerateRules(d);
-            Vector.foldRight(match (num, rule) -> match rule {
+            let pseudoStratums = MutMap.empty(rc);
+            ruleNums |> Vector.forEach(match (num, rule) -> match rule {
                 case Constraint(HeadAtom(p, _, _), _) =>
-                    let ruleStratum = Map.getWithDefault(p, 0, strat);
-                    Map.insertWith(List.append, ruleStratum, (num, rule) :: Nil)
-            }, Map#{}, ruleNums) |>
-            Map.forEach(_ -> enumeratedRules -> {
-                let (nums, s) = List.unzip(enumeratedRules);
-                compileStratum(stmts, s, nums, predSymMaps, counter)
+                    let (pseudoStratum, stratum) = Map.getWithDefault(p, (0, 0), strat);
+                    let pseudoMap = MutMap.getOrElsePut(pseudoStratum, MutMap.empty(rc), pseudoStratums);
+                    MutMap.putWith(List.append, stratum, (num, rule) :: Nil, pseudoMap)
             });
-            RamProgram.Program(RamStmt.Seq(MutList.toVector(stmts)), compiledFacts, predSymMaps, (Map.empty(), Map.empty()))
+            pseudoStratums |> MutMap.forEach(_ -> pseudStrat -> {
+                let runInParallel = pseudStrat |> MutMap.foldLeft(acc -> enumeratedRules -> {
+                    let stmtsForPseudo = MutList.empty(rc);
+                    let (nums, s) = List.unzip(enumeratedRules);
+                    compileStratum(stmtsForPseudo, s, nums, predSymMaps, counter);
+                    (MutList.toVector(stmtsForPseudo) |> RamStmt.Seq) :: acc
+                }, Nil);
+                if(List.size(runInParallel) > 1) {
+                    let codeBlock = List.toVector(runInParallel) |> RamStmt.Par;
+                    MutList.push(codeBlock, stmts)
+                } else match List.head(runInParallel) {
+                    case Some(v) => MutList.push(v, stmts)
+                    case None => ()
+                }
+            });
+            let stmt = MutList.toVector(stmts) |> RamStmt.Seq;
+            RamProgram.Program(stmt, compiledFacts, predSymMaps, (Map#{}, Map#{}))
         }
         case _ => bug!("Datalog Boxing bug")
     }
