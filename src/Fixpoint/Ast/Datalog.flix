@@ -49,7 +49,7 @@ mod Fixpoint.Ast.Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
         case Model(Map[RelSym, Map[Vector[Boxed], Boxed]])
         case Join(Datalog, Datalog)
-        case Provenance(Vector[Constraint], Map[RelSym, Map[Vector[Boxed], (Int64, Int32)]])
+        case Provenance(Vector[Constraint], Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]])
     }
 
     instance PredSymsOf[Datalog] {
@@ -106,7 +106,14 @@ mod Fixpoint.Ast.Datalog {
                 let lineSep = String.lineSeparator();
                 "${d1}${lineSep}${d2}${lineSep}"
             }
-            case Datalog.Provenance(_, _) => ???
+            case Datalog.Provenance(_, db) =>
+                let indent = String.repeat(4, " ");
+                Map.joinWith(predSym -> facts -> {
+                    let factsString = Map.joinWith(fact -> annotation -> {
+                        "${indent}${fact} @ ${annotation}"
+                    }, "${String.lineSeparator()},${indent}", facts);
+                    "${predSym}:${String.lineSeparator()}${factsString}"
+                }, "${String.lineSeparator()}", db)
         }
     }
 

@@ -15,20 +15,18 @@
  * limitations under the License.
  */
 
+//
 /// Purpose of phase: For `PredSym(name, id)` we want `id` to be unique, for the whole program.
 /// This phase passes over the Datalog-Ast and replaces the id and after everything is done
 /// recreates the old `PredSym`s for the resulting model.
-
-
+//
 mod Fixpoint.Phase.FixPredSyms {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-    use Fixpoint.Ast.Datalog.BodyPredicate.{Functional}
-    use Fixpoint.Ast.Datalog.BodyPredicate.{Guard1, Guard2, Guard3, Guard4, Guard5}
+    use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom, Functional, Guard1, Guard2, Guard3, Guard4, Guard5}
     use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.Shared.{Denotation, isRelational, PredSym}
     use Fixpoint.Ast.Shared.PredSym.PredSym
@@ -77,8 +75,16 @@ mod Fixpoint.Phase.FixPredSyms {
             let transformer = mapBack(fixing);
             Map.foldLeftWithKey(newMap -> k -> v -> match k {
                 case RelSym.Symbol(p, arity, den) => Map.insert(RelSym.Symbol(transformer(p), arity, den), v, newMap)
-            }, Map#{}, map)
-            |> Model
+            }, Map#{}, map) |> 
+            Model
+        case Provenance(rules, model) => {
+            let transformer = mapBack(fixing);
+            let newRules = remapConstraints(rules, transformer);
+            Map.foldLeftWithKey(newMap -> predSym -> v -> 
+                Map.insert(transformer(predSym), v, newMap)
+            , Map#{}, model) |> 
+            Provenance(newRules)
+        }
         case _ => bug!("Bad argument of type 'Join' in PredSym renaming")
     }
     

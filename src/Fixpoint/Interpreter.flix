@@ -156,13 +156,13 @@ mod Fixpoint.Interpreter {
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
             let innerMap = MutMap.empty(rc);
-            let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym)) |>
+            let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
                 Vector.map(i ->
                     getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );
             Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
             BPlusTree.forEach(vec -> latticeElem -> {
-                let boxedVec = vec |> Vector.mapWithIndex(i -> val ->  boxWith(val, Vector.get(i, curBoxingInfo), boxing));
+                let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
                 MutMap.put(boxedVec, latticeElem, innerMap)
             });
             MutMap.put(relSym, innerMap, res)
@@ -482,9 +482,9 @@ mod Fixpoint.Interpreter {
                 unboxWith(Array.get(index, latEnv), boxingPos, boxing)
             case RamTerm.ProvMax(vec) =>
                 let (_, _, tupleEnv, _) = env;
-                Vector.foldLeft(acc -> match (tupleIndex, indexInTuple) -> 
+                1i64 + Vector.foldLeft(acc -> match (tupleIndex, indexInTuple) -> 
                     acc `Int64.max` Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
-                , -1i64, vec)
+                , 0i64, vec)
             case RamTerm.Meet(cap, lhs, rhs, i) =>
                 let boxed1 = evalBoxedT(lhs);
                 let boxed2 = evalBoxedT(rhs);

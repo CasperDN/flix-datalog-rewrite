@@ -71,11 +71,11 @@
             bug!("In Fixpoint.Phase.Provenance.augmentOp: Cannot do provenance with functional")
         case RelOp.Project(terms, relSym, ruleNum) =>
             let newTerms = Vector.append(
+                terms,
                 Vector#{
                     RamTerm.ProvMax(List.toVector(rowVarsArity)),
-                    RamTerm.Lit(BoxedInt64(Int32.toInt64(ruleNum)), RamId.Id(Counter.getAndIncrement(counter)))
-                },
-                terms
+                    RamTerm.Lit(BoxedInt64(Int32.toInt64(ruleNum)), RamId.Id(-1))
+                }
             );
             RelOp.Project(newTerms, relSym, ruleNum)
         case RelOp.If(boolExps, body) =>  

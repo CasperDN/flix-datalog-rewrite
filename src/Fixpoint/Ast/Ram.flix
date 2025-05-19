@@ -304,8 +304,7 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub def getTermRamId(t: RamTerm): RamId = match t {
         case RamTerm.Lit(_, id) => id
-        case RamTerm.ProvMax(_) => 
-            bug!("In Fixpoint.Ast.Ram.getTermRamid: Attempted to get RamId of RamTerm.Max")
+        case RamTerm.ProvMax(_) => RamId.Id(-1)
         case RamTerm.RowLoad(rv, index, _) => RamId.TuplePos(rv, index)
         case RamTerm.Meet(_, _, _, id) => id
         case RamTerm.App1(_ , _, id) => id
@@ -458,6 +457,10 @@ mod Fixpoint.Ast.Ram {
     ///
     /// `RamId` represents a unique identifier for literals, positions in relations,
     /// positions in tuples or input to a function.
+    ///
+    /// The uniqueness is broken by provenance for convenience of implementation.
+    /// ProvMax statements reserve `Id(-1)` and literals describing rules also 
+    /// use `Id(-1)`.
     ///
     /// `Id(id)` represents the id `id`. If `Id(id)` exists `RowVar.Named(id)` does not.
     ///

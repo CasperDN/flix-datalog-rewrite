@@ -70,6 +70,7 @@ mod Fixpoint.Phase.JoinOptimizer {
             let takeRandomFacts = fs -> {
                 let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
                 if (Vector.length(filtered) < profilerFactLowerBound()) {
+                    // Cast NonDet to Random.
                     let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
                     Vector.take(profilerFactLowerBound(), shuffled)
                 } else filtered
@@ -240,7 +241,10 @@ mod Fixpoint.Phase.JoinOptimizer {
         let tuplesFromJoin: MutMap[List[RowVar], Vector[Int64], rc] = MutMap.empty(rc);
         relations |> List.forEach(rel -> {
             MutMap.put(rel :: Nil, (0i64, rel :: Nil), optimal);
-            let sizePerIterForRel = Map.get(rel, sizePerIter) |> getOrCrash;
+            let sizePerIterForRel = match Map.get(rel, sizePerIter) {
+                case None => Vector#{0i64}
+                case Some(v) => v
+            };
             MutMap.put(rel :: Nil, sizePerIterForRel, tuplesFromJoin)
         });
         let max = List.length(relations);
@@ -268,6 +272,9 @@ mod Fixpoint.Phase.JoinOptimizer {
         };
         loop(2);
         // Reverse to get true order.
-        MutMap.get(relations, optimal) |> getOrCrash |> snd |> List.reverse
+        match MutMap.get(relations, optimal) {
+            case None => Nil
+            case Some(v) => snd(v) |> List.reverse
+        }
     }
 }

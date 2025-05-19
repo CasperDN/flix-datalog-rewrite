@@ -479,16 +479,22 @@ pub def mainApp(): Unit \ IO =
     ()
 
 pub def pathh(): Unit \ IO = 
-    let edges = List.range(0,250) |> List.map(i -> (i, i+1));
+    let edges = List.range(0,5) |> List.map(i -> (i, i+1));
     let f = inject edges into Edge;
     let r = #{
         A(1).
         Path(x, y) :- Edge(x, y).
         Path(x, z) :- Edge(y, z), Path(x, y).
-        DumbRule(1,2,3) :- Path(x, 1), A(x).
+        // DumbRule(1,2,3) :- Path(x, 1), A(x).
     };
     query f, r select (x, y) from Path(x, y) |> Vector.head |> println
 
+pub def dumb3333(): Unit \ IO = 
+    let r = #{
+        A(1).
+    };
+    query r select x from A(x) |> Vector.head |> println;
+    ()
 
 pub def dumb(): Unit \ IO = 
     let aFacts = List.range(0,101);
@@ -501,5 +507,5 @@ pub def dumb(): Unit \ IO =
         B(x) :- D(x).
         C(x) :- A(x), B(x).
     };
-    query f1, f2, r select x from C(x) |> Vector.head |> println;
+    query f1, f2, r select x from C(x)  |> println;
     ()
