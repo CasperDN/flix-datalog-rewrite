@@ -68,7 +68,13 @@ mod Fixpoint.Solver {
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
         let provThing = runWithStratification(fixed, strat, true);
-        let forcedEval = Fixpoint.Provenance.provQuery(PredSym.PredSym("Path", 2i64), Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)}, provThing);
+        let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
+        let goalSym = PredSym.PredSym("Path", 2i64);
+        // let mapping = x -> match x {
+        //     PredSym.PredSym("Path", _) => 
+        // };
+        let forcedEval = provOf(goal, goalSym, d, ???);
+        // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
         if(Option.isEmpty(forcedEval)) {
             Fixpoint.Phase.FixPredSyms.unfixPredSym(provThing, fixInfo)
         } else {
@@ -181,7 +187,7 @@ mod Fixpoint.Solver {
         case Datalog(_, _) =>
             provOf(goal, p, runProvSolver(d), mapping)
         case Model(db) =>
-        // This is a dirty hack based on the implementation of Order on RelSym.
+        // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
         let fakeRelSym = RelSym.Symbol(p, -1, Relational);
         match Map.get(fakeRelSym, db) {
             case None => None
