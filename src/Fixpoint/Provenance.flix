@@ -33,14 +33,25 @@ mod Fixpoint.Provenance {
         case IDB(PredSym, Vector[Boxed], Vector[ProofTree])
     }
 
-    instance ToString[ProofTree] {
-        pub def toString(p: ProofTree): String = match p {
-            case ProofTree.EDB(pred, fact) => "${pred}: ${fact}"
-            case ProofTree.Negative(pred, fact) => "${pred}: No ${fact}"
-            case ProofTree.IDB(pred, fact, subs) => 
-                let subProofs = Vector.join(String.lineSeparator(), subs);
-                "${pred}: ${fact}. Proof:${String.lineSeparator()}${subProofs}"
+    mod ProofTree {
+        pub def toString(p: ProofTree, indentChild: Int32): String = match p {
+            case EDB(pred, fact) => 
+                let factString = Vector.join(", ", fact);
+                "${pred}(${factString}). Fact"
+            case Negative(pred, fact) => 
+                let factString = Vector.join(", ", fact);
+                "No ${pred}(${factString})"
+            case IDB(pred, fact, subs) => 
+                let subProofs = Vector.joinWith(sub -> toString(sub, indentChild + 4), String.lineSeparator(), subs);
+                let factString = Vector.join(", ", fact);
+                let indentCur = String.repeat(indentChild, " ");
+                let indentString = String.repeat(indentChild + 4, " ");
+                "${indentCur}${pred}(${factString}). Proof:${String.lineSeparator()}${indentString}${subProofs}"
         }
+    }
+
+    instance ToString[ProofTree] {
+        pub def toString(p: ProofTree): String = ProofTree.toString(p, 0)
     }
 
     def flatMap(p: ProofTree): List[(PredSym, Vector[Boxed])] = region rc {
@@ -112,6 +123,11 @@ mod Fixpoint.Provenance {
         let bodyValues = Array.init(rc, _ -> None, Vector.length(bodyPreds));
         let getValOfVar = MutMap.empty(rc);
         def getVal(varName) = getOrCrash(MutMap.get(varName, getValOfVar));
+        def putVals(bodyTerms, matchedVFact) = bodyTerms |> Vector.forEachWithIndex(i -> b -> match b {
+            case BodyTerm.Wild => ()
+            case BodyTerm.Lit(_) => ()
+            case BodyTerm.Var(v) => MutMap.put(v, Vector.get(i, matchedVFact), getValOfVar)
+        });
         def loop(index) =
             if (index == Vector.length(bodyPreds)) {
                 true
@@ -137,6 +153,7 @@ mod Fixpoint.Provenance {
                                     false
                                 } else {
                                     Array.put(Some((bodyFact, bodyDepth, bodyRule)), index, bodyValues);
+                                    putVals(expected, bodyFact);
                                     loop(index + 1)
                                 }
                             })
@@ -154,15 +171,16 @@ mod Fixpoint.Provenance {
                         if(not isNonMatch)
                             false
                         else {
+                            // No need to save the match. Negative atoms cannot bind variables.
                             Array.put(Some((vals, -2i64, -2)), index, bodyValues);
                             loop(index + 1)
                         }
                     case BodyPredicate.Guard0(f) =>
-                        if(f()) 
+                        if(f())
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard1(f, v1) =>
-                        if(f(getVal(v1))) 
+                        if(f(getVal(v1)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard2(f, v1, v2) =>
@@ -174,11 +192,11 @@ mod Fixpoint.Provenance {
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard4(f, v1, v2, v3, v4) =>
-                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))) 
+                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard5(f, v1, v2, v3, v4, v5) =>
-                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))) 
+                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5)))
                             loop(index + 1)
                         else false
                     // Functional in provenance is not supported.

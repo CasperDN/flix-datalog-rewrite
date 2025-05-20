@@ -49,6 +49,12 @@ mod Fixpoint.Options {
     pub def disableJoinOptimizer(): Bool = false
 
     ///
+    /// Disables the join optimization phase
+    ///
+    @Internal
+    pub def useProvenance(): Bool = true
+
+    ///
     /// Returns the seed used in the random number generator to generate
     /// the representative input used by the profiler
     ///

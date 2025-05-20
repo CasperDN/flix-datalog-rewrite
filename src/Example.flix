@@ -479,7 +479,7 @@ pub def mainApp(): Unit \ IO =
     ()
 
 pub def pathh(): Unit \ IO = 
-    let edges = List.range(0,5) |> List.map(i -> (i, i+1));
+    let edges = List.range(0,1000) |> List.map(i -> (i, i+1));
     let f = inject edges into Edge;
     let r = #{
         A(1).

@@ -37,18 +37,26 @@ mod Fixpoint.Solver {
     use Fixpoint.Util.getOrCrash
 
     ///
+    /// For testing. Toggles between the normal solver and the provenance solver.
+    ///
+    @Internal
+    pub def runSolver(d: Datalog): Datalog =
+        if(Fixpoint.Options.useProvenance()) {
+            runProvSolver(d)
+        } else {
+            runSolverNoProv(d)
+        }
+
+    ///
     /// Returns the minimal model of the given Datalog program `d`.
     /// The minimal model is given by the model semantics for Datalog programs with stratified negation.
     /// The stratification is computed automatically by the solver.
     ///
     @Internal
-    pub def runSolver(d: Datalog): Datalog = region rc {
+    pub def runSolverNoProv(d: Datalog): Datalog = region rc {
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        let provThing = runWithStratification(fixed, strat, true);
-        let listOfThing = Fixpoint.Provenance.provQuery(PredSym.PredSym("Path", 2i64), Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(5)}, provThing);
-        unchecked_cast(println(listOfThing) as _ \ rc);
-        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, true), fixInfo)
+        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, false), fixInfo)
     }
 
     ///
@@ -59,7 +67,13 @@ mod Fixpoint.Solver {
     pub def runProvSolver(d: Datalog): Datalog = region rc {
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        Fixpoint.Phase.FixPredSyms.unfixPredSym(runWithStratification(fixed, strat, true), fixInfo)
+        let provThing = runWithStratification(fixed, strat, true);
+        let forcedEval = Fixpoint.Provenance.provQuery(PredSym.PredSym("Path", 2i64), Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)}, provThing);
+        if(Option.isEmpty(forcedEval)) {
+            Fixpoint.Phase.FixPredSyms.unfixPredSym(provThing, fixInfo)
+        } else {
+            Fixpoint.Phase.FixPredSyms.unfixPredSym(provThing, fixInfo)
+        }
     }
 
     ///
