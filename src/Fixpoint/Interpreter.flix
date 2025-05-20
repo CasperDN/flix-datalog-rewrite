@@ -207,15 +207,9 @@ mod Fixpoint.Interpreter {
             }
         case RamStmt.Comment(_) => ()
         case RamStmt.Par(stmts) => region rc2 {
-            let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
             stmts |> Vector.forEach(innerStmt -> unchecked_cast({
                 let _: Unit = spawn unchecked_cast({
-                    let threadMinEnv = minEnv |> Vector.map(x -> x);
-                    let threadMaxEnv = maxEnv |> Vector.map(x -> x);
-                    let threadTupleEnv = tupleEnv |> Array.map(rc, x -> x);
-                    let threadLatEnv = latEnv |> Array.map(rc, x -> x); 
-                    let threadEnv = (threadMinEnv, threadMaxEnv, threadTupleEnv, threadLatEnv);
-                    let threadCtxt = (db, threadEnv, boxing);
+                    let threadCtxt = makeCtxt(rc, ctxt);
                     evalStmt(rc, threadCtxt, expectedJoinSize, innerStmt)
                 } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
                 ()
@@ -249,7 +243,7 @@ mod Fixpoint.Interpreter {
         match op {
             case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
                 lookupIndex(searchIndex, db) |>
-                BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
+                BPlusTree.forEachPar(parRelationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
@@ -271,7 +265,7 @@ mod Fixpoint.Interpreter {
                 BPlusTree.put(tuple, Boxed.NoValue, relIndex)
             case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 lookupIndex(searchIndex, db) |> 
-                BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
+                BPlusTree.forEachPar(parLatticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
             case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
@@ -323,6 +317,28 @@ mod Fixpoint.Interpreter {
         });
         Array.put(t, tuplePos, tupleEnv)
 
+    def parRelationHandlingBodyFunc(
+        rc: Region[r],
+        tuplePos: Int32,
+        writes: Vector[WriteTuple],
+        body: RelOp,
+        ctxt: Context[r],
+        t: Tuple,
+        ignored: Boxed
+    ): Unit \ r =
+        relationHandlingBodyFunc(rc, tuplePos, writes, body, makeCtxt(rc, ctxt), t, ignored)
+
+    def makeCtxt(rc: Region[r], ctxt: Context[r]): Context[r] \ r = {
+        let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
+        let threadMinEnv = minEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
+        let threadMaxEnv = maxEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
+        let threadTupleEnv = Array.copyOfRange(rc, 0, Array.length(tupleEnv), tupleEnv);
+        let threadLatEnv = Array.copyOfRange(rc, 0, Array.length(latEnv), latEnv);
+        let threadEnv = (threadMinEnv, threadMaxEnv, threadTupleEnv, threadLatEnv);
+        (db, threadEnv, boxing)
+    }
+
+
     def relationHandlingBodyFunc(
         rc: Region[r],
         tuplePos: Int32,
@@ -336,6 +352,22 @@ mod Fixpoint.Interpreter {
         let (minEnv, maxEnv, tupleEnv, _) = env;
         handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
         evalOp(rc, ctxt, body)
+
+    def parLatticeHandlingBodyFunc(
+        rc: Region[r],
+        tuplePos: Int32,
+        meetWith: Int32,
+        glb: Boxed -> Boxed -> Boxed,
+        leq: Boxed -> Boxed -> Bool,
+        bot: Boxed,
+        writes: Vector[WriteTuple],
+        body: RelOp,
+        ctxt: Context[r],
+        t: Tuple,
+        l: Boxed
+    ): Unit \ r =
+    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), t, l)
+
 
     def latticeHandlingBodyFunc(
         rc: Region[r],

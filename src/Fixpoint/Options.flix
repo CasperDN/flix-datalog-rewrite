@@ -22,7 +22,7 @@ mod Fixpoint.Options {
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal
-    pub def enableDebugging(): Bool = true
+    pub def enableDebugging(): Bool = false
 
     ///
     /// Prints the input and output facts when debugging is enabled.
@@ -46,13 +46,13 @@ mod Fixpoint.Options {
     /// Disables the join optimization phase
     ///
     @Internal
-    pub def disableJoinOptimizer(): Bool = false
+    pub def disableJoinOptimizer(): Bool = true
 
     ///
     /// Disables the join optimization phase
     ///
     @Internal
-    pub def useProvenance(): Bool = true
+    pub def useProvenance(): Bool = false
 
     ///
     /// Returns the seed used in the random number generator to generate

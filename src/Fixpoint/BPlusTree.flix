@@ -61,6 +61,7 @@ pub struct BPlusTree[k, v, r] {
 
 mod BPlusTree {
     import java.util.concurrent.locks.{StampedLock => JStampedLock}
+    import java.lang.Runtime
 
     @Internal
     pub type alias Search = Vector[Int32]
@@ -321,6 +322,50 @@ mod BPlusTree {
         let minLeaf = Node.leftMostChild(t->root);
         Node.traverseRightUnconditional(f, 0, minLeaf)
 
+    ///
+    /// Applies `f` to all mappings `k => v` in `t`.
+    ///
+    /// Not thread-safe.
+    ///
+    @Internal
+    @Parallel
+    pub def forEachPar(f: k -> v -> Unit \ ef, t: BPlusTree[k, v, r]): Unit \ ef + r with Order[k] = region rc {
+        let size = Node.estimateSize(t->root, t);
+        if (size < 128i64) {
+            forEach(f, t)
+        } else {
+            let threadNum = threads();
+            if (threadNum <= 1) {
+                forEach(f, t)
+            } else {
+                let minLeaf = Node.leftMostChild(t->root);
+                unchecked_cast(Vector.range(0, threadNum) |>
+                Vector.forEach(i -> {
+                    let _: Unit = spawn unchecked_cast(
+                        Node.traverseRightUnconditionalInc(f, i, threadNum, minLeaf) as _ \ IO
+                    ) @ rc;
+                    ()
+                }) as _ \ r)
+            }
+        }
+    }
+
+    ///
+    /// Returns the number of threads to use for parallel evaluation.
+    ///
+    /// # SAFETY:
+    /// This accesses the runtime environment, which is an effect.
+    /// It is assumed that this function is only used in contexts
+    /// where this effect is not observable outside of the RedBlackTree module.
+    ///
+    /// Copy pasted from RedBlackTree.flix.
+    ///
+    def threads(): Int32 = unsafe {
+        // Note: We use a multiple of the number of physical cores for better performance.
+        let multiplier = 4;
+        multiplier * Runtime.getRuntime().availableProcessors()
+    }
+        
     ///
     /// Returns the root of the `t` and a stamp on the lock of the returned node.
     ///
@@ -710,6 +755,35 @@ mod BPlusTree {
                     else if (comp == Comparison.LessThan) -1
                     else 0
             }
+        }
+
+        ///
+        /// Compute the height tree rooted in `node`.
+        ///
+        /// Not thread-safe.
+        ///
+        def computeHeight(count: Int32, node: Node[k, v, r]): Int32 \ r with Order[k] = match node->isLeaf {
+            case true => count + 1
+            case false =>
+            if(node->size == 0) {
+                // Only root can be empty.
+                1
+            }  else {
+                computeHeight(count + 1, Array.get(0, node->children))
+            }
+        }
+
+        ///
+        /// Estimate the size of the tree rooted in `node` by its height.
+        ///
+        pub def estimateSize(node: Node[k, v, r], tree: BPlusTree[k, v, r]): Int64 \ r with Order[k] = {
+            let size = Int32.toInt64(node->size);
+            let arity = Int32.toInt64(BPlusTree.arity(tree));
+            // Average should be halfway between newly split (0.5) and full (1).
+            let expectedSize = (arity * 3i64) / 4i64;
+            // 0.75 = 3 / 4
+            let height = Int32.toInt64(computeHeight(0, node));
+            Int64.pow(expectedSize, height - 1i64) * size
         }
 
         ///
@@ -1365,6 +1439,26 @@ mod BPlusTree {
                 traverseRightUnconditional(f, index + 1, node)
             } else match node->next {
                 case Some(next) => traverseRightUnconditional(f, 0, next)
+                case None => ()
+            }
+
+        ///
+        /// Apply `f` to all mappings in `node` and all nodes to the right of `node`.
+        ///
+        /// Not thread-safe.
+        ///
+        pub def traverseRightUnconditionalInc(
+            f: k -> v -> Unit \ ef,
+            index: Int32,
+            stepSize: Int32,
+            node: Node[k, v, r]
+        ): Unit \ ef + r with Order[k] =
+            if(index < node->size) {
+                let k = Array.get(index, node->keys);
+                f(k, Array.get(index, node->values));
+                traverseRightUnconditionalInc(f, index + stepSize, stepSize, node)
+            } else match node->next {
+                case Some(next) => traverseRightUnconditionalInc(f, index - node->size, stepSize, next)
                 case None => ()
             }
     }
