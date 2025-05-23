@@ -23,6 +23,8 @@ mod Common {
             println()
         else ()
 
+    pub def factFolder(): String \ IO + Sys = "${getCwd()}/facts"
+
     pub def getCwd(): String \ {IO, Sys} = match Environment.handle(Environment.getCurrentWorkingDirectory)() {
         case Some(cwd) => cwd
         case None => exit("Could not get current working directory")

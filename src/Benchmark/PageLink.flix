@@ -1,9 +1,9 @@
 mod PageLink {
-    use Common.{loadTuplesFromFile, getCwd, unwrap, exit}
+    use Common.{loadTuplesFromFile, factFolder, unwrap, exit}
 
     pub def getFacts(): #{ PageLink(Int32, Int32), PageId(Int32, String) | r } \ IO + Sys = 
-        let pagelinks = "${getCwd()}/data/wikipedia/pagelinks-100000.csv";
-        let pageids = "${getCwd()}/data/wikipedia/page-ids.csv";
+        let pagelinks = "${factFolder()}/pagelinks-100000.csv";
+        let pageids = "${factFolder()}/page-ids.csv";
         let pagelinksTuples = loadTuplesFromFile(pagelinks, ",");
         let pageidsTuples = loadTuplesFromFile(pageids, ",");
         let map = Int32.fromString >> unwrap;

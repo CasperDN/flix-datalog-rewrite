@@ -1,9 +1,9 @@
 mod Road {
     import java.lang.System;
-    use Common.{forceEval, unwrap, loadTuplesFromFile, getCwd, exit}
+    use Common.{forceEval, unwrap, loadTuplesFromFile, factFolder, exit}
 
     pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = 
-        let path = "${getCwd()}/data/road/road-2000000.csv";
+        let path = "${factFolder()}/road-2000000.csv";
         let tuples = loadTuplesFromFile(path, ",");
         let map = Int64.fromString >> unwrap;
         let roads = tuples |> List.map(x -> match x {

@@ -1,8 +1,8 @@
 mod Path {
-    use Common.{loadTuplesFromFile, getCwd, unwrap, exit}
+    use Common.{loadTuplesFromFile, factFolder, unwrap, exit}
 
     pub def getFacts(): #{ Edge(Int32, Int32) | s } \ IO + Sys = 
-        let filename = "${getCwd()}/src/Test/edge.csv";
+        let filename = "${factFolder()}/edge.csv";
         let tuples = loadTuplesFromFile(filename, ",");
         let map = Int32.fromString >> unwrap;
         let edges = tuples |> List.map(x -> match x {
