@@ -16,17 +16,14 @@
  */
 
 ///
-/// Purpose of `ExecutableRam`: Low level representation of the program to be executed.
-/// This representation is tightly coupled to the current interpreter e.g. `Ram`'s `NotBot`
-/// is removed since the interpreter handles it explicitly.
+/// `ExecutableRam` is a low level representation of the Datalog program to be executed.
+/// This representation is tightly coupled to the current interpreter.
 ///
-
 mod Fixpoint.Ast.ExecutableRam {
-    use Fixpoint.Ast.Ram.{Predicates, RelSym, Search, IndexInformation}
-    use Fixpoint.Ast.Shared.{PredSym, BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Ram.{Predicates, RelSym, IndexInformation}
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Boxed;
     use Fixpoint.BoxingType.{UnifiedTypePos, RamIdToPos};
-    use Fixpoint.SubstitutePredSym
 
     /////////////////////////////////////////////////////////////////////////////
     // RamProgram                                                              //
@@ -40,7 +37,7 @@ mod Fixpoint.Ast.ExecutableRam {
         case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), RamIdToPos)
     }
     ///
-    /// The EDB of a program.
+    /// The extensible database (EDB) of a program.
     ///
     @Internal
     pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
@@ -57,13 +54,14 @@ mod Fixpoint.Ast.ExecutableRam {
     pub type alias ConstWrites = Vector[(Int32, Int32, Int64)]
 
     ///
-    /// `WriteTuple` describes where constants for a context-specified RowVar should be
-    /// written to. Explicitly for `(indexInFrom, indexTo, indexInTo)` we have that for
-    /// the context-specified `RowVar`, `rv`, write
-    /// `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
+    /// `WriteTuple` describes where variables that become bound for a context-specified RowVar
+    /// are used later. Explicitly for `(indexInFrom, indexTo, indexInTo)` we have that for
+    /// the context-specified `RowVar`, `rv`, write `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
     ///
-    /// They come from rules with constants like `Head(x):- Body1(x), Body2(y, x)`. We would here
-    /// a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}`.
+    /// They come from rules with variables like `Head(x):- Body1(x), Body2(y, x)`, since `x` is used
+    /// twice. We would here have a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}` for `Body1`. 
+    /// This should be read as: The first value of `Body1` should be saved as `idOfBody2`'s 
+    /// (the position of `Body2`) second value.
     ///
     @Internal
     pub type alias WriteTuple = (Int32, Int32, Int32)
@@ -81,11 +79,14 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// `Insert(body)` executes the RelOp `body`.
+    /// `Insert(body)` executes the RelOp `body`. `body` is a `RelOp` which always
+    /// ends with insertions.
     ///
-    /// `MergeInto(posFrom, posTo, leq, isLatticenal)` merges the facts of the index at `posFrom`
-    /// into `posTo`. `isLatticenal` is describes whether lattice semantics should be used
-    /// and if so `leq` determines how to settle conflicts.
+    /// `MergeInto(posFrom, posTo, den)` merges the facts of the index at `posFrom`
+    /// into `posTo`. `den` describes whether lattice semantics should. If lattice
+    /// semantics are used and the same tuple is inserted twice least upper bound
+    /// is computed for the lattice value. For relational semantics multiple insertions
+    /// are ignored.
     ///
     /// `Swap(newPos, deltaPos)` swaps the facts of the indexes placed at `newPos` and
     /// `deltaPos`.
@@ -103,12 +104,14 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `EstimateJoinSize(indexPosition, savePosition, search)` estimates the size of the
     /// index at `indexPosition` as described by `search` and save the result to
-    /// `savePosition`. For details see `JoinOptimizer.flix`.
+    /// `savePosition`. `EstimateJoinSize` statements only exist during the
+    /// join profiling stage during join optimization. For more details see 
+    /// `JoinOptimizer.flix`. 
     ///
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
-        case MergeInto(Int32, Int32, Boxed -> Boxed -> Boxed, Bool)
+        case MergeInto(Int32, Int32, Denotation)
         case Swap(Int32, Int32)
         case Purge(Int32)
         case Seq(Vector[RamStmt])
@@ -123,7 +126,7 @@ mod Fixpoint.Ast.ExecutableRam {
             let nl = String.lineSeparator();
             match stmt {
                 case RamStmt.Insert(op) => ToString.toString(op)
-                case RamStmt.MergeInto(src, dst, _, _) => "Merge indexes[${src}] into indexes[${dst}]"
+                case RamStmt.MergeInto(src, dst, _) => "Merge indexes[${src}] into indexes[${dst}]"
                 case RamStmt.Swap(lhs, rhs) => "Swap indexes[${lhs}] and indexes[${rhs}]"
                 case RamStmt.Purge(ramSym) => "Purge indexes[${ramSym}]"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
@@ -255,7 +258,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// Represents a RAM term.
+    /// Represents a Relational Algebra Machine (RAM) term.
     ///
     /// `Lit(rep, val)` represents the literal `val` and its unboxed version, `rep`.
     ///

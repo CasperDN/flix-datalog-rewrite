@@ -177,15 +177,16 @@ mod Fixpoint.Interpreter {
     ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, relOp)
-        case RamStmt.MergeInto(srcIndex, dstIndex, lub, isLatticenal) =>
+        case RamStmt.MergeInto(srcIndex, dstIndex, Relational) =>
             let (db, _, _) = ctxt;
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
-            if (isLatticenal) {
-                BPlusTree.mergeWith(lub, src, dst)
-            } else {
-                BPlusTree.merge(src, dst)
-            }
+            BPlusTree.merge(src, dst)
+        case RamStmt.MergeInto(srcIndex, dstIndex, Latticenal(_, _, lub, _)) =>
+            let (db, _, _) = ctxt;
+            let src = lookupIndex(srcIndex, db);
+            let dst = lookupIndex(dstIndex, db);
+            BPlusTree.mergeWith(lub, src, dst)
         case RamStmt.Swap(lhs, rhs) =>
             let (db, _, _) = ctxt;
             let temp = lookupIndex(lhs, db);

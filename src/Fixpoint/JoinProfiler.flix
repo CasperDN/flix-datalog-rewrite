@@ -232,7 +232,7 @@ mod Fixpoint.JoinProfiler {
         
     def getJoinEstimateNumStmt(s: ERamStmt): Int32 = match s {
         case ERamStmt.Insert(_) => -1
-        case ERamStmt.MergeInto(_, _, _, _) => -1
+        case ERamStmt.MergeInto(_, _, _) => -1
         case ERamStmt.Swap(_, _) => -1
         case ERamStmt.Purge(_) => -1
         case ERamStmt.Seq(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)

@@ -99,10 +99,10 @@ mod Fixpoint.Phase.Stratifier {
     def mkDepEdge(graph: MutGraph[r], dst: HeadPredicate, src: BodyPredicate): Unit \ r = match (dst, src) {
         case (HeadAtom(PredSym.PredSym(_, dstId), _, _), BodyAtom(PredSym.PredSym(_, srcId), _, _, _, _)) => {
             if(dstId != srcId) {
-                MutGraph.addEdge(to32(srcId), to32(dstId), graph)
+                MutGraph.addEdge(toInt32(srcId), toInt32(dstId), graph)
             } else (
                 // We still register the vertex, as it is needed later.
-                MutGraph.addVertex(to32(dstId), graph)
+                MutGraph.addVertex(toInt32(dstId), graph)
             )
         }
         case _ => ()
@@ -126,7 +126,7 @@ mod Fixpoint.Phase.Stratifier {
     ///
     def predSymHelper(predMap: PredIdToName[r], cnst: Constraint): Unit \ r = match cnst {
         case Constraint(HeadPredicate.HeadAtom(PredSym.PredSym(name, id), _, _), body) =>
-            Array.put(name, to32(id), predMap);
+            Array.put(name, toInt32(id), predMap);
             Vector.forEach(collectEdge(predMap), body)
     }
 
@@ -137,14 +137,14 @@ mod Fixpoint.Phase.Stratifier {
     ///
     def collectEdge(predMap: PredIdToName[r], body: BodyPredicate): Unit \ r = match body {
         case (BodyAtom(PredSym.PredSym(name, id), _, _, _, _)) => {
-            Array.put(name, to32(id), predMap);
+            Array.put(name, toInt32(id), predMap);
             ()
         }
         case _ => ()
     }
 
     ///
-    /// Cast `i` to an `Int32`. Will only fail if there are more than 2^32 `PredSyms`s.
+    /// Cast `i` to an `Int32`. Crashes if there are more than 2^32 `PredSyms`s.
     ///
-    def to32(i: Int64): Int32 = getOrCrash(Int64.tryToInt32(i))
+    def toInt32(i: Int64): Int32 = getOrCrash(Int64.tryToInt32(i))
 }

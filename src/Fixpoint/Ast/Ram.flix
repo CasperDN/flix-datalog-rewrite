@@ -43,7 +43,7 @@ mod Fixpoint.Ast.Ram {
     pub type alias Predicates = (Int64, Set[RelSym])
 
     ///
-    /// The EDB of a program.
+    /// The extensible database (EDB) of a program.
     ///
     @Internal
     pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
@@ -108,11 +108,13 @@ mod Fixpoint.Ast.Ram {
     /// `Until(condition, body)` checks if `condition` is false and repeadetly executes
     /// `body` until `condition` is `true`.
     ///
-    /// `Comment(string)` is a comment for debugging.
-    ///
     /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` estimates the size
     /// relation `relSym` based on index `indexUsed` as described by `search` and saves
-    /// the result to `savePosition`. For details see JoinOptimizer.
+    /// the result to `savePosition`. `EstimateJoinSize` statements only exist during the
+    /// join profiling stage during join optimization. For more details see 
+    /// `JoinOptimizer.flix`. 
+    ///
+    /// `Comment(string)` is a comment for debugging.
     ///
     @Internal
     pub enum RamStmt {
@@ -123,8 +125,8 @@ mod Fixpoint.Ast.Ram {
         case Seq(Vector[RamStmt])
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
-        case Comment(String)
         case EstimateJoinSize(RelSym, Int32, Int32, Search)
+        case Comment(String)
     }
 
     instance ToString[RamStmt] {
@@ -136,13 +138,13 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
                 case RamStmt.Purge(relSym) => "Purge ${relSym}"
                 case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
+                case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.Comment(comment) => "/* ${comment} */"
-                case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
                 case RamStmt.EstimateJoinSize(relSym, _, _, attr) =>
                     "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}})"
+                case RamStmt.Comment(comment) => "/* ${comment} */"
             }
     }
 
@@ -259,7 +261,7 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
 
     ///
-    /// Represents a RAM term.
+    /// Represents a Relational Algebra Machine (RAM) term.
     ///
     /// Enums with a `RamId` can be referred to by the `RamId`.
     ///
@@ -459,8 +461,7 @@ mod Fixpoint.Ast.Ram {
     /// positions in tuples or input to a function.
     ///
     /// The uniqueness is broken by provenance for convenience of implementation.
-    /// ProvMax statements reserve `Id(-1)` and literals describing rules also 
-    /// use `Id(-1)`.
+    /// Literals describing rules also use `Id(-1)`.
     ///
     /// `Id(id)` represents the id `id`. If `Id(id)` exists `RowVar.Named(id)` does not.
     ///

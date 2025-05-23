@@ -15,20 +15,6 @@
  * limitations under the License.
  */
 
-/**
-How should functional be handled?
-Simple: For every input they are called with, record it. The estimated size of a join is then the average size
-over the seen values. Like everything else, this relies somewhat on a uniformity assumption which is likely
-to not be true in practice, but it is better than nothing.
-
-Join algorithm should be Selinger's algorithm. Cost computed as on page 12.
-Important note: When joining with a functional the cost is infinity if one of inputs
-have yet to be computed. In practice return a None or something like that to avoid errors
-leading to choosing an unsound join order.
-
-*/
-
-
 mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
     use Fixpoint.Util.{getOrCrash, collectRowVarRelSym}
@@ -39,8 +25,8 @@ mod Fixpoint.Phase.JoinOptimizer {
     ///
     /// Optimizes the join order of the rules in `program`. This is done by first running
     /// the program using the join profiler with a smaller representative input. This
-    /// produces statistics about relation sizes which are used to derive a cost function.
-    /// Selinger's algorithm is then used using the cost function to compute the optimal
+    /// produces statistics on relation sizes which are used to derive a cost function.
+    /// Selinger's algorithm is then run with the cost function to compute the optimal
     /// join order.
     ///
     /// If the number of facts in the program is smaller than `profilerMinimumFacts`, this
@@ -99,8 +85,8 @@ mod Fixpoint.Phase.JoinOptimizer {
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(scheduleStmt(getOptimalJoin), xs))
         case RamStmt.Par(xs) => RamStmt.Par(Vector.map(scheduleStmt(getOptimalJoin), xs))
         case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, scheduleStmt(getOptimalJoin, body))
-        case RamStmt.Comment(_) => stmt
         case RamStmt.EstimateJoinSize(_, _, _, _) => unreachable!()
+        case RamStmt.Comment(_) => stmt
     }
 
     ///

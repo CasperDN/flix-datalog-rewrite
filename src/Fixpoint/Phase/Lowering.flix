@@ -18,16 +18,15 @@
 mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.ExecutableRam.{ConstWrites => EConstWrites}
     use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram, RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
-    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
     use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
     use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, ProvMax => EProvMax, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
+    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
     use Fixpoint.Ast.ExecutableRam.WriteTuple
-    use Fixpoint.Ast.Ram.{IndexInformation, Search}
-    use Fixpoint.Ast.Ram.{RamProgram => AProgram, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat}
-    use Fixpoint.Ast.Ram.{RowVar, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
-    use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
+    use Fixpoint.Ast.Ram.{RowVar, IndexInformation, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat, Search}
+    use Fixpoint.Ast.Ram.{RamProgram => AProgram, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
     use Fixpoint.Ast.Ram.BoolExp.{Not => ANot, IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Leq => ALeq, Eq => AEq, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
     use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, ProvMax => AProvMax, Meet => AMeet, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
+    use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
     use Fixpoint.Boxed
     use Fixpoint.Boxed.BoxedBool
@@ -36,8 +35,8 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.BoxingType.{Boxing, RamIdToPos};
     use Fixpoint.Counter
     use Fixpoint.Debugging
-    use Fixpoint.Util.getOrCrash
     use Fixpoint.UniqueInts
+    use Fixpoint.Util.getOrCrash
 
     // Maps RowVars to their memory-position.
     type alias IdToIndex[r: Region] = UniqueInts[RowVar, r]
@@ -71,19 +70,12 @@ mod Fixpoint.Phase.Lowering {
             case ARamStmt.Insert(op) =>
                 let newOp = lowerOp(op, rc, idToIndex, marshalling, writeTo, indexInfo, (Nil, MutDisjointSets.empty(rc)));
                 ERamStmt.Insert(newOp)
-            case ARamStmt.Seq(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Seq
-            case ARamStmt.Par(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Par
-            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
 
             // For all of these we have to do the operation for all indexes created for the relations.
             case ARamStmt.MergeInto(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
-                let (isLatticenal, lub) = match toDenotation(newRel) {
-                    case Denotation.Relational => (false, _ -> _ -> bug!("Using lattice logic on normal relation"))
-                    case Denotation.Latticenal(_, _, lub, _) => (true, lub)
-                };
-                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, isLatticenal);
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, toDenotation(newRel));
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let merges = Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))), Vector.range(0, deltaRels));
                 if(Vector.length(merges) == 1) {
@@ -94,11 +86,7 @@ mod Fixpoint.Phase.Lowering {
             case ARamStmt.Swap(newRel, deltaRel) => 
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
-                let (isLatticenal, lub) = match toDenotation(newRel) {
-                    case Denotation.Relational => (false, _ -> _ -> bug!("Using lattice logic on normal relation"))
-                    case Denotation.Latticenal(_, _, lub, _) => (true, lub)
-                };
-                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, lub, isLatticenal);
+                let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, toDenotation(newRel));
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, getOrCrash(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {
@@ -122,9 +110,12 @@ mod Fixpoint.Phase.Lowering {
                 } else {
                     ERamStmt.Seq(purges)
                 }
-            case ARamStmt.Comment(s) => ERamStmt.Comment(s)
+            case ARamStmt.Seq(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Seq
+            case ARamStmt.Par(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Par
+            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
             case ARamStmt.EstimateJoinSize(_, relIndex, estWriteTo, attr) => 
                 ERamStmt.EstimateJoinSize(relIndex, estWriteTo, attr)
+            case ARamStmt.Comment(s) => ERamStmt.Comment(s)
     }
 
     def addRowVarToMeetWithMap(rv: RowVar, meetWithMap: MeetWithMap[r]): MeetWithMap[r] \ r =
@@ -137,11 +128,10 @@ mod Fixpoint.Phase.Lowering {
         relSym: RelSym,
         idToIndex: IdToIndex[r],
         meetWithMap: MeetWithMap[r]
-    ): Int32 \ r =
-        match toDenotation(relSym) {
-            case Denotation.Relational => -1
-            case Denotation.Latticenal(_, _, _, _) => computeLatticeMeetPos(rv, idToIndex, meetWithMap)
-        }
+    ): Int32 \ r = match toDenotation(relSym) {
+        case Denotation.Relational => -1
+        case Denotation.Latticenal(_, _, _, _) => computeLatticeMeetPos(rv, idToIndex, meetWithMap)
+    }
     
     def computeLatticeMeetPos(
         rv: RowVar,
@@ -176,27 +166,6 @@ mod Fixpoint.Phase.Lowering {
                 let relPos = getOrCrash(Map.get((relSym, 0), placements));
                 let oldPos = computeMeetWithPos(rv, relSym, idToIndex, meetWithMap);
                 ESearch(lowerRowVar(rv, idToIndex), relPos, oldPos, den, thisWriteTo, loweredBody)
-            case AFunctional(rv, f, terms, body, arity) =>
-                let (idToMarshall, _) = marshalling;
-                let idToMarhsalled = id -> getOrCrash(Map.get(id, idToMarshall));
-                let loweredBody = lowerOpRec(body);
-                let thisWriteTo = getWriteTo(rv, writeTo);
-                let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
-                EFunctional(
-                    lowerRowVar(rv, idToIndex), f, 
-                    Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms), 
-                    thisWriteTo, loweredBody, to
-                )
-            case AProject(terms, s, _) => 
-                let (_, placements) = indexInfo;
-                let newRelPos = getOrCrash(Map.get((s, 0), placements));
-                let den = toDenotation(s);
-                let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
-                EProject(
-                    loweredTerms, newRelPos, den
-                )
-            case AIf(boolExps, body) =>
-                EIf(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, meetWithMap), boolExps), lowerOpRec(body))
             case AQuery(rv, relSym, tests, index, body) =>
                 let den = toDenotation(relSym);
                 let (idToMarshall, marshall) = marshalling;
@@ -224,6 +193,27 @@ mod Fixpoint.Phase.Lowering {
                     unchecked_cast(bug!("Bug in Fixpoint.Lowering: Bools except equality in query") as _ \ r) 
                 else ();
                 EQuery(lowerRowVar(rv, idToIndex), index, oldPos, den, thisWriteTo, loweredBody)
+            case AFunctional(rv, f, terms, body, arity) =>
+                let (idToMarshall, _) = marshalling;
+                let idToMarhsalled = id -> getOrCrash(Map.get(id, idToMarshall));
+                let loweredBody = lowerOpRec(body);
+                let thisWriteTo = getWriteTo(rv, writeTo);
+                let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
+                EFunctional(
+                    lowerRowVar(rv, idToIndex), f, 
+                    Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms), 
+                    thisWriteTo, loweredBody, to
+                )
+            case AProject(terms, s, _) => 
+                let (_, placements) = indexInfo;
+                let newRelPos = getOrCrash(Map.get((s, 0), placements));
+                let den = toDenotation(s);
+                let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
+                EProject(
+                    loweredTerms, newRelPos, den
+                )
+            case AIf(boolExps, body) =>
+                EIf(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, meetWithMap), boolExps), lowerOpRec(body))
         }
 
     def lowerTerm(
@@ -237,6 +227,10 @@ mod Fixpoint.Phase.Lowering {
         let termToM = t -> getOrCrash(Map.get(getTermRamId(t), idToMarshall));
         match term {
             case ALit(val, id) => ELit(Boxing.unboxWith(val, getOrCrash(Map.get(id, idToMarshall)), marshall), val)
+            case AProvMax(vec) =>
+                vec |>
+                Vector.map(match (rv, i) -> (UniqueInts.getIndex(rv, idToIndex), i)) |>
+                EProvMax
             case ARowLoad(rv, index, RelSym.Symbol(_, arity, den)) => 
                 match den {
                     case Denotation.Relational => ELoadFromTuple(UniqueInts.getIndex(rv, idToIndex), index, termToM(term))
@@ -247,10 +241,6 @@ mod Fixpoint.Phase.Lowering {
                             ELoadLatVar(UniqueInts.getIndex(rv, idToIndex), termToM(term))
                         }
                 }
-            case AProvMax(vec) =>
-                vec |>
-                Vector.map(match (rv, i) -> (UniqueInts.getIndex(rv, idToIndex), i)) |>
-                EProvMax
             case AMeet(_, _, _, _) =>
                 let representingRowVar = lowerMeet(term, idToIndex, meetWithMap);
                 let pos = computeLatticeMeetPos(representingRowVar, idToIndex, meetWithMap);

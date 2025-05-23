@@ -79,6 +79,7 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
             Some(RamStmt.Seq(Vector.filterMap(simplifyHelper, xs)))
+        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper, xs)))
         case RamStmt.Until(test, body) =>
             match simplifyHelper(body) {
                 case None => None
@@ -89,30 +90,11 @@ mod Fixpoint.Phase.Simplifier {
                         Some(RamStmt.Until(test, simplifiedBody))
                     }
             }
-        case RamStmt.Comment(_) => Some(stmt)
-        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper, xs)))
         case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
+        case RamStmt.Comment(_) => Some(stmt)
     }
 
     def simplifyOp(op: RelOp): Option[RelOp] = match op {
-        case RelOp.If(test, then) =>
-            let (memberOf, rest) =
-                // Delete checks of the form `x[i] == x[i]`.
-                Vector.filter(e -> match e {
-                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
-                    case _ => true
-                }, test) |>
-                // Partition into membership tests and rest.
-                Vector.partition(e -> match e {
-                    case BoolExp.NotMemberOf(_, _) => true
-                    case _ => false
-                });
-            let newTest = Vector.append(rest, memberOf);
-            // Simplify `if () then body` to `body`.
-            if (Vector.isEmpty(newTest))
-                Some(then)
-            else
-                Some(RelOp.If(newTest, then))
         case RelOp.Search(rowVar, ramSym, body) =>
             Option.map(newBody -> RelOp.Search(rowVar, ramSym, newBody), simplifyOp(body))
         case RelOp.Query(rowVar, ramSym, qry, _, body) =>
@@ -141,6 +123,24 @@ mod Fixpoint.Phase.Simplifier {
                 newBody <- simplifyOp(body)
             ) yield RelOp.Functional(rowVar, f, terms, newBody, arity)
         case RelOp.Project(_, _, _)    => Some(op)
+        case RelOp.If(test, then) =>
+            let (memberOf, rest) =
+                // Delete checks of the form `x[i] == x[i]`.
+                Vector.filter(e -> match e {
+                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
+                    case _ => true
+                }, test) |>
+                // Partition into membership tests and rest.
+                Vector.partition(e -> match e {
+                    case BoolExp.NotMemberOf(_, _) => true
+                    case _ => false
+                });
+            let newTest = Vector.append(rest, memberOf);
+            // Simplify `if () then body` to `body`.
+            if (Vector.isEmpty(newTest))
+                Some(then)
+            else
+                Some(RelOp.If(newTest, then))
     }
 
     def isOnlyMergeSwapPurge(r: RamStmt): Bool = match r {
@@ -149,10 +149,10 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Swap(_, _) => true
         case RamStmt.Purge(_) => true
         case RamStmt.Seq(xs) => Vector.forAll(isOnlyMergeSwapPurge, xs)
-        case RamStmt.Until(_, _) => false
-        case RamStmt.Comment(_) => true
         case RamStmt.Par(xs) => Vector.forAll(isOnlyMergeSwapPurge, xs)
+        case RamStmt.Until(_, _) => false
         case RamStmt.EstimateJoinSize(_, _, _, _) => false
+        case RamStmt.Comment(_) => true
     }
     
 }
