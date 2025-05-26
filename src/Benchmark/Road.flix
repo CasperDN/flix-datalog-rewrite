@@ -10,7 +10,6 @@ mod Road {
             case src :: dst :: Nil => (map(src), map(dst))
             case _ => exit("Error parsing facts file")
         });
-        println("Created facts");
         inject roads into Road
 
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {

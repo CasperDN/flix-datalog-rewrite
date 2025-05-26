@@ -9,7 +9,6 @@ mod Path {
             case y :: z :: Nil => (map(y), map(z))
             case _ => exit("Error parsing facts file")
         });
-        println("Created facts");
         inject edges into Edge
 
     pub def runWithFacts(f: #{ Edge(Int32, Int32) }): Int64 \ IO + Clock = 

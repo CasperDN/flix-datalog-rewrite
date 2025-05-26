@@ -17,7 +17,6 @@ mod PageLink {
         });
         let f1 = inject edges into PageLink;
         let f2 = inject ids into PageId;
-        println("Created facts");
         f1 <+> f2
 
     pub def runSingle(): Unit \ IO + Sys = 
