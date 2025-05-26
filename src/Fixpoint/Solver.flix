@@ -100,7 +100,7 @@ mod Fixpoint.Solver {
             Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |>
             Fixpoint.Phase.Hoisting.hoistProgram |>
             Fixpoint.Debugging.notifyPreLowering("Hoisting") |>
-            Fixpoint.Phase.IndexSelection.indexProgram |>
+            Fixpoint.Phase.IndexSelection.indexProgramWrapper |>
             Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
             Fixpoint.Phase.Provenance.augmentProgram(withProv) |>
             Fixpoint.Phase.Lowering.lowerProgram(rc)
@@ -133,7 +133,7 @@ mod Fixpoint.Solver {
         let expectedJoinSize = 
             program |> 
             Fixpoint.Phase.Hoisting.hoistProgram |> 
-            Fixpoint.Phase.IndexSelection.indexProgram |> 
+            Fixpoint.Phase.IndexSelection.indexProgramWrapper |> 
             Fixpoint.Phase.Lowering.lowerProgram(rc) |>
             Fixpoint.Interpreter.estimateJoinSizes(rc);
         expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector

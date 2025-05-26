@@ -32,6 +32,7 @@ mod Common {
 
     pub def exit(str: String): a \ {IO, Sys} = 
         println(str);
-        Exit.handle(Exit.exit)(1) 
+        ???
+        // Exit.handle(Exit.exit)(1) 
     
 }
