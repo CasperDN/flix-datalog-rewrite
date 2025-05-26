@@ -6,6 +6,16 @@ def benchmark(): Unit \ {IO, Sys} =
         case program :: Nil => program
         case _ => exit("wrong program arguments")
     };
+    benchmarkWithStr(programStr)
+
+def benchmarkWithStr(programStr: String): Unit \ {IO, Sys} = match programStr {
+    case "All" =>
+        Vector#{"Road", "RoadLattice", "PageLink", "Path"} |>
+        Vector.forEach(benchmarkRun)
+    case _ => benchmarkRun(programStr)
+    }
+
+def benchmarkRun(programStr: String): Unit \ {IO, Sys} =
     // We cant unify the SchemaRow types so we write the facts out individually
     let roadFacts = if (programStr == "Road" or programStr == "RoadLattice") Road.getFacts() else #{ };
     let pageLinkFacts = if (programStr == "PageLink") PageLink.getFacts() else #{ };

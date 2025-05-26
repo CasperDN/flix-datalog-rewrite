@@ -22,6 +22,15 @@ mod Fixpoint.Phase.IndexSelection {
     
     type alias Searches[r: Eff] = MutMap[RelSym, List[Search], r]
 
+    pub def indexProgramWrapper(program: RamProgram): RamProgram = {
+        if(Fixpoint.Options.disableIndexSelection()) {
+            Fixpoint.Benchmark.FakeIndexSelection.indexProgram(program)
+        } else {
+            indexProgram(program)
+        }
+
+    }
+
     ///
     /// Creates indexes for each `RelSym` in `program`, places them in memory and
     /// propagates the positions to `Query` operations. To create the appropriate indexes
@@ -57,7 +66,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// of the relation. I.e., the search `0 < 2` gets expanded to `0 < 2 < 1`. 
     ///
     pub def indexProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, meta, _) => 
+        case RamProgram.Program(stmt, facts, meta, _) =>
             // This type annotation is apparently needed?
             let (newIndexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = region rc {
                 let indexes = MutMap.empty(rc);
