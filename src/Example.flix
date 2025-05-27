@@ -513,3 +513,18 @@ pub def dumb(): Unit \ IO =
     };
     query f1, f2, r select x from C(x)  |> println;
     ()
+
+
+pub def dumb2(): Unit \ IO = 
+    let aFacts = List.range(0,1000);
+    let f1 = inject aFacts into A;
+    let r = #{
+        C(a, b) :- A(a), A(b).
+    };
+    query f1, r select x from C(x, _) |> Vector.length  |> println;
+    ()
+
+pub def fff(): Unit \ IO = {
+    let aFacts = List.range(0,1000);
+    aFacts |> List.join(",") |> println
+}

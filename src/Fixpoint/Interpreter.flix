@@ -151,7 +151,7 @@ mod Fixpoint.Interpreter {
             evalStmt(rc, ctxt, expectedJoinSize, stmt);
             
             let elapsed = Clock.now() - time;
-            println("elapsed: ${elapsed / 1_000i64}")
+            println("elapsed in milli: ${elapsed}")
             }) as _ \ r);
             (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
     }

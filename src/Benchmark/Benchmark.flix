@@ -13,7 +13,7 @@ def benchmarkWithStr(programStr: String): Unit \ {IO, Sys} = match programStr {
         Vector#{"Road", "RoadLattice", "PageLink", "Path"} |>
         Vector.forEach(benchmarkRun)
     case _ => benchmarkRun(programStr)
-    }
+}
 
 def benchmarkRun(programStr: String): Unit \ {IO, Sys} =
     // We cant unify the SchemaRow types so we write the facts out individually

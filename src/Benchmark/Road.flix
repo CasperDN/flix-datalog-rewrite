@@ -106,6 +106,7 @@ mod Road {
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {
         let f = getFacts();
         let r = #{
+            Road(x, y) :- Road(y, x).
             Path(x, y) :- Road(x, y).
             Path(x, z) :- Road(y, z), Path(x, y).
         };
@@ -118,6 +119,7 @@ mod Road {
 
     pub def runWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock = 
         let r = #{
+            Road(x, y) :- Road(y, x).
             Path(x, y) :- Road(x, y).
             Path(x, z) :- Path(x, y), Road(y, z).
         };
@@ -129,6 +131,7 @@ mod Road {
 
     pub def runLatticeWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock = 
         let r = #{
+            Road(x, y) :- Road(y, x).
             Path(x, y; init(y, 1, x)) :- Road(x, y).
             Path(x, z; cons(z, 1, l)) :- Path(x, y; l), Road(y, z).
         };
