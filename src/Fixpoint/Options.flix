@@ -70,7 +70,7 @@ mod Fixpoint.Options {
     /// The arity of the B+ trees in the interpreter.
     ///
     @Internal
-    pub def usedArity(): Int32 = 32
+    pub def usedArity(): Int32 = 64
 
     ///
     /// Returns the seed used in the random number generator to generate

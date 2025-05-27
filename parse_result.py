@@ -52,7 +52,7 @@ def filter_list(dic, key, val):
 
 res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/OrderExperiment.txt", 3)
 
-res = filter_list(filter_list(res, "Threads", 32), "Insertions", 10000)
+res = filter_list(filter_list(res, "Threads", 32), "Insertions", 1000000)
 
 for v in res:
     print(v)
