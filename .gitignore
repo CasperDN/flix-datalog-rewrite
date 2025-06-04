@@ -3,6 +3,6 @@ crash_report_*
 artifact
 build
 compiler.log
-.fixpoint_debug.txt
+facts
 fixpoint_debug.txt
 data
