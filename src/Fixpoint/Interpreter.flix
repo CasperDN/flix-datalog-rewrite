@@ -136,8 +136,8 @@ mod Fixpoint.Interpreter {
         program: RamProgram
     ): (Database[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
-            unchecked_cast(Clock.runWithIO(() -> {
-            let time = Clock.now();
+            let time = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r);
+            unchecked_cast(println("Start-inter: ${time}") as _ \ r);
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
             constWrites |> Vector.forEach(match (id1, id2, val) -> {
@@ -150,9 +150,8 @@ mod Fixpoint.Interpreter {
             let ctxt = (db, env, boxing);
             evalStmt(rc, ctxt, expectedJoinSize, stmt);
             
-            let elapsed = Clock.now() - time;
-            println("elapsed in milli: ${elapsed}")
-            }) as _ \ r);
+            // let elapsed = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r) - time;
+            unchecked_cast(println("End-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
             (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
     }
 

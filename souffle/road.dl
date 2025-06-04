@@ -1,0 +1,10 @@
+.decl Road(x: number, y: number)
+.decl Path(x: number, y: number)
+.decl PathOut(x: number)
+.input Road(filename="facts/road-2000000.csv", delimiter=",")
+.output PathOut
+
+Road(x, y) :- Road(y, x).
+Path(x, y) :- Road(x, y).
+Path(x, z) :- Path(x, y), Road(y, z).
+PathOut(1) :- Path(1,1).

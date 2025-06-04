@@ -493,6 +493,20 @@ pub def pathh(): Unit \ IO = Clock.runWithIO(() ->{
     println(elapsed / 1_000i64)
     })
 
+pub def pathE(): Unit \ IO = Clock.runWithIO(() ->{
+    let now = Clock.now();
+    let edges = List.range(0, 10) |> List.map(i -> (i, i+1));
+    let f = inject edges into Edge;
+    let r = #{
+        Path(x, y) :- Edge(x, y).
+        Path(x, z) :- Edge(y, z), Path(x, y).
+        // DumbRule(1,2,3) :- Path(x, 1), A(x).
+    };
+    query f, r select (x, y) from Path(x, y) |> Vector.head |> println;
+    let elapsed = Clock.now() - now;
+    println(elapsed / 1_000i64)
+    })
+
 pub def dumb3333(): Unit \ IO = 
     let r = #{
         A(1).

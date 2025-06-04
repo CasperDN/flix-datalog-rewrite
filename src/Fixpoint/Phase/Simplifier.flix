@@ -17,8 +17,9 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, RamProgram}
+    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, RamProgram, Predicates}
     use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit, Meet}
+    use Fixpoint.Predicates.{getRelSymAsType, PredType}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.
@@ -35,17 +36,23 @@ mod Fixpoint.Phase.Simplifier {
     ///     end
     ///
     @Internal
-    pub def simplifyProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, meta, index) => RamProgram.Program(simplifyStmt(stmt), facts, meta, index)
-    }
+    pub def simplifyProgram(program: RamProgram): RamProgram = region rc {match program {
+        case RamProgram.Program(stmt, facts, predicates, index) =>
+            let nonEmpty = facts |>
+                Map.filter(Vector.nonEmpty) |>
+                Map.foldRightWithKey(k -> _ -> Set.insert(k), Set#{}) |>
+                Set.map(rel -> getRelSymAsType(rel, PredType.Full, predicates));
+            let _ = Array.empty(rc, 1);
+            RamProgram.Program(simplifyStmt(stmt, nonEmpty, predicates), facts, predicates, index)
+    }}
     @Internal
-    pub def simplifyStmt(stmt: RamStmt): RamStmt =
-        Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(stmt))
+    pub def simplifyStmt(stmt: RamStmt, nonEmpty: Set[RelSym], predicates: Predicates): RamStmt =
+        Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(nonEmpty, predicates, false, stmt))
 
-    def simplifyHelper(stmt: RamStmt): Option[RamStmt] = match stmt {
+    def simplifyHelper(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, stmt: RamStmt): Option[RamStmt] = match stmt {
         case RamStmt.Insert(op) =>
             forM (
-                newOp <- simplifyOp(op)
+                newOp <- simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op)
             ) yield {
                 match newOp {
                     //
@@ -78,10 +85,10 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
-            Some(RamStmt.Seq(Vector.filterMap(simplifyHelper, xs)))
-        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper, xs)))
+            Some(RamStmt.Seq(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
+        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
         case RamStmt.Until(test, body) =>
-            match simplifyHelper(body) {
+            match simplifyHelper(nonEmpty, predicates, true, body) {
                 case None => None
                 case Some(simplifiedBody) =>
                     if(isOnlyMergeSwapPurge(simplifiedBody)) {
@@ -94,15 +101,18 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Comment(_) => Some(stmt)
     }
 
-    def simplifyOp(op: RelOp): Option[RelOp] = match op {
+    def simplifyOp(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, seenPreds: Set[RelSym], op: RelOp): Option[RelOp] = 
+        let recurseNewRel = rel -> simplifyOp(nonEmpty, predicates, inUntil, Set.insert(rel, seenPreds));
+        let recurse = simplifyOp(nonEmpty, predicates, inUntil, seenPreds);
+        match op {
         case RelOp.Search(rowVar, ramSym, body) =>
-            Option.map(newBody -> RelOp.Search(rowVar, ramSym, newBody), simplifyOp(body))
+            Option.map(newBody -> RelOp.Search(rowVar, ramSym, newBody), recurseNewRel(ramSym, body))
         case RelOp.Query(rowVar, ramSym, qry, _, body) =>
             let f = nb -> match ramSym {
                 case _ => Some(RelOp.Query(rowVar, ramSym, qry, -1, nb))
             };
             forM (
-                newBody <- simplifyOp(body);
+                newBody <- recurseNewRel(ramSym, body);
                 res <- f(newBody)
             ) yield res
         // case RelOp.Query(rowVar, ramSym, qry, body) =>
@@ -120,9 +130,17 @@ mod Fixpoint.Phase.Simplifier {
         //     ) yield res
         case RelOp.Functional(rowVar, f, terms, body, arity) =>
             forM(
-                newBody <- simplifyOp(body)
+                newBody <- recurse(body)
             ) yield RelOp.Functional(rowVar, f, terms, newBody, arity)
-        case RelOp.Project(_, _, _)    => Some(op)
+        case RelOp.Project(_, rel, _) =>
+            // If we are not in an until and we insert in the new relation for `rel`,
+            // we depend on `rel`, and `rel` is empty beforehand the code is dead.
+            let fulRel = getRelSymAsType(rel, PredType.Full, predicates);
+            if((not inUntil) and Set.memberOf(fulRel, seenPreds) and (not Set.memberOf(fulRel, nonEmpty))) {
+                None
+            } else {
+                Some(op)
+            }
         case RelOp.If(test, then) =>
             let (memberOf, rest) =
                 // Delete checks of the form `x[i] == x[i]`.
@@ -137,10 +155,14 @@ mod Fixpoint.Phase.Simplifier {
                 });
             let newTest = Vector.append(rest, memberOf);
             // Simplify `if () then body` to `body`.
-            if (Vector.isEmpty(newTest))
-                Some(then)
-            else
-                Some(RelOp.If(newTest, then))
+            match recurse(then) {
+                case None => None
+                case Some(newThen) =>  
+                if (Vector.isEmpty(newTest))
+                    Some(newThen)
+                else
+                    Some(RelOp.If(newTest, newThen))
+            }
     }
 
     def isOnlyMergeSwapPurge(r: RamStmt): Bool = match r {

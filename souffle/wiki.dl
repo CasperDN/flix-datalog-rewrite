@@ -1,0 +1,21 @@
+.decl PageLink(x: number, y: number)
+.decl RealPageLink(x: number, y: number)
+.decl Protected(x: number, y: symbol)
+.decl PageId(x: number, y: symbol)
+.decl Leq(x: symbol, y: symbol)
+.input PageLink(filename="facts/pagelinks-1000000.csv", delimiter=",", columns="0:2")
+.input Protected(filename="facts/restrictions.csv", delimiter=",", columns="0:1")
+.input PageId(filename="facts/page-ids.csv", delimiter=",", columns="0:2")
+.input Leq(filename="facts/wiki-leq.csv", delimiter=",", columns="0:1")
+.decl ProtectedId(x: number)
+.decl Reachable(x: symbol, y: symbol)
+.decl ReachableId(x: number, y: number)
+.output Reachable
+
+ProtectedId(x) :- Protected(x, _).
+RealPageLink(x, y) :- PageLink(x, y), PageId(x, _), PageId(y, _).
+ReachableId(x, y) :- RealPageLink(x, y), !ProtectedId(x).
+ReachableId(x, y) :- RealPageLink(x, y), Protected(x, xPro), Protected(y, yPro), Leq(xPro, yPro).
+ReachableId(x, z) :- ReachableId(x, y), RealPageLink(y, z), !ProtectedId(x).
+ReachableId(x, z) :- ReachableId(x, y), RealPageLink(y, z), Protected(x, xPro), Protected(z, zPro), Leq(xPro, zPro).
+Reachable(x, y) :- ReachableId(xId, yId), PageId(xId, x), PageId(yId, y).

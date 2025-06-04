@@ -50,9 +50,15 @@ def satisfy(tuple, key, val):
 def filter_list(dic, key, val):
     return filter(lambda x: satisfy(x, key, val), dic)
 
-res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/OrderExperiment.txt", 3)
+res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/B+_tree/javaWriteExperiment.txt", 1)
 
-res = filter_list(filter_list(res, "Threads", 32), "Insertions", 1000000)
+# res = filter_list(filter_list(res, "Order", 64), "Insertions", 10000)
+
+
+# res = filter_list(res, "Insertions", 10000)
+
+# print(res)
+
 
 for v in res:
     print(v)

@@ -17,9 +17,9 @@ mod Path {
             Path(x, z) :- Path(x, y), Path(y, z)
         };
         let x = query f, r select (x, y) from Path(x, y);
-        let startTime = Clock.currentTime(TimeUnit.Nanoseconds);
+        let startTime = Clock.now();
         Common.forceEval(x);
-        let endTime = Clock.currentTime(TimeUnit.Nanoseconds);
+        let endTime = Clock.now();
         endTime - startTime
 
 }

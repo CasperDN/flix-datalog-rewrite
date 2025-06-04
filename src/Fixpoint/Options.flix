@@ -52,13 +52,13 @@ mod Fixpoint.Options {
     /// Disables parallelism in the interpreter.
     ///
     @Internal
-    pub def disableParallelism(): Bool = false
+    pub def disableParallelism(): Bool = true
 
     ///
     /// Disables the join optimization phase.
     ///
     @Internal
-    pub def disableJoinOptimizer(): Bool = false
+    pub def disableJoinOptimizer(): Bool = true
 
     ///
     /// Disables the join optimization phase.

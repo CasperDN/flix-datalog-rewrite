@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Solver {
+mod Fixpoint.SolverApi {
     use Fixpoint.BoxingType.{Boxing}
 
     import dev.flix.runtime.Global
