@@ -94,19 +94,40 @@ mod Fixpoint.Phase.Compiler {
     /// Collect all facts by their predicate
     ///
     def compileFacts(facts: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]], predSymMaps: Predicates): Facts =
-        let startingPoint = Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match isRelational(den) {
-            case true => Map.foldWithKey(acc -> k -> _ -> k :: acc, Nil, values)
-            case false => Map.foldWithKey(acc -> k -> v -> Vector.append(k, Vector#{v}) :: acc, Nil, values)
+        let startingPoint = Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match den {
+            case Relational => Map.foldWithKey(acc -> k -> _ -> k :: acc, Nil, values)
+            case Latticenal(bot, leq, _, _) => Map.foldWithKey(acc -> k -> v ->
+                // Remove p(;bot) from the facts
+                if(v `leq` bot) {
+                    acc
+                } else {
+                    Vector.append(k, Vector#{v}) :: acc
+                }
+            , Nil, values)
         }, db);
 
         let test =
             Vector.foldRight(a -> b -> {
                 match a {
                     case Constraint(headAtom, _) =>
-                        let HeadAtom(_, _, headTerms) = headAtom;
+                        let HeadAtom(_, den, headTerms) = headAtom;
                         let x = Vector.map(getFactTerm, headTerms);
-                        let sym = Predicates.headAtomToRelSym(headAtom, Full, predSymMaps);
-                        Map.insertWith(List.append, sym, x :: Nil, b)
+                        let isBot = match den {
+                            case Relational => false
+                            case Latticenal(bot, leq, _, _) => 
+                                // Remove p(;bot) from the facts
+                                if(Vector.get(Vector.length(x) - 1, x) `leq` bot) {
+                                    true
+                                } else {
+                                    false
+                                }
+                        };
+                        if(isBot) {
+                            b
+                        } else {
+                            let sym = Predicates.headAtomToRelSym(headAtom, Full, predSymMaps);
+                            Map.insertWith(List.append, sym, x :: Nil, b)
+                        }
                 }
             }, startingPoint, facts);
         Map.map(List.toVector, test)
