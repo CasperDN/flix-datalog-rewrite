@@ -20,7 +20,7 @@
 /// This phase passes over the Datalog-Ast and replaces the id and after everything is done
 /// recreates the old `PredSym`s for the resulting model.
 //
-mod Fixpoint.Phase.FixPredSyms {
+mod Fixpoint.Phase.RenamePredSyms {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -37,10 +37,10 @@ mod Fixpoint.Phase.FixPredSyms {
 
     ///
     /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
-    /// program and information which `unfixPredSym` can use to recreate the original program.
+    /// program and information which `renamePredSymToFlixStyle` can use to recreate the original program.
     ///
     @Internal
-    pub def fixPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
+    pub def renamePredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
         let mapping = UniqueInts.empty(rc);
         let fixed = fixPredSymsInternal(d, mapping);
         (fixed, UniqueInts.reverse(mapping))
@@ -67,7 +67,7 @@ mod Fixpoint.Phase.FixPredSyms {
     /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
     ///
     @Internal
-    pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
+    pub def renamePredSymToFlixStyle(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
