@@ -122,15 +122,35 @@ mod Fixpoint.Provenance {
         let Constraint.Constraint(HeadPredicate.HeadAtom(_, _, headTerms), bodyPreds) = rule;
         let bodyValues = Array.init(rc, _ -> None, Vector.length(bodyPreds));
         let getValOfVar = MutMap.empty(rc);
+        let headApps = Vector.zip(headTerms, fact) |>
+        Vector.filter(match (h, _) -> match h {
+            case (HeadTerm.App0(_)) => false // Must be true.
+            case (HeadTerm.App1(_, _)) => true
+            case (HeadTerm.App2(_, _, _)) => true
+            case (HeadTerm.App3(_, _, _, _)) => true
+            case (HeadTerm.App4(_, _, _, _, _)) => true
+            case (HeadTerm.App5(_, _, _, _, _, _)) => true
+            case _ => false
+        });
         def getVal(varName) = getOrCrash(MutMap.get(varName, getValOfVar));
         def putVals(bodyTerms, matchedVFact) = bodyTerms |> Vector.forEachWithIndex(i -> b -> match b {
             case BodyTerm.Wild => ()
             case BodyTerm.Lit(_) => ()
             case BodyTerm.Var(v) => MutMap.put(v, Vector.get(i, matchedVFact), getValOfVar)
         });
+        let guardFromApp = () -> headApps |>
+            Vector.forAll(match (app, val) -> match app {
+                case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
+                case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
+                case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
+                case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
+                case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
+                case _ => unreachable!()
+            });
+
         def loop(index) =
             if (index == Vector.length(bodyPreds)) {
-                true
+                guardFromApp()
             } else {
                 // This could, for performance something that was done once and only once. Would
                 // require new representation.

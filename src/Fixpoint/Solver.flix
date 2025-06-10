@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Solver {
+mod Fixpoint.SolverApi {
     use Fixpoint.BoxingType.{Boxing}
 
     import dev.flix.runtime.Global
@@ -70,9 +70,10 @@ mod Fixpoint.Solver {
         let provThing = runWithStratification(fixed, strat, true);
         let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
         let goalSym = PredSym.PredSym("Path", 2i64);
-        // let mapping = x -> match x {
-        //     PredSym.PredSym("Path", _) => 
-        // };
+        let mapping = x -> match x {
+            case PredSym.PredSym("Path", _) => Some(1)
+            case _ => None
+        };
         let forcedEval = provOf(goal, goalSym, d, ???);
         // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
         if(Option.isEmpty(forcedEval)) {
