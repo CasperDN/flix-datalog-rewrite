@@ -542,3 +542,102 @@ pub def fff(): Unit \ IO = {
     let aFacts = List.range(0,1000);
     aFacts |> List.join(",") |> println
 }
+
+
+enum Parity {
+    case Top,
+    case Even,
+    case Odd,
+    case Bot
+}
+
+instance Eq[Parity] {
+    pub def eq(x: Parity, y: Parity): Bool =
+        use Parity.{Top, Even, Odd, Bot};
+        match (x, y) {
+        
+        case (Bot, Bot) => true
+        case (Even, Even) => true
+        case (Odd, Odd) => true
+        case (Top, Top) => true
+        case _          => false
+    }
+}
+
+instance Order[Parity] {
+    pub def compare(x: Parity, y: Parity): Comparison =
+        use Parity.{Top, Even, Odd, Bot};
+        let num = w -> match w {
+            case Bot => 0
+            case Even => 1
+            case Odd => 2
+            case Top => 3
+        };
+        num(x) <=> num(y)
+}
+
+instance LowerBound[Parity] {
+    pub def minValue(): Parity = Parity.Bot
+}
+
+instance PartialOrder[Parity] {
+    pub def lessEqual(x: Parity, y: Parity): Bool =
+        use Parity.{Top, Even, Odd, Bot};
+        match (x, y) {
+            case (Bot, _) => true
+            case (_, Bot) => false
+            case (_, Top) => true
+            case (Top, _) => false
+            case (_, _) if (x == y) => true
+            case _ => false
+        }
+}
+
+instance JoinLattice[Parity] {
+    pub def leastUpperBound(x: Parity, y: Parity): Parity =
+        use Parity.{Top, Even, Odd, Bot};
+        match (x, y) {
+            case (Bot, _)   => y
+            case (_, Bot)   => x
+            case (_, _) if( x == y) => x
+            case _ => Top
+        }
+}
+
+instance MeetLattice[Parity] {
+    pub def greatestLowerBound(x: Parity, y: Parity): Parity =
+        use Parity.{Top, Even, Odd, Bot};
+        match (x, y) {
+            case (Top, _)   => y
+            case (_, Top)   => x
+            case (_, _) if( x == y) => x
+            case _          => Bot
+        }
+}
+
+
+
+instance ToString[Parity] {
+    pub def toString(x: Parity): String = match x {
+        case Parity.Bot => "Bot"
+        case Parity.Even => "Even"
+        case Parity.Odd => "Odd"
+        case Parity.Top => "Top"
+    }
+}
+
+def main55555(): Unit \ IO = {
+    let r = #{
+        A(;Parity.Even).
+        B(;Parity.Odd).
+        C(;Parity.Bot).
+        
+        E(;x) :- A(;x), B(;x).
+        F(;Parity.Even) :- A(;x), B(;x).
+        G(1) :- fix A(;x), fix B(;x).
+        G(2) :- fix C(;x).
+        H(;2) :- C(;x).
+    };
+    query r select (x) from H(;x) |> println;
+    ()
+}

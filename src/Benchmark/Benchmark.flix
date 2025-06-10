@@ -17,8 +17,10 @@ def benchmarkWithStr(programStr: String): Unit \ {IO, Sys} = match programStr {
 
 def benchmarkRun(programStr: String): Unit \ {IO, Sys} =
     // We cant unify the SchemaRow types so we write the facts out individually
-    let roadFacts = if (programStr == "Road" or programStr == "RoadShuffled" or programStr == "RoadLattice") Road.getFacts() else #{ };
-    let pageLinkFacts = if (programStr == "PageLink" or programStr == "PageLinkShuffled") PageLink.getFacts() else #{ };
+    let roadFacts = if (programStr == "Road" or programStr == "RoadLattice") Road.getFacts() else #{ };
+    let smallRoadFacts = if (programStr == "RoadShuffled") Road.getFacts() else #{ };
+    let pageLinkFacts = if (programStr == "PageLink") PageLink.getFacts() else #{ };
+    let smallPageLinkFacts = if (programStr == "PageLinkShuffled") PageLink.getFacts() else #{ };
     // let pathFacts = if (programStr == "Path") Path.getFacts() else #{ };
     let runCount: Int32 = 5;
     println("Program: ${programStr}");
@@ -27,10 +29,10 @@ def benchmarkRun(programStr: String): Unit \ {IO, Sys} =
         System.gc();
         match programStr {
         case "Road" => acc + Clock.handle(Road.runWithFacts)(roadFacts)
-        case "RoadShuffled" => acc + Clock.handle(Road.runWithFactsShuffled)(roadFacts)
+        case "RoadShuffled" => acc + Clock.handle(Road.runWithFactsShuffled)(smallRoadFacts)
         case "RoadLattice" => acc + Clock.handle(Road.runLatticeWithFacts)(roadFacts)
         case "PageLink" => acc + Clock.handle(PageLink.runWithFacts)(pageLinkFacts)
-        case "PageLinkShuffled" => acc + Clock.handle(PageLink.runWithFactsShuffled)(pageLinkFacts)
+        case "PageLinkShuffled" => acc + Clock.handle(PageLink.runWithFactsShuffled)(smallPageLinkFacts)
         // case "Path" => acc + Clock.handle(Path.runWithFacts)(pathFacts)
         case _ => exit("No such program")
     }}, 0i64, range);

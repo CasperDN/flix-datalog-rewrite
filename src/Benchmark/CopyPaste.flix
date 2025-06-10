@@ -2,7 +2,7 @@ mod CopyPaste {
     import java.lang.System;
     use Common.{forceEval, unwrap, loadTuplesFromFile, factFolder, exit}
 
-    def n(): Int32 = 5000
+    def n(): Int32 = 129
 
 
     pub def getFacts(): #{ A(Int32) | t } = 
@@ -11,10 +11,10 @@ mod CopyPaste {
     pub def runSingle(): Unit \ IO = Clock.runWithIO(() -> {
         let f = getFacts();
         let r = #{
-            Res(x, y, z, w) :- A(x), A(y), A(z), A(w).
+            Res(x, y, v, w) :- A(x), A(y), A(v), A(w).
         };
         let startTime = Clock.now();
-        let x = query f, r select (x, y, z, w) from Res(x, y, z, w);
+        let x = query f, r select (x, y, v, w) from Res(x, y, v, w);
         Common.forceEval(x);
         let endTime = Clock.now();
         println(endTime - startTime)

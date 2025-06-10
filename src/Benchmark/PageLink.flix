@@ -33,6 +33,39 @@ mod PageLink {
         let f4 = inject leqTuples into Leq;
         f1 <+> f2 <+> f3 <+> f4
 
+
+    pub def getSmallFacts(): #{ PageLink(Int32, Int32), PageId(Int32, String), Protected(Int32, String), Leq(String, String) | r } \ IO + Sys = 
+        let pagelinks = "${factFolder()}/pagelinks-1000000.csv";
+        let pageids = "${factFolder()}/page-ids.csv";
+        let protectedFile = "${factFolder()}/restrictions.csv";
+        let leqFile = "${factFolder()}/wiki-leq.csv";
+        let pagelinksTuples = loadTuplesFromFile(pagelinks, ",");
+        let pageidsTuples = loadTuplesFromFile(pageids, ",");
+        let restrictionsFromFile = loadTuplesFromFile(protectedFile, ",");
+        let leqFromFile = loadTuplesFromFile(leqFile, ",");
+        let map = Int32.fromString >> unwrap;
+        let edges = pagelinksTuples |> List.map(x -> match x {
+            case y :: _ :: w :: Nil => (map(y), map(w))
+            case _ => exit("Error parsing facts file")
+        });
+        let ids = pageidsTuples |> List.map(x -> match x {
+            case idStr :: _ :: title :: _ => (map(idStr), title)
+            case _ => exit("Error parsing facts file")
+        });
+        let restrictedTuples = restrictionsFromFile |> List.map(x -> match x {
+            case idStr :: title :: Nil => (map(idStr), title)
+            case _ => exit("Error parsing facts file")
+        });
+        let leqTuples = leqFromFile |> List.map(x -> match x {
+            case small :: big :: Nil => (small, big)
+            case _ => exit("Error parsing facts file")
+        });
+        let f1 = inject edges into PageLink;
+        let f2 = inject ids into PageId;
+        let f3 = inject restrictedTuples into Protected;
+        let f4 = inject leqTuples into Leq;
+        f1 <+> f2 <+> f3 <+> f4
+
     pub def runSingle(): Unit \ IO + Sys = 
         let f = getFacts();
         let r = #{

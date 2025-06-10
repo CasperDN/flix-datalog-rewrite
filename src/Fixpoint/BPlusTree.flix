@@ -329,7 +329,7 @@ mod BPlusTree {
     ///
     @Internal
     @Parallel
-    pub def forEachPar(f: k -> v -> Unit \ ef, t: BPlusTree[k, v, r]): Unit \ ef + r with Order[k] = region rc {
+    pub def parForEach(f: k -> v -> Unit \ ef, t: BPlusTree[k, v, r]): Unit \ ef + r with Order[k] = region rc {
         let size = Node.estimateSize(t->root, t);
         if (size < 128i64) {
             forEach(f, t)

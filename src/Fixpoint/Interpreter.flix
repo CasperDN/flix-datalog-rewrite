@@ -34,6 +34,11 @@ mod Fixpoint.Interpreter {
     ///
     type alias Tuple = Vector[Int64]
 
+    ///
+    /// The number of times the interpreter can branch recursively on a `RelOp.Search`.
+    ///
+    type alias AllowedBranches = Int32
+
     type alias SearchTuple[r: Region] = Array[Int64, r]
 
     ///
@@ -59,6 +64,7 @@ mod Fixpoint.Interpreter {
     type alias Context[r: Region] = (
         Indexes[r],
         SearchEnv[r],
+        // AllowedBranches,
         Boxing[r]
     )
     
@@ -148,11 +154,15 @@ mod Fixpoint.Interpreter {
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
             let ctxt = (db, env, boxing);
-            evalStmt(rc, ctxt, expectedJoinSize, stmt);
+            evalStmt(rc, ctxt, expectedJoinSize, Fixpoint.Options.parLevel(), stmt);
             
             // let elapsed = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r) - time;
             unchecked_cast(println("End-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
-            (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
+            // Don't insert when doing join size estimation. It is not used and is expensive.
+            match expectedJoinSize {
+                case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
+                case Some(_) => (MutMap.empty(rc), predState)
+            }
     }
 
 
@@ -178,11 +188,12 @@ mod Fixpoint.Interpreter {
         rc: Region[r], 
         ctxt: Context[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        parLevel: AllowedBranches,
         stmt: RamStmt
     ): Unit \ r = 
     match stmt {
         case RamStmt.Insert(relOp) =>
-            evalOp(rc, ctxt, relOp)
+            evalOp(rc, ctxt, parLevel, relOp)
         case RamStmt.MergeInto(srcIndex, dstIndex, Relational) =>
             let (db, _, _) = ctxt;
             let src = lookupIndex(srcIndex, db);
@@ -204,24 +215,24 @@ mod Fixpoint.Interpreter {
             let newIndex = BPlusTree.emptyWithArityAndSearch(rc, Fixpoint.Options.usedArity(), BPlusTree.search(oldIndex));
             storeIndex(newIndex, index, db)
         case RamStmt.Seq(stmts) => 
-            Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize), stmts)
+            Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize, parLevel), stmts)
         case RamStmt.Until(test, body) =>
             if (evalBoolExps(ctxt, test)) {
                 ()
             } else {
-                evalStmt(rc, ctxt, expectedJoinSize, body);
-                evalStmt(rc, ctxt, expectedJoinSize, stmt)
+                evalStmt(rc, ctxt, expectedJoinSize, parLevel, body);
+                evalStmt(rc, ctxt, expectedJoinSize, parLevel, stmt)
             }
         case RamStmt.Comment(_) => ()
         case RamStmt.Par(stmts) =>
         if(Fixpoint.Options.disableParallelism()) {
-            evalStmt(rc, ctxt, expectedJoinSize, RamStmt.Seq(stmts))
+            evalStmt(rc, ctxt, expectedJoinSize, parLevel, RamStmt.Seq(stmts))
         } else {
             region rc2 {
                 stmts |> Vector.forEach(innerStmt -> unchecked_cast({
                     let _: Unit = spawn unchecked_cast({
                         let threadCtxt = makeCtxt(rc, ctxt);
-                        evalStmt(rc, threadCtxt, expectedJoinSize, innerStmt)
+                        evalStmt(rc, threadCtxt, expectedJoinSize, parLevel, innerStmt)
                     } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
                     ()
                 } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
@@ -250,22 +261,23 @@ mod Fixpoint.Interpreter {
             MutList.push((size, dup), Array.get(writeTo, getOrCrash(expectedJoinSize)))
     }
 
-    def evalOp(rc: Region[r], ctxt: Context[r], op: RelOp): Unit \ r = 
+    def evalOp(rc: Region[r], ctxt: Context[r], parLevel: AllowedBranches, op: RelOp): Unit \ r = 
         let (db, env, boxing) = ctxt;
         match op {
             case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
-                if(Fixpoint.Options.disableParallelism()) {
+                if(Fixpoint.Options.disableParallelism() or parLevel == 0) {
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
+                        BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt, parLevel))
                 } else {
+                    let newCtxt = (db, env, boxing);
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.forEachPar(parRelationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt))
+                        BPlusTree.parForEach(parRelationHandlingBodyFunc(rc, tuplePos, writes, body, newCtxt, parLevel - 1))
                 }
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
-                    relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt),
+                    relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt, parLevel),
                     // We could here use Vector.toArray, but it would create a copy. To avoid memory
                     // allocation we simply cast.
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
@@ -273,7 +285,7 @@ mod Fixpoint.Interpreter {
                 )
             case RelOp.If(test, then) =>
                 if (evalBoolExps(ctxt, test))
-                    evalOp(rc, ctxt, then)
+                    evalOp(rc, ctxt, parLevel, then)
                 else
                     ()
             case RelOp.Project(terms, rel, Relational) =>
@@ -281,18 +293,19 @@ mod Fixpoint.Interpreter {
                 let tuple = Vector.map(evalTerm(env, boxing), terms);
                 BPlusTree.put(tuple, Boxed.NoValue, relIndex)
             case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
-                if(Fixpoint.Options.disableParallelism()) {
+                if(Fixpoint.Options.disableParallelism() or parLevel == 0) {
                     lookupIndex(searchIndex, db) |> 
-                    BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
+                    BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt, parLevel))
                 } else {
+                    let newCtxt = (db, env, boxing);
                     lookupIndex(searchIndex, db) |> 
-                    BPlusTree.forEachPar(parLatticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt))
+                    BPlusTree.parForEach(parLatticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, newCtxt, parLevel))
                 }
             case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
-                    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt),
+                    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt, parLevel),
                     // We could here use Vector.toArray, but it would create a copy. To avoid memory
                     // allocation we simply cast.
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
@@ -321,7 +334,7 @@ mod Fixpoint.Interpreter {
                         Array.put(Vector.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
                     });
                     Array.put(t, tupleIndex, tupleEnv);
-                    evalOp(rc, ctxt, body)
+                    evalOp(rc, ctxt, parLevel, body)
                 })
         }
 
@@ -345,10 +358,11 @@ mod Fixpoint.Interpreter {
         writes: Vector[WriteTuple],
         body: RelOp,
         ctxt: Context[r],
+        parLevel: AllowedBranches,
         t: Tuple,
         ignored: Boxed
     ): Unit \ r =
-        relationHandlingBodyFunc(rc, tuplePos, writes, body, makeCtxt(rc, ctxt), t, ignored)
+        relationHandlingBodyFunc(rc, tuplePos, writes, body, makeCtxt(rc, ctxt), parLevel, t, ignored)
 
     def makeCtxt(rc: Region[r], ctxt: Context[r]): Context[r] \ r = {
         let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
@@ -367,13 +381,14 @@ mod Fixpoint.Interpreter {
         writes: Vector[WriteTuple],
         body: RelOp,
         ctxt: Context[r],
+        parLevel: AllowedBranches,
         t: Tuple,
         _: Boxed
     ): Unit \ r =
         let (_, env, _) = ctxt;
         let (minEnv, maxEnv, tupleEnv, _) = env;
         handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
-        evalOp(rc, ctxt, body)
+        evalOp(rc, ctxt, parLevel, body)
 
     def parLatticeHandlingBodyFunc(
         rc: Region[r],
@@ -385,10 +400,11 @@ mod Fixpoint.Interpreter {
         writes: Vector[WriteTuple],
         body: RelOp,
         ctxt: Context[r],
+        parLevel: AllowedBranches,
         t: Tuple,
         l: Boxed
     ): Unit \ r =
-    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), t, l)
+    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), parLevel, t, l)
 
 
     def latticeHandlingBodyFunc(
@@ -401,6 +417,7 @@ mod Fixpoint.Interpreter {
         writes: Vector[WriteTuple],
         body: RelOp,
         ctxt: Context[r],
+        parLevel: AllowedBranches,
         t: Tuple,
         l: Boxed
     ): Unit \ r =
@@ -410,13 +427,13 @@ mod Fixpoint.Interpreter {
         // Recurse only if the meet is not bottom
         if (meetWith == tuplePos) {
             Array.put(l, tuplePos, latEnv);
-            evalOp(rc, ctxt, body)
+            evalOp(rc, ctxt, parLevel, body)
         } else {
             let meet = l `glb` Array.get(meetWith, latEnv);
             if (meet `leq` bot) ()
             else {
                 Array.put(meet, tuplePos, latEnv);
-                evalOp(rc, ctxt, body)
+                evalOp(rc, ctxt, parLevel, body)
             }
         }
 

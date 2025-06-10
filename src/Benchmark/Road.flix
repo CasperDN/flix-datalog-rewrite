@@ -93,6 +93,16 @@ mod Road {
     }
 
 
+    // pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = 
+    //     let path = "${factFolder()}/road-1000000.csv";
+    //     let tuples = loadTuplesFromFile(path, ",");
+    //     let map = Int64.fromString >> unwrap;
+    //     let roads = tuples |> List.map(x -> match x {
+    //         case src :: dst :: Nil => (map(src), map(dst))
+    //         case _ => exit("Error parsing facts file")
+    //     });
+    //     inject roads into Road
+
     pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = 
         let path = "${factFolder()}/road-1000000.csv";
         let tuples = loadTuplesFromFile(path, ",");
@@ -102,6 +112,16 @@ mod Road {
             case _ => exit("Error parsing facts file")
         });
         inject roads into Road
+
+    pub def getSmallFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = ???
+        // let path = "${factFolder()}/road-1000000.csv";
+        // let tuples = loadTuplesFromFile(path, ",");
+        // let map = Int64.fromString >> unwrap;
+        // let roads = tuples |> List.map(x -> match x {
+        //     case src :: dst :: Nil => (map(src), map(dst))
+        //     case _ => exit("Error parsing facts file")
+        // });
+        // inject roads into Road
 
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {
         let f = getFacts();
@@ -118,8 +138,9 @@ mod Road {
     })
 
     pub def runSingleLattice(): Unit \ IO + Sys = Clock.runWithIO(() -> {
-        let f = getFacts();
-        Clock.runWithIO(() -> runLatticeWithFacts(f));
+        ???;
+        // let f = getFacts();
+        // Clock.runWithIO(() -> runLatticeWithFacts(f));
         ()
     })
 

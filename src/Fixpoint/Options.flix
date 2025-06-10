@@ -22,7 +22,7 @@ mod Fixpoint.Options {
     /// Prints the Datalog program before the fixpoint computation.
     ///
     @Internal
-    pub def enableDebugging(): Bool = true
+    pub def enableDebugging(): Bool = false
 
     ///
     /// Prints the input and output facts when debugging is enabled.
@@ -58,7 +58,7 @@ mod Fixpoint.Options {
     /// Disables the join optimization phase.
     ///
     @Internal
-    pub def disableJoinOptimizer(): Bool = true
+    pub def disableJoinOptimizer(): Bool = false
 
     ///
     /// Disables the join optimization phase.
@@ -71,6 +71,12 @@ mod Fixpoint.Options {
     ///
     @Internal
     pub def usedArity(): Int32 = 64
+
+    ///
+    /// The maximum depth of recursively spawned threads in the interpreter.
+    ///
+    @Internal
+    pub def parLevel(): Int32 = 2
 
     ///
     /// Returns the seed used in the random number generator to generate
