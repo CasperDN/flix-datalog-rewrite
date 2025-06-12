@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-//
+///
 /// Purpose of phase: For `PredSym(name, id)` we want `id` to be unique, for the whole program.
-/// This phase passes over the Datalog-Ast and replaces the id and after everything is done
+/// This phase passes over the Datalog-Ast and replaces the `id` and after everything is done
 /// recreates the old `PredSym`s for the resulting model.
-//
+///
+/// This is necessary as Flix uses the id-part for generating local predicates, not as unique identifiers.
+///
 mod Fixpoint.Phase.RenamePredSyms {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
@@ -37,10 +39,10 @@ mod Fixpoint.Phase.RenamePredSyms {
 
     ///
     /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
-    /// program and information which `renamePredSymToFlixStyle` can use to recreate the original program.
+    /// program and information which `renamePredSyms` can use to recreate the original program.
     ///
     @Internal
-    pub def renamePredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
+    pub def assignUniqueIdentifiersToPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
         let mapping = UniqueInts.empty(rc);
         let fixed = fixPredSymsInternal(d, mapping);
         (fixed, UniqueInts.reverse(mapping))
@@ -64,10 +66,10 @@ mod Fixpoint.Phase.RenamePredSyms {
     }
 
     ///
-    /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
+    /// Replaces `PredSym(name, id)` in `d` with `Map.get(id, fixing)`.
     ///
     @Internal
-    pub def renamePredSymToFlixStyle(d: Datalog, fixing: FixInformation): Datalog = match d {
+    pub def renamePredSyms(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))

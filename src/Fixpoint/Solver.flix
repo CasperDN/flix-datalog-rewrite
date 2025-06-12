@@ -54,9 +54,9 @@ mod Fixpoint.SolverApi {
     ///
     @Internal
     pub def runSolverNoProv(d: Datalog): Datalog = region rc {
-        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.renamePredSyms(rc, d);
+        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        Fixpoint.Phase.RenamePredSyms.renamePredSymToFlixStyle(runWithStratification(fixed, strat, false), fixInfo)
+        Fixpoint.Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, false), fixInfo)
     }
 
     ///
@@ -65,7 +65,7 @@ mod Fixpoint.SolverApi {
     ///
     @Internal
     pub def runProvSolver(d: Datalog): Datalog = region rc {
-        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.renamePredSyms(rc, d);
+        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
         let provThing = runWithStratification(fixed, strat, true);
         let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
@@ -77,9 +77,9 @@ mod Fixpoint.SolverApi {
         let forcedEval = provOf(goal, goalSym, d, ???);
         // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
         if(Option.isEmpty(forcedEval)) {
-            Fixpoint.Phase.RenamePredSyms.renamePredSymToFlixStyle(provThing, fixInfo)
+            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
         } else {
-            Fixpoint.Phase.RenamePredSyms.renamePredSymToFlixStyle(provThing, fixInfo)
+            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
         }
     }
 
