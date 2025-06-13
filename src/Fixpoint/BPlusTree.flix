@@ -322,31 +322,26 @@ mod BPlusTree {
 //         let minLeaf = Node.leftMostChild(t->root);
 //         Node.traverseRightUnconditional(f, 0, minLeaf)
 
-    ///
-    /// Applies `f` to all mappings `k => v` in `t`.
-    ///
-    /// Not thread-safe.
-    ///
     @Internal
     @Parallel
-    pub def parForEach(f: k -> v -> Unit \ ef, t: BPlusTree[k, v, r]): Unit \ ef + r with Order[k] = region rc {
-        let size = Node.estimateSize(t->root, t);
-        if (size < 128i64) {
+    pub def parForEach(f: k -> v -> Unit \ r, t: BPlusTree[k, v, r]): Unit \ r with Order[k] = region rc {
+        let threadNum = if(Node.computeHeight(t->root) >= 2) {
+            threads()
+        } else {
+            Int32.min(threads(), Node.size(t->root))
+        };
+        if (threadNum <= 1) {
             forEach(f, t)
         } else {
-            let threadNum = threads();
-            if (threadNum <= 1) {
-                forEach(f, t)
-            } else {
-                let minLeaf = Node.leftMostChild(t->root);
-                unchecked_cast(Vector.range(0, threadNum) |>
-                Vector.forEach(i -> {
-                    let _: Unit = spawn unchecked_cast(
-                        Node.traverseRightUnconditionalInc(f, i, threadNum, minLeaf) as _ \ IO
-                    ) @ rc;
-                    ()
-                }) as _ \ r)
-            }
+            let minLeaf = Node.leftMostChild(t->root);
+            unchecked_cast(Vector.range(0, threadNum) |>
+            Vector.forEach(i -> {
+                let _: Unit = spawn unchecked_cast(
+                    // Flix does not allow region effect in spawns. Remove the effect. 
+                    (Node.traverseRightUnconditionalInc(f, i, threadNum, minLeaf): _ \ r) as _ \ IO
+                ) @ rc;
+                ()
+            }) as _ \ r)
         }
     }
 
@@ -762,29 +757,18 @@ mod BPlusTree {
         ///
         /// Not thread-safe.
         ///
-        def computeHeight(count: Int32, node: Node[k, v, r]): Int32 \ r with Order[k] = match node->isLeaf {
-            case true => count + 1
-            case false =>
-            if(node->size == 0) {
-                // Only root can be empty.
-                1
-            }  else {
-                computeHeight(count + 1, Array.get(0, node->children))
-            }
-        }
-
-        ///
-        /// Estimate the size of the tree rooted in `node` by its height.
-        ///
-        pub def estimateSize(node: Node[k, v, r], tree: BPlusTree[k, v, r]): Int64 \ r with Order[k] = {
-            let size = Int32.toInt64(node->size);
-            let arity = Int32.toInt64(BPlusTree.arity(tree));
-            // Average should be halfway between newly split (0.5) and full (1).
-            let expectedSize = (arity * 3i64) / 4i64;
-            // 0.75 = 3 / 4
-            let height = Int32.toInt64(computeHeight(0, node));
-            Int64.pow(expectedSize, height - 1i64) * size
-        }
+        pub def computeHeight(node: Node[k, v, r]): Int32 \ r with Order[k] =
+            def loop(count, n) = {
+                match n->isLeaf {
+                    case true => count
+                    case false => if(n->size == 0) {
+                        count
+                    }  else {
+                        loop(count + 1, Array.get(0, n->children))
+                    }
+                }
+            };
+            loop(1, node)
 
 //         ///
 //         /// Compare `vec1` to `vec2` from `i` (inclusive) to `max` (exlusive) in the order defined by `search`.
@@ -1161,6 +1145,13 @@ mod BPlusTree {
 //                 else ()
 //             } else
 //                 traverseRight(f, index, max, search, minLeaf)
+
+        ///
+        /// Returns the size of `node`.
+        ///
+        @Internal
+        pub def size(node: Node[k, v, r]): Int32 \ r with Order[k] = node->size
+
 
 //         ///
 //         /// Split `leftLeaf` into two leaves and push the middle key into the parent,

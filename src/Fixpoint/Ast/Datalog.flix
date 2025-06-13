@@ -84,23 +84,33 @@ mod Fixpoint.Ast.Datalog {
     instance ToString[Datalog] {
         pub def toString(cs: Datalog): String = match cs {
             case Datalog.Datalog(facts, rules) => region rc {
-                Iterator.append(Vector.iterator(rc, facts), Vector.iterator(rc, rules))
-                    |> Iterator.join(String.lineSeparator())
+                if(not Fixpoint.Options.enableDebugPrintFacts()) {
+                    "Printing facts disabled ${String.lineSeparator()}" + 
+                    Vector.iterator(rc, rules)
+                        |> Iterator.join(String.lineSeparator())
+                } else {
+                    Iterator.append(Vector.iterator(rc, facts), Vector.iterator(rc, rules))
+                        |> Iterator.join(String.lineSeparator())
+                }
             }
             case Datalog.Model(db) => region rc {
                 use Fixpoint.Ast.Ram.toDenotation;
-                Map.iterator(rc, db)
-                    |> Iterator.flatMap(match (ramSym, rel) -> {
-                        Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
-                            let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
-                            match toDenotation(ramSym) {
-                                case Relational => "${ramSym}(${tupleString})."
-                                case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
-                            }
+                if(not Fixpoint.Options.enableDebugPrintFacts()) {
+                    "Printing facts disabled."
+                } else {
+                    Map.iterator(rc, db)
+                        |> Iterator.flatMap(match (ramSym, rel) -> {
+                            Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
+                                let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
+                                match toDenotation(ramSym) {
+                                    case Relational => "${ramSym}(${tupleString})."
+                                    case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
+                                }
+                            })
                         })
-                    })
-                    |> Iterator.join(String.lineSeparator())
-                    + String.lineSeparator()
+                        |> Iterator.join(String.lineSeparator())
+                        + String.lineSeparator()
+                }
             }
             case Datalog.Join(d1, d2) => {
                 let lineSep = String.lineSeparator();
@@ -111,12 +121,12 @@ mod Fixpoint.Ast.Datalog {
                 Map.joinWith(predSym -> facts -> {
                     let factsString = Map.joinWith(fact -> annotation -> {
                         "${indent}${fact} @ ${annotation}"
-                    }, "${String.lineSeparator()},${indent}", facts);
+                    }, "$,{String.lineSeparator()}${indent}", facts);
                     "${predSym}:${String.lineSeparator()}${factsString}"
                 }, "${String.lineSeparator()}", db)
         }
     }
-
+    
     /////////////////////////////////////////////////////////////////////////////
     // Constraint                                                              //
     /////////////////////////////////////////////////////////////////////////////
