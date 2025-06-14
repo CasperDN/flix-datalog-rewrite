@@ -38,7 +38,7 @@ def parse_times(f: typing.TextIO, withJoin: bool):
         res = res | {"join_time": join_end_inter - join_start_inter}
     start_inter = readTime(f)
     end_inter = readTime(f)
-    end_marshall = 0
+    end_marshall = readTime(f)
     return res | {"inter_time": end_inter - start_inter, "compile_time": start_inter - start, "marshall_time": end_marshall - end_inter, "total": end_marshall - start_inter}
 
 def readTime(f: typing.TextIO):
@@ -69,7 +69,7 @@ def project(dictionary: dict, values):
 
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Provenance/WithProv.txt", True)
 
-res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/RoadFirstOld.txt", False)
+res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/PathFirst.txt", True)
 
 # keptValues = ["join_time", "inter_time", "compile_time", "marshall_time", "total"]
 # keptValues = ["compile_time", "inter_time", "marshall_time"]
