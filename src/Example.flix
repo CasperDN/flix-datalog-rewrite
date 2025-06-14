@@ -495,16 +495,32 @@ pub def pathh(): Unit \ IO = Clock.runWithIO(() ->{
 
 pub def pathE(): Unit \ IO = Clock.runWithIO(() ->{
     let now = Clock.now();
-    let edges = List.range(0, 10) |> List.map(i -> (i, i+1));
+    let edges = List.range(0, 2000) |> List.map(i -> (i, i+1));
     let f = inject edges into Edge;
     let r = #{
         Path(x, y) :- Edge(x, y).
-        Path(x, z) :- Edge(y, z), Path(x, y).
+        Path(x, z) :- Path(x, y), Edge(y, z).
         // DumbRule(1,2,3) :- Path(x, 1), A(x).
     };
     query f, r select (x, y) from Path(x, y) |> Vector.head |> println;
     let elapsed = Clock.now() - now;
     println(elapsed / 1_000i64)
+    })
+
+pub def runLatticeWithFacts(): Int64 \ IO = Clock.runWithIO(() -> {
+    let edges = List.range(0, 200) |> List.map(i -> (i, i+1));
+    let f = inject edges into Road;
+    let r = #{
+        Road(x, y) :- Road(y, x).
+        Path(x, y; Road.init(y, 1, x)) :- Road(x, y).
+        Path(x, z; Road.cons(z, 1, l)) :- Path(x, y; l), Road(y, z).
+    };
+    let x = query f, r select shortest from Path(x, y; shortest);
+    let startTime = Clock.now();
+    Common.forceEval(x);
+    let endTime = Clock.now();
+    println((endTime - startTime) / 1000i64);
+    0i64
     })
 
 pub def dumb3333(): Unit \ IO = 

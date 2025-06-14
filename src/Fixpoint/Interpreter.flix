@@ -182,6 +182,7 @@ mod Fixpoint.Interpreter {
             });
             MutMap.put(relSym, innerMap, res)
         });
+        unchecked_cast(println("End-marshall: ${Clock.runWithIO(Clock.now)}") as _ \ r);
         res
 
     def evalStmt(

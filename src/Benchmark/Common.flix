@@ -18,10 +18,10 @@ mod Common {
         case None => bug!("Could not unwrap option")
     }
 
-    pub def forceEval(x: Vector[a]): Unit \ IO = 
+    pub def forceEval(x: Vector[a]): Unit \ IO + Clock = 
         if (Vector.length(x) == -1)
             println()
-        else ()
+        else unchecked_cast(() as _ \ Clock)
 
     pub def factFolder(): String \ IO + Sys = "${getCwd()}/facts"
 

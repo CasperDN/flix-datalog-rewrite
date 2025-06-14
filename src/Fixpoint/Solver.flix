@@ -68,15 +68,35 @@ mod Fixpoint.SolverApi {
         let (fixed, fixInfo) = Fixpoint.Phase.FixPredSyms.fixPredSyms(rc, d);
         let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
         let provThing = runWithStratification(fixed, strat, true);
-        let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
-        let goalSym = PredSym.PredSym("Path", 2i64);
-        let mapping = x -> match x {
-            case PredSym.PredSym("Path", _) => Some(1)
-            case _ => None
+        let _goalSym = PredSym.PredSym("Path", 1i64); //1971280, 1969959
+        let _queries = Vector#{(1970963i64, 1962912i64), (1970998i64, 1966197i64), (1970999i64, 1963388i64), (1970999i64, 1963396i64), (1971002i64, 1963499i64), (1971019i64, 1963058i64), (1971028i64, 1966344i64), (1971089i64, 1962981i64), (1971128i64, 1963918i64), (1971138i64, 1963729i64), (1971138i64, 1963940i64), (1971139i64, 1702976i64), (1971148i64, 1963746i64), (1971151i64, 1963748i64), (1971151i64, 1970885i64), (1971200i64, 1964139i64), (1971248i64, 1966137i64), (1971249i64, 1965701i64), (1971249i64, 1966136i64), (1971269i64, 1970116i64)};
+        let _mapping = x -> _ -> match x {
+            case _ => 1
+            // case PredSym.PredSym("Path", _) => xvar Path((1, 2))
+            // case PredSym.PredSym("Edge", _) => xvar Edge((1, 2))
+            // case _ => ???
         };
-        let forcedEval = provOf(goal, goalSym, d, ???);
+
+        // let goal = Vector#{Boxed.BoxedInt64(1970834i64), Boxed.BoxedInt64(1963862i64)};
+        // let res = Vector.foldLeft(acc -> match (from_, to_) -> {
+        //     let now = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ rc);
+        //     unchecked_cast(println("Start-prov: ${now}") as _ \ rc);
+        //     let goal = Vector#{Boxed.BoxedInt64(from_), Boxed.BoxedInt64(to_)};
+        //     let forcedEval = provOf(goal, goalSym, provThing, mapping);
+        //     if(unchecked_cast(Option.isEmpty(forcedEval) and acc as _ \ rc)) {
+        //         let end = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ rc);
+        //         unchecked_cast(println("End-prov: ${end}") as _ \ rc);
+        //         true
+        //     } else {
+        //         let end = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ rc);
+        //         unchecked_cast(println("End-prov: ${end}") as _ \ rc);
+        //         false
+        //     }
+        // }, true, queries);
+        
+        // let forcedEval = provOf(goal, goalSym, provThing, mapping);
         // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
-        if(Option.isEmpty(forcedEval)) {
+        if(false) {
             Fixpoint.Phase.FixPredSyms.unfixPredSym(provThing, fixInfo)
         } else {
             Fixpoint.Phase.FixPredSyms.unfixPredSym(provThing, fixInfo)

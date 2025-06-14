@@ -103,7 +103,7 @@ mod Road {
     //     });
     //     inject roads into Road
 
-    pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = 
+    pub def getFacts(): #{ Road(Int64, Int64) | t } \ IO + Sys = 
         let path = "${factFolder()}/road-1000000.csv";
         let tuples = loadTuplesFromFile(path, ",");
         let map = Int64.fromString >> unwrap;
@@ -113,15 +113,15 @@ mod Road {
         });
         inject roads into Road
 
-    pub def getSmallFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = ???
-        // let path = "${factFolder()}/road-1000000.csv";
-        // let tuples = loadTuplesFromFile(path, ",");
-        // let map = Int64.fromString >> unwrap;
-        // let roads = tuples |> List.map(x -> match x {
-        //     case src :: dst :: Nil => (map(src), map(dst))
-        //     case _ => exit("Error parsing facts file")
-        // });
-        // inject roads into Road
+    pub def getSmallFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} =
+        let path = "${factFolder()}/road-3000.csv";
+        let tuples = loadTuplesFromFile(path, ",");
+        let map = Int64.fromString >> unwrap;
+        let roads = tuples |> List.map(x -> match x {
+            case src :: dst :: Nil => (map(src), map(dst))
+            case _ => exit("Error parsing facts file")
+        });
+        inject roads into Road
 
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {
         let f = getFacts();
@@ -129,6 +129,11 @@ mod Road {
             Road(x, y) :- Road(y, x).
             Path(x, y) :- Road(x, y).
             Path(x, z) :- Road(y, z), Path(x, y).
+            // LongRoadPath(x, z) :- Road(x, y), Road(y, z), if(x != z).
+            // LongRoadPath(x, v) :- Road(x, y), Road(y, z), Road(z, v), if(x != z), if(y != v), if(x != v).
+            // LongRoadPath(x, w) :- Road(x, y), Road(y, z), Road(z, v), Road(v, w), if(y != v).
+            // LongRoadPath(x, w) :- Road(x, y), Road(y, z), Road(z, v), Road(v, w), if(x != z), if(y != v), if(x != v), if(x != y), if (w != y), if (w != z), if (w != x).
+            // LongRoadPath(x, w) :- Road(x, y), Road(y, z), Road(z, v), Road(v, w), Road(w, u), if(x != z), if(y != v), if(x != v), if(x != y), if (w != y), if (w != z), if (w != x), if (u != v), if (u != z), if (u != y), if (u != x).
         };
         let startTime = Clock.now();
         let x = query f, r select (x, y) from Path(x, y);
@@ -150,9 +155,9 @@ mod Road {
             Path(x, y) :- Road(x, y).
             Path(x, z) :- Path(x, y), Road(y, z).
         };
-        let x = query f, r select (x, y) from Path(x, y);
         let startTime = Clock.now();
         println("Start: ${startTime}");
+        let x = (unchecked_cast(query f, r select (x, y) from Path(x, y) as _ \ Clock));
         Common.forceEval(x);
         let endTime = Clock.now();
         endTime - startTime

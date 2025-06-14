@@ -3,13 +3,13 @@ import numpy as np
 from pathlib import Path
 
 # Everything
-all = {'Road': 37.1, 'Road Shuffled': 37.1, 'Page Link': 31.4, 'Page Link Shuffled': 31.4}
+all = {'Road': 37.3, 'Road Shuffled': 37.4, 'Page Link': 31.5, 'Page Link Shuffled': 31.4}
 # No parallelism
-join = {'Road': 81.9, 'Road Shuffled': 76.0, 'Page Link': 70.3, 'Page Link Shuffled': 63.4}
+join = {'Road': 103.1, 'Road Shuffled': 98.2, 'Page Link': 91.2, 'Page Link Shuffled': 83.4}
 # No join
-index = {'Road': 83.2, 'Road Shuffled': 128, 'Page Link': 80.5, 'Page Link Shuffled': 81.3}
+index = {'Road': 103.4, 'Road Shuffled': 179.9, 'Page Link': 104.9, 'Page Link Shuffled': 98.1}
 # Nothing
-nothing = {'Road': 83.9, 'Road Shuffled': float("inf"), 'Page Link': 81.4, 'Page Link Shuffled': 81.3}
+nothing = {'Road': 103.8, 'Road Shuffled': float("inf"), 'Page Link': 111.3, 'Page Link Shuffled': 109.9}
 
 cats = ['Road', 'Road Shuffled', 'Page Link', 'Page Link Shuffled']
 arrs = []

@@ -121,7 +121,7 @@ mod Fixpoint.Ast.Datalog {
                 Map.joinWith(predSym -> facts -> {
                     let factsString = Map.joinWith(fact -> annotation -> {
                         "${indent}${fact} @ ${annotation}"
-                    }, "${String.lineSeparator()},${indent}", facts);
+                    }, "$,{String.lineSeparator()}${indent}", facts);
                     "${predSym}:${String.lineSeparator()}${factsString}"
                 }, "${String.lineSeparator()}", db)
         }
