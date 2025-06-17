@@ -15,46 +15,42 @@
  * limitations under the License.
  */
  
-/**
-Purpose: We need to make more predicates (at most 3 times as many) than there are relations.
-Solution: The first n are the full relations, the next n are the delta relations, the last n are the temporary delta' relations.
-Problem: Assuming that the relations are currently named 0 to n seems restrictive
-Solution: Start by creating a map from old relation-numbers to new.
-    Advantage: If we were to change this later we would only have to change the module Predicates. All other code does not need to care for the implementation.
- */
-
-// Purpose: We need to make more predicates than there are 
+///
+/// This files keeps track predicates (`PredSym`). It keeps information about which `PredSym`s exist
+/// and which predicates represent full, delta and new relations.
+///
+/// It uses the following convention: Assume that there are `k` predicates. The original predicate
+/// `PredSym(name, id)` will be the full predicate while `PredSym(name, id + k)` will be the 
+/// delta-predicate and `PredSym(name, id + 2k)` will be the new-predicate.
+///
+/// Other code should not know or rely on this convention.
+///
 mod Fixpoint.Predicates {
-    use Fixpoint.Predicates.idToPredType
-    use Fixpoint.Predicates.allFullRelSyms
-    use Fixpoint.Predicates.PredType
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Ast.Datalog.Datalog.Datalog
-    use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadPredicate, HeadTerm, Polarity, VarSym}
+    use Fixpoint.Ast.Datalog.{BodyPredicate, BodyTerm, Constraint, Datalog, HeadPredicate, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, Predicates, RamProgram, toId}
+    use Fixpoint.Ast.Ram.{BoolExp, Facts, Predicates, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar, toId}
     use Fixpoint.Boxed
 
+    ///
+    /// `PredType` describes the three types of predicates that exists in a RAM program.
+    /// The `Full` relations contains all facts for the relation, the `Delta` is for fixpoint iterations
+    /// and the `New` relations are the relations that values are inserted into in project statements.
+    ///
     @Internal
     pub enum PredType with Eq {
         case Full,
         case Delta,
         case New
     }
-
-    @Internal
-    pub def initialize(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Predicates = 
-        collectPreds(program, db)
-        // let backMap = Map.mapWithKey(id -> v -> 
-        //     match v {
-        //         case RelSym.Symbol(PredSym(name, _), _, _) => PredSym(name, id)
-        //     }
-        // , forwardMap);
-        // (max, forwardMap, backMap)
     
+    ///
+    /// Returns a list of all full `RelSym` in `predInfo`.
+    ///
     @Internal
     pub def allFullRelSyms(predInfo: Predicates): List[RelSym] =
         let (_, set) = predInfo;
@@ -62,24 +58,96 @@ mod Fixpoint.Predicates {
             relSym :: acc
         , Nil, set)
 
+    ///
+    /// Returns a list of all `RelSym` in `predInfo`.
+    ///
     @Internal
-    pub def allRelSyms(predTrack: Predicates): List[RelSym] =
-        let full = allFullRelSyms(predTrack);
+    pub def allRelSyms(predInfo: Predicates): List[RelSym] =
+        let full = allFullRelSyms(predInfo);
         full |>
-        List.append(List.map(fullRelSymToType(predTrack, PredType.Delta), full)) |>
-        List.append(List.map(fullRelSymToType(predTrack, PredType.New), full))
+        List.append(List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), full)) |>
+        List.append(List.map(x -> fullRelSymToType(x, PredType.New, predInfo), full))
 
-    pub def relSymsOfProgram(program: RamProgram): List[RelSym] = match program {
-        case RamProgram.Program(_, _, predInfo, _) => allRelSyms(predInfo)
+    ///
+    /// Returns the full `RelSym` associated with the `PredSym` in `body` according to `predInfo`.
+    ///
+    @Internal
+    pub def bodyAtomToRelSym(body: BodyPredicate, wantedType: PredType, predInfo: Predicates): RelSym = 
+        let fullRel = bodyAtomToFullRelSym(body);
+        getRelSymAsType(fullRel, wantedType, predInfo)
+
+    ///
+    /// Returns the identifier of `wantedType` of `id` according to `predInfo`
+    ///
+    @Internal
+    pub def fullIdtoPredType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
+        let (max, _) = predInfo;
+        match wantedType {
+            case PredType.Full => id
+            case PredType.Delta => id + max
+            case PredType.New => id + max * 2i64
+        }
+
+    ///
+    /// Returns a `RelSym` of type `wantedType` given the `RelSym` `relSym`, which must be
+    /// a full `RelSym`.
+    ///
+    @Internal
+    pub def fullRelSymToType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = match relSym {
+        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(id, wantedType, predInfo)), arity, den)
     }
 
-    pub def isFullID(self: Predicates, id: Int64): Bool = 
-        PredType.Full == idToPredType(id, self)
+    ///
+    /// Returns the identifier of type `wantedType` from `id` according to `predInfo`.
+    ///
+    @Internal
+    pub def getIdAsType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
+        let fullId = idToFullPredId(id, predInfo);
+        fullIdtoPredType(fullId, wantedType, predInfo)
 
-    pub def fullRelSymToType(self: Predicates, wantedType: PredType, relSym: RelSym): RelSym = match relSym {
-        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => RelSym.Symbol(PredSym.PredSym(name, fullIDtoPredType(id, wantedType, self)), arity, den)
+    ///
+    /// Returns the `PredSym` of type `wantedType` from `predSym` according to `predInfo`.
+    ///
+    @Internal
+    pub def getPredSymAsType(predSym: PredSym, wantedType: PredType, predInfo: Predicates): PredSym = match predSym {
+        case PredSym.PredSym(name, id) => PredSym.PredSym(name, getIdAsType(id, wantedType, predInfo))
     }
 
+    ///
+    /// Returns the `RelSym` of type `wantedType` from `relSym` according to `predInfo`.
+    ///
+    @Internal
+    pub def getRelSymAsType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = match relSym {
+        case RelSym.Symbol(pred, arity, den) => RelSym.Symbol(getPredSymAsType(pred, wantedType, predInfo), arity, den)
+    }
+
+    ///
+    /// Returns the full `RelSym` associated with the `PredSym` in `head` according to `predInfo`.
+    ///
+    @Internal
+    pub def headAtomToRelSym(head: HeadPredicate, wantedType: PredType, predInfo: Predicates): RelSym =
+        let fullRel = headAtomToFullRelSym(head);
+        getRelSymAsType(fullRel, wantedType, predInfo)
+
+    ///
+    /// Returns the identifier of the full `PredSym` associated with the identifier `id`
+    /// according to `predInfo`.
+    ///
+    @Internal
+    pub def idToFullPredId(id: Int64, predInfo: Predicates): Int64 =
+        let (max, _) = predInfo;
+        if(id <= max) {
+            id
+        } else if (id <= max * 2i64) {
+            id - max
+        } else {
+            id - 2i64 * max
+        }
+
+    ///
+    /// Returns the type of a `PredSym` with identifier `id` according to `predInfo`.
+    /// 
+    @Internal
     pub def idToPredType(id: Int64, predInfo: Predicates): PredType = 
         let (max, _) = predInfo;
         if(id <= max) {
@@ -90,37 +158,47 @@ mod Fixpoint.Predicates {
             PredType.New                
         }
 
-    // Could use previos method, but would duplicate computation... 
-    pub def idToFullPredID(id: Int64, predInfo: Predicates): Int64 =
-        let (max, _) = predInfo;
-        if(id <= max) {
-            id
-        } else if (id <= max * 2i64) {
-            id - max
-        } else {
-            id - 2i64 * max
-        }
+    ///
+    /// Collect all preciate information given a Datalog program `program` and database `db`.
+    ///
+    @Internal
+    pub def initialize(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Predicates = 
+        collectPreds(program, db)
 
+    ///
+    /// Returns true if `id` is the id of a full `PredSym` according to `predInfo`.
+    ///
+    @Internal
+    pub def isFullId(id: Int64, predInfo: Predicates): Bool = 
+        PredType.Full == idToPredType(id, predInfo)
+
+    ///
+    /// Returns a `RelSym` of type `wantedType` from `relSym` according to `predInfo`.
+    ///
+    @Internal
+    pub def relSymFromPredType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = match relSym {
+        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) =>
+            RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(idToFullPredId(id, predInfo), wantedType, predInfo)), arity, den)
+    }
+
+    ///
+    /// Returns a list of all `RelSym` known in `program`.
+    ///
+    @Internal
+    pub def relSymsOfProgram(program: RamProgram): List[RelSym] = match program {
+        case RamProgram.Program(_, _, predInfo, _) => allRelSyms(predInfo)
+    }
+
+    ///
+    /// Returns the type of the `PredSym` in `relSym` according to `predInfo`.
+    ///
+    @Internal
     pub def relSymToPredType(relSym: RelSym, predInfo: Predicates): PredType = match relSym {
         case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => idToPredType(id, predInfo)
     }
 
-    pub def relSymFromPredType(relSym: RelSym, wanted: PredType, self: Predicates): RelSym = match relSym {
-        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) =>
-            RelSym.Symbol(PredSym.PredSym(name, fullIDtoPredType(idToFullPredID(id, self), wanted, self)), arity, den)
-    }
-
-    // Could use previos method, but would duplicate computation... 
-    pub def fullIDtoPredType(id: Int64, wantedType: PredType, self: Predicates): Int64 =
-        let (max, _) = self;
-        match wantedType {
-            case PredType.Full => id
-            case PredType.Delta => id + max
-            case PredType.New => id + max * 2i64
-        }
-
     ///
-    /// Collect all predicate symbols in a set.
+    /// Returns a set of all full `RelSym` created from `PredSym`s in `program` and `db` and the maximal identifier+1.
     ///
     def collectPreds(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (Int64, Set[RelSym]) = match program {
         case Datalog(facts, rules) =>
@@ -136,11 +214,17 @@ mod Fixpoint.Predicates {
         case _ => bug!("Datalog Boxing bug")
     }
 
+    ///
+    /// Returns a set of full `RelSym` in `db`.
+    ///
     def collectDbPredicates(db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Set[RelSym] =
         Map.foldLeftWithKey(set -> relSym -> _ -> {
             Set.insert(relSym, set)
         }, Set#{}, db)
 
+    ///
+    /// Returns a set of full `RelSym` in `constraints`.
+    ///
     def collectPredicates(constraints: Vector[Constraint]): Set[RelSym] =
         Vector.foldLeft(match set -> match Constraint(headAtom, body) -> {
             let setWithHead = Set.insert(headAtomToFullRelSym(headAtom), set);
@@ -151,37 +235,19 @@ mod Fixpoint.Predicates {
                 }, setWithHead, body)
         }, Set#{}, constraints)
 
+    ///
+    /// Returns the full `RelSym` associated with the `PredSym` in `head`.
+    ///
     def headAtomToFullRelSym(head: HeadPredicate): RelSym = match head {
         case HeadAtom(pred, den, terms) => RelSym.Symbol(pred, Vector.length(terms), den)
     }
 
+    ///
+    /// Returns the full `RelSym` associated with the `PredSym` in `body`.
+    ///
     def bodyAtomToFullRelSym(body: BodyPredicate): RelSym = match body {
         case BodyAtom(pred, den, _, _, terms) => RelSym.Symbol(pred, Vector.length(terms), den)
         case _ => unreachable!()
     }
 
-    pub def headAtomToRelSym(head: HeadPredicate, t: PredType, predInfo: Predicates): RelSym =
-        let fullRel = headAtomToFullRelSym(head);
-        getRelSymAsType(fullRel, t, predInfo)
-
-    pub def bodyAtomToRelSym(body: BodyPredicate, t: PredType, predInfo: Predicates): RelSym = 
-        let fullRel = bodyAtomToFullRelSym(body);
-        getRelSymAsType(fullRel, t, predInfo)
-
-    pub def getRelSymAsType(relSym: RelSym, t: PredType, predInfo: Predicates): RelSym = match relSym {
-        case RelSym.Symbol(pred, arity, den) => RelSym.Symbol(getPredSymAsType(pred, t, predInfo), arity, den)
-    }
-
-    pub def getPredSymAsType(predSym: PredSym, t: PredType, predInfo: Predicates): PredSym = match predSym {
-        case PredSym.PredSym(name, id) => PredSym.PredSym(name, getIdAsType(id, t, predInfo))
-    }
-
-    pub def getIdAsType(id: Int64, t: PredType, predInfo: Predicates): Int64 =
-        let (max, _) = predInfo;
-        let fullId = idToFullPredID(id, predInfo);
-        match t {
-            case PredType.Full => fullId
-            case PredType.Delta => fullId + max
-            case PredType.New => fullId + 2i64 * max
-    }
 }
