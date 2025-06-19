@@ -32,7 +32,7 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxed
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.BoxingType.{Boxing, TypeInfo, Types, setType, getType, RamIdToPos, UnifiedTypePos}
-    use Fixpoint.Predicates.relSymsOfProgram
+    use Fixpoint.Predicate.relSymsOfProgram
     use Fixpoint.ReadWriteLock
     use Fixpoint.Util.getOrCrash
 
@@ -282,7 +282,7 @@ mod Fixpoint.Boxing {
         use Fixpoint.BoxingType.RamIdToPos
         use Fixpoint.Counter
         use Fixpoint.Util.getOrCrash
-        use Fixpoint.Predicates.{PredType, idToFullPredId, fullIdtoPredType, relSymsOfProgram}
+        use Fixpoint.Predicate.{PredType, idToFullPredId, fullIdtoPredType, relSymsOfProgram}
 
         pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
             let disjointSet = MutDisjointSets.empty(rc);

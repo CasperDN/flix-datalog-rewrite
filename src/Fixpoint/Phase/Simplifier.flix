@@ -19,7 +19,7 @@
 mod Fixpoint.Phase.Simplifier {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, RamProgram, Predicates}
     use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit, Meet}
-    use Fixpoint.Predicates.{getRelSymAsType, PredType}
+    use Fixpoint.Predicate.{getRelSymAsType, PredType}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.

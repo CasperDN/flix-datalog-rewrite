@@ -876,7 +876,7 @@ mod Fixpoint.SolverApi {
         let dbOnlyFullRels = MutMap.toMap(db) |>
         Map.map(MutMap.toMap) |>
         Map.filterWithKey(k -> facts -> match k {
-            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicates.isFullId(id, meta) and Map.nonEmpty(facts)
+            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicate.isFullId(id, meta) and Map.nonEmpty(facts)
         });
         if(withProv) {
             toProvenance(rules, dbOnlyFullRels)

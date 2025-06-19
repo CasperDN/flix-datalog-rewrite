@@ -27,7 +27,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Counter
     use Fixpoint.Util.{getOrCrash}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
-    use Fixpoint.Predicates.{allFullRelSyms}
+    use Fixpoint.Predicate.{allFullRelSyms}
 
     ///
     /// A
