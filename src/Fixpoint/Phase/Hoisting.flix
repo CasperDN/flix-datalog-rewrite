@@ -197,7 +197,7 @@ mod Fixpoint.Phase.Hoisting {
                         let knownEqualities = MutList.empty(rc);
                         range |> Vector.forEach(i -> {match MutDisjointSets.find((rowVar, i), equalitySets) {
                             case None => ()
-                            case Some(rep) => match getOrCrash(MutMap.get(rep, termMap)) {
+                            case Some(rep) => match getOrCrash(MutMap.get(rep, termMapCopy)) {
                                 case RamTerm.RowLoad(rv, i1, rel) =>
                                     if (rv == rowVar) {
                                         MutMap.remove(rep, termMap);
