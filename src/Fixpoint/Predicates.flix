@@ -46,7 +46,7 @@ mod Fixpoint.Predicates {
     }
 
     @Internal
-    pub def initialize(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Predicates = 
+    pub def initialize(program: Datalog, db: Map[RelSym, Vector[Vector[Boxed]]]): Predicates = 
         collectPreds(program, db)
         // let backMap = Map.mapWithKey(id -> v -> 
         //     match v {
@@ -122,7 +122,7 @@ mod Fixpoint.Predicates {
     ///
     /// Collect all predicate symbols in a set.
     ///
-    def collectPreds(program: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (Int64, Set[RelSym]) = match program {
+    def collectPreds(program: Datalog, db: Map[RelSym, Vector[Vector[Boxed]]]): (Int64, Set[RelSym]) = match program {
         case Datalog(facts, rules) =>
             let set1 = collectPredicates(rules);
             let set2 = collectPredicates(facts);
@@ -136,7 +136,7 @@ mod Fixpoint.Predicates {
         case _ => bug!("Datalog Boxing bug")
     }
 
-    def collectDbPredicates(db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Set[RelSym] =
+    def collectDbPredicates(db: Map[RelSym, Vector[Vector[Boxed]]]): Set[RelSym] =
         Map.foldLeftWithKey(set -> relSym -> _ -> {
             Set.insert(relSym, set)
         }, Set#{}, db)

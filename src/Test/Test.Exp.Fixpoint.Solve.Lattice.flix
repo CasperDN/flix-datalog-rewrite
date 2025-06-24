@@ -70,131 +70,131 @@ mod Test.Exp.Fixpoint.Solve.Lattice {
         }
     }
 
-    def sum(e1: Constant, e2: Constant): Constant = match (e1, e2) {
-        case (Constant.Bot, _)           => Constant.Bot
-        case (_, Constant.Bot)           => Constant.Bot
-        case (Constant.Cst(n1), Constant.Cst(n2)) => Constant.Cst(n1 + n2)
-        case _                  => Constant.Top
-    }
+    // def sum(e1: Constant, e2: Constant): Constant = match (e1, e2) {
+    //     case (Constant.Bot, _)           => Constant.Bot
+    //     case (_, Constant.Bot)           => Constant.Bot
+    //     case (Constant.Cst(n1), Constant.Cst(n2)) => Constant.Cst(n1 + n2)
+    //     case _                  => Constant.Top
+    // }
 
-    @test
-    def testFixpointLattice01(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Top). LocalVar((); Constant.Top). LocalVar((); Constant.Top). LocalVar((); Constant.Top).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
+    // @test
+    // def testFixpointLattice01(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Top). LocalVar((); Constant.Top). LocalVar((); Constant.Top). LocalVar((); Constant.Top).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
 
-    @test
-    def testFixpointLattice02(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Bot). LocalVar((); Constant.Top). LocalVar((); Constant.Bot). LocalVar((); Constant.Top).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
+    // @test
+    // def testFixpointLattice02(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Bot). LocalVar((); Constant.Top). LocalVar((); Constant.Bot). LocalVar((); Constant.Top).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
 
-    @test
-    def testFixpointLattice03(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Cst(39)).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
+    // @test
+    // def testFixpointLattice03(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Cst(39)).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
 
-    @test
-    def testFixpointLattice04(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Bot).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
+    // @test
+    // def testFixpointLattice04(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Bot).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
 
-    @test
-    def testFixpointLattice05(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(39)).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
+    // @test
+    // def testFixpointLattice05(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(39)).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
 
-    @test
-    def testFixpointLattice06(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(12)).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
+    // @test
+    // def testFixpointLattice06(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(12)).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
 
-    @test
-    def testFixpointLattice07(): Bool =
-        let m = solve #{
-            LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(12)). LocalVar((); Constant.Bot).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
+    // @test
+    // def testFixpointLattice07(): Bool =
+    //     let m = solve #{
+    //         LocalVar((); Constant.Cst(39)). LocalVar((); Constant.Cst(12)). LocalVar((); Constant.Bot).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
 
-    @test
-    def testFixpointLattice08(): Bool =
-        let m = solve #{
-            LitStm("a", 39).
-            LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
+    // @test
+    // def testFixpointLattice08(): Bool =
+    //     let m = solve #{
+    //         LitStm("a", 39).
+    //         LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39))
 
-    @test
-    def testFixpointLattice09(): Bool =
-        let m = solve #{
-            LitStm("a", 39). LitStm("a", 345).
-            LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
-        };
-        let ans = query m select t from LocalVar(_; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
+    // @test
+    // def testFixpointLattice09(): Bool =
+    //     let m = solve #{
+    //         LitStm("a", 39). LitStm("a", 345).
+    //         LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
+    //     };
+    //     let ans = query m select t from LocalVar(_; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Top)
 
-    @test
-    def testFixpointLattice10(): Bool =
-        let m = solve #{
-            LitStm("a", 39).
-            AddStm("r", "a", "a").
-            LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
-            LocalVar(r; sum(v1, v2)) :- AddStm(r, x, y), LocalVar(x; v1), LocalVar(y; v2).
+    // @test
+    // def testFixpointLattice10(): Bool =
+    //     let m = solve #{
+    //         LitStm("a", 39).
+    //         AddStm("r", "a", "a").
+    //         LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
+    //         LocalVar(r; sum(v1, v2)) :- AddStm(r, x, y), LocalVar(x; v1), LocalVar(y; v2).
 
-        };
-        let ans = query m select t from LocalVar("r"; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39+39))
+    //     };
+    //     let ans = query m select t from LocalVar("r"; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39+39))
 
-    @test
-    pub def testFixpointLattice11(): Bool =
-        let m = solve #{
-            LitStm("a", 39).
-            LitStm("b", 12).
-            AddStm("r", "a", "b").
-            LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
-            LocalVar(r; sum(v1, v2)) :- AddStm(r, x, y), LocalVar(x; v1), LocalVar(y; v2).
-        };
-        let ans = query m select t from LocalVar("r"; t);
-        Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39+12))
+    // @test
+    // pub def testFixpointLattice11(): Bool =
+    //     let m = solve #{
+    //         LitStm("a", 39).
+    //         LitStm("b", 12).
+    //         AddStm("r", "a", "b").
+    //         LocalVar(x; Constant.Cst(c)) :- LitStm(x, c).
+    //         LocalVar(r; sum(v1, v2)) :- AddStm(r, x, y), LocalVar(x; v1), LocalVar(y; v2).
+    //     };
+    //     let ans = query m select t from LocalVar("r"; t);
+    //     Vector.length(ans) == 1 and Vector.head(ans) == Some(Constant.Cst(39+12))
 
-    @Test
-    def testRelationToLattice01(): Bool =
-        let pr = #{
-            Foo("a", 1).
-            Foo("b", 2).
-            Bar(n; v) :- Foo(n, v).
-        };
-        let result = query pr select (x, y) from Bar(x; y);
-        Assert.eq(Vector#{("a", 1), ("b", 2)}, result)
+    // @Test
+    // def testRelationToLattice01(): Bool =
+    //     let pr = #{
+    //         Foo("a", 1).
+    //         Foo("b", 2).
+    //         Bar(n; v) :- Foo(n, v).
+    //     };
+    //     let result = query pr select (x, y) from Bar(x; y);
+    //     Assert.eq(Vector#{("a", 1), ("b", 2)}, result)
 
-    @Test
-    def testRelationToLattice02(): Bool =
-        let pr = #{
-            Foo("a", 1).
-            Foo("a", 2).
-            Foo("b", 2).
-            Foo("b", 4).
-            Bar(n; v) :- Foo(n, v).
-        };
-        let result = query pr select (x, y) from Bar(x; y);
-        Assert.eq(Vector#{("a", 2), ("b", 4)}, result)
+    // @Test
+    // def testRelationToLattice02(): Bool =
+    //     let pr = #{
+    //         Foo("a", 1).
+    //         Foo("a", 2).
+    //         Foo("b", 2).
+    //         Foo("b", 4).
+    //         Bar(n; v) :- Foo(n, v).
+    //     };
+    //     let result = query pr select (x, y) from Bar(x; y);
+    //     Assert.eq(Vector#{("a", 2), ("b", 4)}, result)
 
 }

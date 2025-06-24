@@ -47,7 +47,7 @@ mod Fixpoint.Ast.Datalog {
     @Internal
     pub enum Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
-        case Model(Map[RelSym, Map[Vector[Boxed], Boxed]])
+        case Model(Map[RelSym, Vector[Vector[Boxed]]])
         case Join(Datalog, Datalog)
         case Provenance(Vector[Constraint], Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]])
     }
@@ -100,11 +100,11 @@ mod Fixpoint.Ast.Datalog {
                 } else {
                     Map.iterator(rc, db)
                         |> Iterator.flatMap(match (ramSym, rel) -> {
-                            Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
+                            Vector.iterator(rc, rel) |> Iterator.map(match tuple -> {
                                 let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
                                 match toDenotation(ramSym) {
                                     case Relational => "${ramSym}(${tupleString})."
-                                    case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
+                                    case Latticenal(_, _, _, _) => "${ramSym}(${tupleString})."
                                 }
                             })
                         })

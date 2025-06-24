@@ -58,7 +58,7 @@ mod Fixpoint.Options {
     /// Disables the join optimization phase.
     ///
     @Internal
-    pub def disableJoinOptimizer(): Bool = false
+    pub def disableJoinOptimizer(): Bool = true
 
     ///
     /// Disables the join optimization phase.

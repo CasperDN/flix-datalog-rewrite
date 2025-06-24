@@ -451,6 +451,10 @@ mod BPlusTree {
 //     pub def merge(src: BPlusTree[k, v, r], dst: BPlusTree[k, v, r]): Unit \ r with Order[k], Eq[v] =
 //         BPlusTree.forEach(k -> v -> BPlusTree.put(k, v, dst), src)
 
+
+    pub def mergePar(src: BPlusTree[k, v, r], dst: BPlusTree[k, v, r]): Unit \ r with Order[k], Eq[v] =
+        BPlusTree.parForEach(k -> v -> BPlusTree.put(k, v, dst), src)
+
 //     ///
 //     /// Merges `src` into `dst` modyfing `dst`. If `k => v1` is in `src` and `k => v2` is
 //     /// in `dst`, updates `dst` to with `k => f(v1, v2)`.

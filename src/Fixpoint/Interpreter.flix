@@ -19,7 +19,7 @@
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
     use Fixpoint.Ast.Ram.{RelSym, toDenotation, Predicates, arityOfNonLat, toId, RamId, Search}
-    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
+    use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation, PredSym}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
     use Fixpoint.Boxing.{boxWith, unboxWith}
@@ -52,7 +52,7 @@ mod Fixpoint.Interpreter {
     type alias Indexes[r: Region] = Array[Index[r], r]
 
     @Internal
-    pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
+    pub type alias Database[r: Region] = MutMap[RelSym, Vector[Vector[Boxed]], r]
 
     type alias SearchEnv[r: Region] = (
         Vector[SearchTuple[r]], 
@@ -142,8 +142,8 @@ mod Fixpoint.Interpreter {
         program: RamProgram
     ): (Database[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
-            let time = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r);
-            unchecked_cast(println("Start-inter: ${time}") as _ \ r);
+            // let time = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r);
+            // unchecked_cast(println("Start-inter: ${time}") as _ \ r);
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
             constWrites |> Vector.forEach(match (id1, id2, val) -> {
@@ -157,7 +157,7 @@ mod Fixpoint.Interpreter {
             evalStmt(rc, ctxt, expectedJoinSize, Fixpoint.Options.parLevel(), stmt);
             
             // let elapsed = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r) - time;
-            unchecked_cast(println("End-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
+            // unchecked_cast(println("End-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
             // Don't insert when doing join size estimation. It is not used and is expensive.
             match expectedJoinSize {
                 case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
@@ -168,22 +168,100 @@ mod Fixpoint.Interpreter {
 
     def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): Database[r] \ r =
         let res = MutMap.empty(rc);
-        allFullRelSyms(predTrack) |>
-        List.forEach(relSym -> {
-            let innerMap = MutMap.empty(rc);
-            let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
-                Vector.map(i ->
-                    getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
-                );
-            Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
-            BPlusTree.forEach(vec -> latticeElem -> {
-                let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
-                MutMap.put(boxedVec, latticeElem, innerMap)
-            });
-            MutMap.put(relSym, innerMap, res)
-        });
-        unchecked_cast(println("End-marshall: ${Clock.runWithIO(Clock.now)}") as _ \ r);
+        let allRels = allFullRelSyms(predTrack);
+        let resultSym = allRels |>
+            List.find(x -> match x {
+                case RelSym.Symbol(PredSym.PredSym("$Result", _), _, _) => true
+                case _ => false
+            }
+        );
+        // If we have a resultSym then only return a database for this. It means we worked on query.
+        match resultSym {
+            case Some(relSym) =>
+                let index = Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db);
+                let onlyDB = mapSingleRel(relSym, rc, index, boxing, boxingIndexes);
+                MutMap.put(relSym, onlyDB, res)
+            case _ =>
+                allRels |>
+                List.forEach(relSym -> {
+                    let index = Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db);
+                    let onlyDB = mapSingleRel(relSym, rc, index, boxing, boxingIndexes);
+                    MutMap.put(relSym, onlyDB, res)
+                })
+        };
+        // allFullRelSyms(predTrack) |>
+        // List.forEach(relSym -> {
+        //     let innerMap = MutMap.empty(rc);
+        //     let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
+        //         Vector.map(i ->
+        //             getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+        //         );
+        //     Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
+        //     BPlusTree.forEach(vec -> latticeElem -> {
+        //         let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
+        //         MutMap.put(boxedVec, latticeElem, innerMap)
+        //     });
+        //     MutMap.put(relSym, innerMap, res)
+        // });
+        // unchecked_cast(println("End-marshall: ${Clock.runWithIO(Clock.now)}") as _ \ r);
         res
+
+    def mapSingleRel(relSym: RelSym, rc: Region[r], index: Index[r], boxing: Boxing[r], boxingIndexes: RamIdToPos): Vector[Vector[Boxed]] \ r = {
+        match toDenotation(relSym) {
+            case Relational => mapSingleRelNonLat(relSym, rc, index, boxing, boxingIndexes)
+            case _ => mapSingleRelLat(relSym, rc, index, boxing, boxingIndexes)
+        }
+        // let innerMap = MutList.empty(rc);
+        // let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
+        //     Vector.map(i ->
+        //         getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+        //     );
+        // index |>
+        // BPlusTree.forEach(vec -> latticeElem -> {
+        //     let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
+        //     MutList.push(boxedVec, latticeElem, innerMap)
+        // });
+        // innerMap
+    }
+
+    def mapSingleRelNonLat(relSym: RelSym, rc: Region[r], index: Index[r], boxing: Boxing[r], boxingIndexes: RamIdToPos): Vector[Vector[Boxed]] \ r = {
+        let innerMap = MutList.empty(rc);
+        let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
+            Vector.map(i ->
+                getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+            );
+        index |>
+        BPlusTree.forEach(vec -> _ -> {
+            let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
+            MutList.push(boxedVec, innerMap)
+        });
+        MutList.toVector(innerMap)
+    }
+
+    def mapSingleRelLat(relSym: RelSym, rc: Region[r], index: Index[r], boxing: Boxing[r], boxingIndexes: RamIdToPos): Vector[Vector[Boxed]] \ r = {
+        let len = arityOfNonLat(relSym);
+        let innerMap = MutList.empty(rc);
+        let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
+            Vector.map(i ->
+                getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
+            );
+        index |>
+        BPlusTree.forEach(vec -> lat -> {
+            // Could be moved outside...
+            // let realLen = Vector.length(vec);
+            let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
+            let completeVec = Vector.init(i ->
+                if(len < i) {
+                    Vector.get(i, boxedVec)
+                } else if(len == i) {
+                    lat
+                } else {
+                    Vector.get(i + 1, boxedVec)
+                }, len + 1);
+            MutList.push(completeVec, innerMap)
+        });
+        MutList.toVector(innerMap)
+    }
 
     def evalStmt(
         rc: Region[r], 
@@ -199,7 +277,7 @@ mod Fixpoint.Interpreter {
             let (db, _, _) = ctxt;
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
-            BPlusTree.merge(src, dst)
+            BPlusTree.mergePar(src, dst)
         case RamStmt.MergeInto(srcIndex, dstIndex, Latticenal(_, _, lub, _)) =>
             let (db, _, _) = ctxt;
             let src = lookupIndex(srcIndex, db);

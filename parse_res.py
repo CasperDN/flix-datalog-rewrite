@@ -39,7 +39,7 @@ def parse_times(f: typing.TextIO, withJoin: bool):
     start_inter = readTime(f)
     end_inter = readTime(f)
     end_marshall = readTime(f)
-    return res | {"inter_time": end_inter - start_inter, "compile_time": start_inter - start, "marshall_time": end_marshall - end_inter, "total": end_marshall - start_inter}
+    return res | {"inter_time": end_inter - start_inter, "compile_time": start_inter - start, "marshall_time": end_marshall - end_inter, "total": end_marshall - start}
 
 def readTime(f: typing.TextIO):
     return int(f.readline().replace(' ', '').replace('\n', '').split(':')[1])
@@ -63,17 +63,19 @@ def project(dictionary: dict, values):
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Index_selection/NoIndex.txt", False)
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/flix-datalog-rewrite/_t.txt", True)
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Join_optimization/WithJoin.txt", True)
-# res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Parallelism/WithPar.txt", True)
+res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Parallelism/WithPar.txt", True)
 
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/OldEngine/Res.txt", False)
 
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Provenance/WithProv.txt", True)
 
-res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/PathFirst.txt", True)
+# res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/PathFirst.txt", True)
+
+# res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/temp.txt", False)
 
 # keptValues = ["join_time", "inter_time", "compile_time", "marshall_time", "total"]
-# keptValues = ["compile_time", "inter_time", "marshall_time"]
-keptValues = ["inter_time"]
+keptValues = ["compile_time", "inter_time", "marshall_time"]
+# keptValues = ["inter_time"]
 
 
 

@@ -45,7 +45,7 @@ mod Fixpoint.Phase.Compiler {
     /// A rule belongs to the same stratum as its head predicate.
     ///
     @Internal
-    pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, (Int32, Int32)]): RamProgram = match d {
+    pub def compile(d: Datalog, db: Map[RelSym, Vector[Vector[Boxed]]], strat: Map[PredSym, (Int32, Int32)]): RamProgram = match d {
         case Datalog(facts, _) => region rc {
             let predSymMaps = Predicates.initialize(d, db);
             let stmts = MutList.empty(rc);
@@ -93,22 +93,22 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Collect all facts by their predicate
     ///
-    def compileFacts(facts: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]], predSymMaps: Predicates): Facts =
-        let startingPoint = Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match den {
-            case Relational => Map.foldWithKey(acc -> k -> _ -> k :: acc, Nil, values)
-            case Latticenal(bot, leq, _, _) => Map.foldWithKey(acc -> k -> v ->
-                // Remove p(;bot) from the facts
-                if(v `leq` bot) {
-                    acc
-                } else {
-                    Vector.append(k, Vector#{v}) :: acc
-                }
-            , Nil, values)
-        }, db);
+    def compileFacts(facts: Vector[Constraint], db: Map[RelSym, Vector[Vector[Boxed]]], predSymMaps: Predicates): Facts = region rc{
+        // let startingPoint = Map.mapWithKey(match RelSym.Symbol(_, arr, den) -> values -> match den {
+        //     case Relational => values
+        //     case Latticenal(bot, leq, _, _) => Vector.filter(k ->
+        //         // Remove p(;bot) from the facts
+        //         if(Vector.get(arr, k) `leq` bot) {
+        //             false
+        //         } else {
+        //             true
+        //         }
+        //     , Nil, values)
+        // }, db);
 
-        let test =
-            Vector.foldRight(a -> b -> {
-                match a {
+        let newMap = MutMap.empty(rc);
+            Vector.forEach(head -> {
+                match head {
                     case Constraint(headAtom, _) =>
                         let HeadAtom(_, den, headTerms) = headAtom;
                         let x = Vector.map(getFactTerm, headTerms);
@@ -123,15 +123,48 @@ mod Fixpoint.Phase.Compiler {
                                 }
                         };
                         if(isBot) {
-                            b
+                            ()
                         } else {
                             let sym = Predicates.headAtomToRelSym(headAtom, Full, predSymMaps);
-                            Map.insertWith(List.append, sym, x :: Nil, b)
+                            let list = MutMap.getOrElsePut(sym, MutList.empty(rc), newMap);
+                            MutList.push(x, list)
+
+                            // Map.insertWith(List.append, sym, x :: Nil, b)
                         }
                 }
-            }, startingPoint, facts);
-        Map.map(List.toVector, test)
+            }, facts);
+        newMap |>
+            MutMap.toMap |>
+            Map.map(MutList.toVector) |>
+            Map.unionWith(v1 -> v2 -> Vector.append(v1, v2), db)
+        // Vector.append(filtered)
 
+        // let test =
+        //     Vector.foldRight(a -> b -> {
+        //         match a {
+        //             case Constraint(headAtom, _) =>
+        //                 let HeadAtom(_, den, headTerms) = headAtom;
+        //                 let x = Vector.map(getFactTerm, headTerms);
+        //                 let isBot = match den {
+        //                     case Relational => false
+        //                     case Latticenal(bot, leq, _, _) => 
+        //                         // Remove p(;bot) from the facts
+        //                         if(Vector.get(Vector.length(x) - 1, x) `leq` bot) {
+        //                             true
+        //                         } else {
+        //                             false
+        //                         }
+        //                 };
+        //                 if(isBot) {
+        //                     b
+        //                 } else {
+        //                     let sym = Predicates.headAtomToRelSym(headAtom, Full, predSymMaps);
+        //                     Map.insertWith(List.append, sym, x :: Nil, b)
+        //                 }
+        //         }
+        //     }, startingPoint, facts);
+        // Map.map(List.toVector, test)
+    }
 
     ///
     /// Compile all rules to be evaluated in `stratum` to RAM

@@ -112,7 +112,7 @@ mod Fixpoint.SolverApi {
     def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfiler`.
-        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
+        def compiler(cs: Datalog, db: Map[RelSym, Vector[Vector[Boxed]]]): (ERamProgram, Boxing[rc]) \ rc = {
             Fixpoint.Phase.Compiler.compile(cs, db, stf) |>
             Fixpoint.Debugging.notifyPreLowering("Compiler") |>
             Fixpoint.Phase.Simplifier.simplifyProgram |>
@@ -173,8 +173,8 @@ mod Fixpoint.SolverApi {
         case (Model(db1), Model(db2)) =>
             use Fixpoint.Ast.Ram.toDenotation;
             let union = ramSym -> match toDenotation(ramSym) {
-                case Relational => Map.union
-                case Latticenal(_, _, lub, _) => Map.unionWith(lub)
+                case Relational => Vector.append
+                case Latticenal(_, _, _, _) => Vector.append
             };
             Model(Map.unionWithKey(union, db1, db2))
         case (Model(_), Datalog(_, _)) => Join(d1, d2)
@@ -190,13 +190,14 @@ mod Fixpoint.SolverApi {
 
     def provenanceToModel(d: Datalog): Datalog = match d {
         case Provenance(_, facts) =>
-            Map.foldLeftWithKey(acc -> predSym -> factMap -> match Map.find(_ -> _ -> true, factMap) {
-                case None => acc
-                case Some((v, _)) =>
-                    let relSym = RelSym.Symbol(predSym, Vector.length(v), Relational);
-                    let innerMap = Map.map(_ -> Boxed.NoValue, factMap);
-                    Map.insert(relSym, innerMap, acc)
-            }, Map#{}, facts) |> Model
+            ???
+            // Map.foldLeftWithKey(acc -> predSym -> factMap -> match Map.find(_ -> _ -> true, factMap) {
+            //     case None => acc
+            //     case Some((v, _)) =>
+            //         let relSym = RelSym.Symbol(predSym, Vector.length(v), Relational);
+            //         let innerMap = Map.map(_ -> Boxed.NoValue, factMap);
+            //         Map.insert(relSym, innerMap, acc)
+            // }, Map#{}, facts) |> Model
         case _ => unreachable!()
     }
 
@@ -212,7 +213,7 @@ mod Fixpoint.SolverApi {
         let fakeRelSym = RelSym.Symbol(p, -1, Relational);
         match Map.get(fakeRelSym, db) {
             case None => None
-            case Some(facts) => match Map.memberOf(goal, facts) {
+            case Some(facts) => match Vector.memberOf(goal, facts) {
                 case false => None
                 case true => Some(mapping(p, goal) :: Nil)
             }
@@ -633,10 +634,11 @@ mod Fixpoint.SolverApi {
                 let vs = f(t);
                 let arity = List.length(vs);
                 let ramSym = RelSym.Symbol(p, arity, Relational);
-                let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
-                MutMap.put(List.toVector(vs), Reflect.default(), rel)
+                let rel = MutMap.getOrElsePut(ramSym, MutList.empty(rc), db);
+                MutList.push(List.toVector(vs), rel)
             }, (), ts);
-            toModel(db)
+            let usedDb = MutMap.map(rc, MutList.toVector, db);
+            toModel(usedDb)
         }
 
     ///
@@ -854,19 +856,21 @@ mod Fixpoint.SolverApi {
                 case _ => Comparison.LessThan
             };
             Map.rangeQueryWith(qquery, ramSym -> rel -> match toDenotation(ramSym) {
-                case Relational =>
-                    Map.forEach((tuple, _) -> MutList.push(f(Vector.toList(tuple)), pFacts), rel)
+                case Relational => 
+                    Vector.forEach(x -> MutList.push(f(Vector.toList(x)), pFacts), rel)
+                    // Map.forEach((tuple, _) -> MutList.push(f(Vector.toList(tuple)), pFacts), rel)
                 case Latticenal(_, _, _, _) =>
-                    Map.forEach((tuple, lat) -> {
-                        let it = Iterator.range(rc, 0, Vector.length(tuple) + 1);
-                        let vs = it |> Iterator.map(i -> {
-                            if (i < Vector.length(tuple))
-                                Vector.get(i, tuple)
-                            else
-                                lat
-                        }) |> Iterator.toList;
-                        MutList.push(f(vs), pFacts)
-                    }, rel)
+                    Vector.forEach(x -> MutList.push(f(Vector.toList(x)), pFacts), rel)
+                    // Map.forEach((tuple, lat) -> {
+                    //     let it = Iterator.range(rc, 0, Vector.length(tuple) + 1);
+                    //     let vs = it |> Iterator.map(i -> {
+                    //         if (i < Vector.length(tuple))
+                    //             Vector.get(i, tuple)
+                    //         else
+                    //             lat
+                    //     }) |> Iterator.toList;
+                    //     MutList.push(f(vs), pFacts)
+                    // }, rel)
             }, db);
             pFacts |> MutList.toVector
         }
@@ -894,12 +898,14 @@ mod Fixpoint.SolverApi {
     def toModelWithoutFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r =
         let (db, meta) = dbMeta;
         let dbOnlyFullRels = MutMap.toMap(db) |>
-        Map.map(MutMap.toMap) |>
+        // Map.map(MutMap.toMap) |>
         Map.filterWithKey(k -> facts -> match k {
-            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicates.isFullID(meta, id) and Map.nonEmpty(facts)
+            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicates.isFullID(meta, id) and Vector.nonEmpty(facts)
         });
         if(withProv) {
-            toProvenance(rules, dbOnlyFullRels)
+            toProvenance(???, ???)
+            // ???
+            // toProvenance(rules, dbOnlyFullRels)
         } else {
             Model(dbOnlyFullRels)
         }
@@ -925,7 +931,7 @@ mod Fixpoint.SolverApi {
     ///
     def toModel(db: Database[r]): Datalog \ r =
         MutMap.toMap(db) |>
-        Map.map(MutMap.toMap) |>
+        // Map.map(MutMap.toMap) |>
         Model
 
 }

@@ -1,3 +1,4 @@
+import java.lang.System
 def ex1_01(): Unit \ IO = 
     let facts = #{
         // The Simpsons family tree
@@ -656,4 +657,57 @@ def main55555(): Unit \ IO = {
     };
     query r select (x) from H(;x) |> println;
     ()
+}
+
+
+
+def main444(): Unit \ IO = 
+    let r = 10;
+    let l = Vector.range(0, 1_000_000) |> Vector.map(x -> (x, x + 1));
+
+    let t1 = System.nanoTime();
+    repeat(r, 0, () -> {
+        // println("Start: ${Clock.runWithIO(Clock.now)}");
+        let db = inject l into A;
+        let pr = #{
+            B(y, x) :- A(x, y).
+        };
+        query db, pr select (x, y) from B(x, y) |> Vector.length
+    }) |> println;
+    let e1 = System.nanoTime() - t1;
+    println("Inject-Query: ${e1 / 1_000_000_000i64}s");
+
+    let t2 = System.nanoTime();
+    repeat(r, 0, () -> {
+        l |> Vector.map(match (x, y) -> (y, x)) |> Vector.length
+    }) |> println;
+    let e2 = System.nanoTime() - t2;
+    println("Vector.map: ${e2 / 1_000_000_000i64}s");
+
+    let t3 = System.nanoTime();
+    repeat(r, 0, () -> {
+        l |> Vector.foldLeft(acc -> match (x, y) -> Set.insert((y, x), acc), Set#{}) |> Set.size
+    }) |> println;
+    let e3 = System.nanoTime() - t3;
+    println("Fold creating set: ${e3 / 1_000_000_000i64}s")
+
+def repeat(n: Int32, r: Int32, f: Unit -> Int32 \ ef): Int32 \ ef = 
+    if (n == 0) r else repeat(n - 1, r + f(), f)
+
+
+    // repeat(r, 0, () ->
+    //     region rc {
+    //         let db = MutMap.empty(rc);
+    //         // let head = Foldable.foldRightWithCont(t -> _ -> Some(), None);
+    //         Foldable.foldLeft(() -> t -> {
+    //             let vs = swap2(t);
+    //             let rel = MutMap.getOrElsePut("shouldBeRelSym", MutList.empty(rc), db);
+    //             // let rel = MutMap.getOrElsePut("shouldBeRelSym", MutList.empty(rc), db);
+    //             MutList.push(List.toVector(vs), rel)
+    //         }, (), l);
+    //         Option.getWithDefault(MutList.empty(rc), MutMap.get("shouldBeRelSym", db)) |> MutList.toVector |> Vector.length
+    //     }) |> println;
+
+def swap2(v: (Int32, Int32)): List[Fixpoint.Boxed] = match v {
+    case (first, second) => Fixpoint.Boxable.box(second) :: Fixpoint.Boxable.box(first) :: Nil
 }
