@@ -83,10 +83,11 @@ mod Fixpoint.Phase.Lowering {
                 } else {
                     ERamStmt.Par(merges)
                 }
-            case ARamStmt.Swap(newRel, deltaRel) => 
+            case ARamStmt.Swap(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
                 let lowerToMerge = index -> ERamStmt.MergeInto(newRelPos, index, toDenotation(newRel));
+                let lowerToPurge = index -> ERamStmt.Purge(index);
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, getOrCrash(Map.get((deltaRel, 0), placements)));
                 if (deltaRels == 1) {
@@ -95,10 +96,12 @@ mod Fixpoint.Phase.Lowering {
                     let merges = 
                         Vector.range(1, deltaRels) |>
                         Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))));
+                    let purges = Vector.range(1, deltaRels) |>
+                        Vector.map(index -> lowerToPurge(getOrCrash(Map.get((deltaRel, index), placements))));
                     if(Vector.length(merges) == 1) {
                         ERamStmt.Seq(Vector#{Vector.get(0, merges), swapPart})
                     } else {
-                        ERamStmt.Seq(Vector#{ERamStmt.Par(merges), swapPart})
+                        ERamStmt.Seq(Vector#{ERamStmt.Seq(purges), ERamStmt.Par(merges), swapPart})
                     }
                 }
             case ARamStmt.Purge(s) =>
