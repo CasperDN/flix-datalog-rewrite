@@ -208,8 +208,7 @@ mod Fixpoint.Phase.Compiler {
     }
 
     ///
-    /// Construct merges for the given `RelSym`s in `idb`. Specifically for each relation `Pi` in `idb`
-    /// construct Merge(ΔPi', ΔPi).
+    /// Construct merges for the given `RelSym`s in `idb`. See the description for `compileStratum`
     ///
     def constructMerges(idb: Set[RelSym], predicates: Predicates): RamStmt = region rc {
         let merges = MutList.empty(rc);
