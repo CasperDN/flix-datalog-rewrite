@@ -15,6 +15,14 @@
  * limitations under the License.
  */
 
+///
+/// `PrecedenceGraph` contains a graph module which is used to compute a topological sort
+/// of strongly connected components (SCC) for a Datalog program.
+///
+/// The topological sort described a legal stratification of the Datalog program.
+///
+/// A `PseudoSCC` is a group of mutually independent, consecutive SCC in the topological order.
+///
 mod Fixpoint.PrecedenceGraph {
     @Internal
     pub type alias Vertex = Int32
@@ -64,6 +72,9 @@ mod Fixpoint.PrecedenceGraph {
         use Fixpoint.PrecedenceGraph.Vertex
         use Fixpoint.Util.getOrCrash
 
+        ///
+        /// `Color` is used for computing the topological sort.
+        ///
         enum Color with Eq {
             case White,
             case Gray,
@@ -98,8 +109,7 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// Returns the vertices of `g`.
         ///
-        @Internal
-        pub def getVertices(g: MutGraph[r]): MutSet[Vertex, r] = g->vertices
+        def getVertices(g: MutGraph[r]): MutSet[Vertex, r] = g->vertices
 
         ///
         /// Returns the number of vertices in `g`. MutGraphs should start with vertex 0.
@@ -165,8 +175,7 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// Return a `List` of the vertices of `g` in a topologically sorted order.
         ///
-        @Internal
-        pub def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
+        def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
             let sorted = MutList.empty(rc);           
             let colors = Array.repeat(rc, getSize(g), Color.White);
             getVertices(g) |>
@@ -178,6 +187,12 @@ mod Fixpoint.PrecedenceGraph {
             sorted |> MutList.toList |> List.reverse
         }
 
+        ///
+        /// Pushes undiscovered vertices reachable from `u` of graph `g` in reverse topological to `sorted`.
+        ///
+        /// A vertex is `White` if it has not been discovered yet. After discovery it is colored
+        /// `Grey`. After it and all its neighbors have been handled it is colored `Black`.
+        ///
         def topologicalSortVisit(
             g: MutGraph[r1], 
             colors: Array[Color, r0], 
@@ -200,8 +215,7 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// Returns a `List` of the strongly conected components of `g`.
         ///
-        @Internal
-        pub def stronglyConnectedComponents(g: MutGraph[r]): List[Set[Vertex]] \ r = region rc {
+        def stronglyConnectedComponents(g: MutGraph[r]): List[Set[Vertex]] \ r = region rc {
             let n = getSize(g);
             let disc = Array.repeat(rc, n, -1);
             let low = Array.repeat(rc, n, -1);
@@ -227,6 +241,27 @@ mod Fixpoint.PrecedenceGraph {
         def getNeighbors(u: Vertex, g: MutGraph[r]): List[Vertex] \ r = 
             MutMap.getWithDefault(u, List.empty(), g->adjList) 
 
+        ///
+        /// Helper method for `stronglyConnectedComponents`.
+        ///
+        /// `g` is the graph in question. `u` is the current vertex under consideration. 
+        /// `time` is used to assign discovery times. `onStack[u]` is true iff `u` has been
+        /// met but has not yet been assigned to a component. Similarly, `stack` contains the
+        /// vertices that have been met, but not assigned a component in order of discovery.
+        /// `disc[u]` is the time `u` was discovered, initialized to `-1`. `low[u]` is assigned
+        /// the lowest discovery time reachable from `u`, for vertices that were undiscovered
+        /// when met as a neighbor of `u`, or still on the stack when considered as a neighbor of `u`.
+        ///
+        /// The following invariant is kept: When all calls to neighbors of `u` are finished
+        /// everything discovered after `u` and still on `stack` is in the same SCC as `u`.
+        /// Furthermore `low[u]` will be `disc[u]` iff `u` was the first vertex discovered in
+        /// `u`'s SCC.
+        ///
+        /// `stronglyConnectedComponentsVisit(..., u)` will first handle all SCC reachable from `u`.
+        /// Afterwards all nodes on `stack` most be in the same SCC as `u`. If `disc[u]==low[u]` then
+        /// `u` was the first vertex discovered in the SCC and the SCC is built by popping from the stack
+        /// until `u` is met.
+        ///
         def stronglyConnectedComponentsVisit(
             components: MutList[Set[Vertex], r0],
             stack: MutList[Vertex, r0],
