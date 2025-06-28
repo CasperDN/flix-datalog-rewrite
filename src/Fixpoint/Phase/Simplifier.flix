@@ -51,36 +51,8 @@ mod Fixpoint.Phase.Simplifier {
 
     def simplifyHelper(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, stmt: RamStmt): Option[RamStmt] = match stmt {
         case RamStmt.Insert(op) =>
-            forM (
-                newOp <- simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op)
-            ) yield {
-                match newOp {
-                    //
-                    // DANGER! WILL ROBINSON! The following code is incorrect when a relation is being merged into a lattice.
-                    //
-                    // See #4719.
-                    //
-                    // // Rewrite join loops that copy one relation into another into a `merge` statement.
-                    // // search b ∈ B do
-                    // //   project (b[0], b[1]) into A
-                    // // end
-                    // // ==>
-                    // // merge B into A
-                    // // If A and B have the same arity.
-                    // case RelOp.Search(varB, relB, RelOp.Project(tuple, relA)) =>
-                    //     use Fixpoint.Ram.arityOf;
-                    //     let isCopy =
-                    //         Vector.map(t -> match t {
-                    //             case RamTerm.RowLoad(var, i) => if (varB == var) i else -1
-                    //             case _ => -1
-                    //         }, tuple) == Vector.range(0, arityOf(relB));
-                    //     if (isCopy)
-                    //         RamStmt.MergeInto(relB, relA)
-                    //     else
-                    //         RamStmt.Insert(newOp)
-                    case _ => RamStmt.Insert(newOp)
-                }
-            }
+            simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op) |>
+            Option.map(RamStmt.Insert)
         case RamStmt.MergeInto(_, _) => Some(stmt)
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
@@ -115,19 +87,6 @@ mod Fixpoint.Phase.Simplifier {
                 newBody <- recurseNewRel(ramSym, body);
                 res <- f(newBody)
             ) yield res
-        // case RelOp.Query(rowVar, ramSym, qry, body) =>
-        //     let f = nb -> match ramSym {
-        //         // case RelSym.Delta(_, _, _) =>
-        //         //     if (Set.memberOf(ramSym, stratum))
-        //         //         Some(RelOp.Query(rowVar, ramSym, qry, nb))
-        //         //     else
-        //         //         None
-        //         case _ => Some(RelOp.Query(rowVar, ramSym, qry, nb))
-        //     };
-        //     forM (
-        //         newBody <- simplifyOp(stratum, body);
-        //         res <- f(newBody)
-        //     ) yield res
         case RelOp.Functional(rowVar, f, terms, body, arity) =>
             forM(
                 newBody <- recurse(body)

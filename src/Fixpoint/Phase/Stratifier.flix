@@ -33,7 +33,9 @@ mod Fixpoint.Phase.Stratifier {
 
     ///
     /// Computes the stratification of `d`. The result is a map from `PredSym`
-    /// their strata.
+    /// to pseudo strata and a their position in the pseudo-stratum. The number
+    /// is meaningless, except for allowing to seperate `PredSym` in the same
+    /// pseudo-stratum by which strata they belong to to.
     ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
