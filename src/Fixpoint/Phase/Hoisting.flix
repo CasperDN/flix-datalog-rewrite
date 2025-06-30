@@ -18,6 +18,7 @@
 mod Fixpoint.Phase.Hoisting {
     use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, RamProgram, RamId, arityOfNonLat}
     use Fixpoint.Boxed
+    use Fixpoint.Phase.Compiler.functionalRelSym
     use Fixpoint.Util.{getOrCrash, unifyEqualitiesStmt}
     use MutDisjointSets.MutDisjointSets
 
@@ -226,7 +227,7 @@ mod Fixpoint.Phase.Hoisting {
             case RelOp.Functional(rowVar, func, terms, body, arity) =>
                 Vector.forEach(i -> {
                     match MutDisjointSets.find((rowVar, i), equalitySets) {
-                        case Some(rep) => MutMap.putWith(_ -> v -> v, rep, RamTerm.RowLoad(rowVar, i, Fixpoint.Phase.Compiler.functionalRelSym(arity)), termMap)
+                        case Some(rep) => MutMap.putWith(_ -> v -> v, rep, RamTerm.RowLoad(rowVar, i, functionalRelSym(arity)), termMap)
                         case None => bug!("In Fixpoint.Phase.Hoisting: Everything should be in the equalitySet")
                     }
                 }, Vector.range(0, arity));
