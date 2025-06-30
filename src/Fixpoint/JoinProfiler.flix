@@ -19,9 +19,8 @@ mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram, RamStmt => ERamStmt}
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
-    use Fixpoint.Util.{getOrCrash, unifyEqualitiesOp}
+    use Fixpoint.Util.{collectRowVarRelSymOp, getOrCrash, unifyEqualitiesOp}
     use Fixpoint.Solver
-    use Fixpoint.Util.{collectRowVarRelSymOp}
 
     ///
     /// Contains estimates on relation sizes and the expected number of tuples resulting 
