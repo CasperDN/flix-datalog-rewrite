@@ -24,7 +24,7 @@ mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Util.getOrCrash
-    use Fixpoint.PrecedenceGraph.{MutGraph, getPseudoSCCs}
+    use Fixpoint.PrecedenceGraph.{MutGraph, getPseudoStrata}
 
     ///
     /// Array allowing lookup of the id-part of `PredSym` to name-part of `PredSym`.
@@ -41,7 +41,7 @@ mod Fixpoint.Phase.Stratifier {
     pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
         let graph = MutGraph.empty(rc);
         mkDepGraphInternal(graph, d);
-        let scc = getPseudoSCCs(graph);
+        let scc = getPseudoStrata(graph);
         let numberOfPredSyms = MutGraph.getSize(graph);
         let predSyms = Array.empty(rc, numberOfPredSyms);
         collectPredSym(predSyms, d);

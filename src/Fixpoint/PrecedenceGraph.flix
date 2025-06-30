@@ -38,7 +38,7 @@ mod Fixpoint.PrecedenceGraph {
     ///
     /// Returns a list of the pseudo-SCCs of `g`.
     ///
-    pub def getPseudoSCCs(g: MutGraph[r]): List[PseudoSCC] \ r = region rc {
+    pub def getPseudoStrata(g: MutGraph[r]): List[PseudoSCC] \ r = region rc {
         let sorted = MutGraph.getSCCOrder(g);
         let pseudoStratums = MutList.empty(rc);
         def loop(s1, list) = match list {
