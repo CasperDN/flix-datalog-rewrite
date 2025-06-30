@@ -32,10 +32,10 @@ mod Fixpoint.Phase.Stratifier {
     type alias PredIdToName[r: Region] = Array[String, r]
 
     ///
-    /// Computes the stratification of `d`. The result is a map from `PredSym`
-    /// to pseudo strata and a their position in the pseudo-stratum. The number
-    /// is meaningless, except for allowing to seperate `PredSym` in the same
-    /// pseudo-stratum by which strata they belong to to.
+    /// Computes the stratification of `d`. The result is a map from `PredSym` to pseudo
+    /// strata and a their position in the pseudo-stratum. The number is meaningless,
+    /// except for allowing to seperate `PredSym` in the same pseudo-stratum by which
+    /// strata they belong to to.
     ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
@@ -73,8 +73,8 @@ mod Fixpoint.Phase.Stratifier {
     }
 
     ///
-    /// Insert edges into `graph` for the dependencies in the Datalog program `d`.
-    /// `A(x) :- B(x), A(x), -C(x).` inserts the edge `B -> A` and `C -> A` in `graph`.
+    /// Insert edges into `graph` for the dependencies in the Datalog program `d`. `A(x)
+    /// :- B(x), A(x), -C(x).` inserts the edge `B -> A` and `C -> A` in `graph`.
     ///
     def mkDepGraphInternal(graph: MutGraph[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(precedenceHelper(graph), rules)
@@ -93,8 +93,8 @@ mod Fixpoint.Phase.Stratifier {
     }
 
     ///
-    /// Inserts edges into `graph` for the found dependency between `dst`
-    /// and `src`. No edge is inserted if `dst == src`.
+    /// Inserts edges into `graph` for the found dependency between `dst` and `src`. No
+    /// edge is inserted if `dst == src`.
     ///
     /// See `mkDepGraphInternal`.
     ///
@@ -111,8 +111,8 @@ mod Fixpoint.Phase.Stratifier {
     }
 
     ///
-    /// Collects the names of the `PredSym`s of `d`. A `PredSym` `(name, id)`
-    /// in `d` will ensure that `predMap[id] == name`.
+    /// Collects the names of the `PredSym`s of `d`. A `PredSym` `(name, id)` in `d` will
+    /// ensure that `predMap[id] == name`.
     ///
     def collectPredSym(predMap: PredIdToName[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(predSymHelper(predMap), rules)
