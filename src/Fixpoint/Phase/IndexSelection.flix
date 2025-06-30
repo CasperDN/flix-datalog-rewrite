@@ -56,6 +56,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// The searches returned by `minIndex` are expanded to encompass the whole tuple size 
     /// of the relation. I.e., the search `0 < 2` gets expanded to `0 < 2 < 1`. 
     ///
+    @Internal
     pub def indexProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, meta, _) => 
             // This type annotation is apparently needed?
@@ -296,6 +297,7 @@ mod Fixpoint.Phase.IndexSelection {
         ///
         /// Find the minimum set of indexes that covers `searches`.
         ///
+        @Internal
         pub def minIndex(searches: List[Search]): List[Search] = 
             minChainCover(searches) |> 
             List.map(chain -> List.zip(chain, Vector.empty() :: chain)) |>
@@ -379,13 +381,6 @@ mod Fixpoint.Phase.IndexSelection {
                 let chain = toSearch(u1) :: List.map(e -> toSearch(snd(e)), maximalPath(u1, matching));
                 chain :: acc
             }, List.empty())
-
-        pub def main(): Unit \ IO = 
-            let u0: Search = Vector#{0,1};
-            let u1: Search = Vector#{0,2};
-            let u2: Search = Vector#{0,1,2};
-            let indexes = minIndex(u0::u1::u2::Nil);
-            println(indexes)
 
     }
 
