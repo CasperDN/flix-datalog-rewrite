@@ -76,14 +76,16 @@ mod Fixpoint.Phase.Hoisting {
     }
 
     ///
-    /// Hoist `If` ops in `stmt` and merge them with `Search` ops when relevant.
+    /// Hoist `If` ops in `Insert` `stmts` and merge them with `Search` ops when relevant.
     ///
-    /// `termMap` is used to look up which term a given `(RowVar, Int32)` is represented by and
-    /// whether they are currently considered ground.
+    /// `termMap` is used to look up the representative term for a given term involving a
+    /// `RowVar` and whether it is currently considered ground. The represented term is
+    /// stored as a tuple containing its `RowVar` and `RamId`.
     ///
     /// `equalitySets` is used to find representative terms given the seen equalities.
     ///
-    /// `impossible` contains the set of `RowVar`'s/rules which have been determined impossible to satisfy.
+    /// `impossible` contains the set of `RowVar`'s/rules which have been determined 
+    /// impossible to satisfy.
     ///
     def hoistStmt(
         rc: Region[r],
@@ -157,7 +159,7 @@ mod Fixpoint.Phase.Hoisting {
     }
 
     ///
-    /// Hoists statements in `op` as far as possible. See `hoistStmt`.
+    /// Hoists `If` ops in `op` as far as possible. 
     ///
     /// `idToBool` maps `RowVar`s to a list of `BoolExp`s which `RowVar` occur in.
     /// 
@@ -277,7 +279,7 @@ mod Fixpoint.Phase.Hoisting {
             case BoolExp.IsEmpty(_) => Set#{}
             case BoolExp.NotMemberOf(terms, _) => Vector.foldLeft(y -> x -> Set.union(collectTerm(x), y), Set#{}, terms)
             case BoolExp.NotBot(t1, _, _) => collectTerm(t1)
-            case BoolExp.Leq(_, rv, RelSym.Symbol(_, i, _)) => insertRepRowVar(termMap, rv, i)
+            case BoolExp.Leq(_, rv, RelSym.Symbol(_, i, _)) => collectRepRowVar(termMap, rv, i)
             case BoolExp.Eq(t1, t2) => Set.union(collectTerm(t1), collectTerm(t2))
             case BoolExp.Guard1(_, t1) => collectTerm(t1)
             case BoolExp.Guard2(_, t1, t2) => Set.union(collectTerm(t1), collectTerm(t2))
@@ -293,11 +295,11 @@ mod Fixpoint.Phase.Hoisting {
     /// Returns the set of `RowVar` in `term`.
     ///
     def collectTermVariables(termMap: MutMap[(RowVar, Int32), RamTerm, r], term: RamTerm): Set[RowVar] \ r = match term {
-        case RamTerm.Lit(_, _)               => Set#{}
-        case RamTerm.ProvMax(vec)            => Vector.foldLeft(acc -> match (rv, _) -> Set.insert(rv, acc), Set#{}, vec)
-        case RamTerm.RowLoad(rv, i, _)       => insertRepRowVar(termMap, rv, i)
-        case RamTerm.Meet(_, t1, (rv, RelSym.Symbol(_, arity, _)), _) => Set.union(collectTermVariables(termMap, t1), insertRepRowVar(termMap, rv, arity))
-        case RamTerm.App1(_, t1, _)          => collectTermVariables(termMap, t1)
+        case RamTerm.Lit(_, _) => Set#{}
+        case RamTerm.ProvMax(vec) => Vector.foldLeft(acc -> match (rv, _) -> Set.insert(rv, acc), Set#{}, vec)
+        case RamTerm.RowLoad(rv, i, _) => collectRepRowVar(termMap, rv, i)
+        case RamTerm.Meet(_, t1, (rv, RelSym.Symbol(_, arity, _)), _) => Set.union(collectTermVariables(termMap, t1), collectRepRowVar(termMap, rv, arity))
+        case RamTerm.App1(_, t1, _) => collectTermVariables(termMap, t1)
         case RamTerm.App2(_, t1, t2, _) =>
             Vector#{t1, t2} |>
             Vector.foldRight(t -> acc -> collectTermVariables(termMap, t) `Set.union` acc, Set#{})
@@ -312,7 +314,14 @@ mod Fixpoint.Phase.Hoisting {
             Vector.foldRight(t -> acc -> collectTermVariables(termMap, t) `Set.union` acc, Set#{})
     }
 
-    def insertRepRowVar(termMap: MutMap[(RowVar, Int32), RamTerm, r], rv: RowVar, index: Int32): Set[RowVar] \ r = match MutMap.get((rv, index), termMap) {
+    ///
+    /// Collect the `RowVar` of the `RowLoad` term representing `rv` with `RamID` `index`.
+    ///
+    def collectRepRowVar(
+        termMap: MutMap[(RowVar, Int32), RamTerm, r], 
+        rv: RowVar, 
+        index: Int32
+    ): Set[RowVar] \ r = match MutMap.get((rv, index), termMap) {
         case None => Set#{rv}
         case Some(rep) => match rep {
             case RamTerm.RowLoad(rv1, _, _) => Set#{rv1}
@@ -363,15 +372,15 @@ mod Fixpoint.Phase.Hoisting {
         };
         let replaceRec = replaceByRepRamTerm(termMap, equalitySets);
         match ramTerm {
-            case RamTerm.Lit(_, _)                      => ramTerm
-            case RamTerm.ProvMax(_)                     => ramTerm
-            case RamTerm.RowLoad(_, _, _)               => getRep(ramTerm)
-            case RamTerm.Meet(_, _, _, _)               => ramTerm
-            case RamTerm.App1(f, t1, id)                => RamTerm.App1(f, replaceRec(t1), id)
-            case RamTerm.App2(f, t1, t2, id)            => RamTerm.App2(f, replaceRec(t1), replaceRec(t2), id)
-            case RamTerm.App3(f, t1, t2, t3, id)        => RamTerm.App3(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), id)
-            case RamTerm.App4(f, t1, t2, t3, t4, id)    => RamTerm.App4(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), replaceRec(t4), id)
-            case RamTerm.App5(f, t1, t2, t3, t4, t5, id)=> RamTerm.App5(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), replaceRec(t4), replaceRec(t5), id)
+            case RamTerm.Lit(_, _)                       => ramTerm
+            case RamTerm.ProvMax(_)                      => ramTerm
+            case RamTerm.RowLoad(_, _, _)                => getRep(ramTerm)
+            case RamTerm.Meet(_, _, _, _)                => ramTerm
+            case RamTerm.App1(f, t1, id)                 => RamTerm.App1(f, replaceRec(t1), id)
+            case RamTerm.App2(f, t1, t2, id)             => RamTerm.App2(f, replaceRec(t1), replaceRec(t2), id)
+            case RamTerm.App3(f, t1, t2, t3, id)         => RamTerm.App3(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), id)
+            case RamTerm.App4(f, t1, t2, t3, t4, id)     => RamTerm.App4(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), replaceRec(t4), id)
+            case RamTerm.App5(f, t1, t2, t3, t4, t5, id) => RamTerm.App5(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), replaceRec(t4), replaceRec(t5), id)
     }
 
 
@@ -421,7 +430,8 @@ mod Fixpoint.Phase.Hoisting {
                 })
             case RamTerm.RowLoad(rv, i, _) =>
                 MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, i), equalitySets)), termMap)
-            case RamTerm.Meet(_, t1, (rv, relSym), _) => termGround(t1) and MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
+            case RamTerm.Meet(_, t1, (rv, relSym), _) => 
+                termGround(t1) and MutMap.memberOf(getOrCrash(MutDisjointSets.find((rv, arityOfNonLat(relSym)), equalitySets)), termMap)
             case RamTerm.App1(_, t1, _) => termGround(t1)
             case RamTerm.App2(_, t1, t2, _) => termGround(t1) and termGround(t2)
             case RamTerm.App3(_, t1, t2, t3, _) => termGround(t1) and termGround(t2) and termGround(t3)
