@@ -57,21 +57,6 @@ mod Fixpoint.Phase.Stratifier {
         MutMap.toMap(result)
     }
 
-    pub def main199(): Unit \ IO = region rc {
-        let g = MutGraph.empty(rc);
-        MutGraph.addEdge(0, 7, g);
-        MutGraph.addEdge(1, 3, g);
-        MutGraph.addEdge(2, 3, g);
-        MutGraph.addEdge(3, 4, g);
-        MutGraph.addEdge(4, 3, g);
-        MutGraph.addEdge(3, 6, g);
-        MutGraph.addEdge(5, 6, g);
-        MutGraph.addEdge(5, 7, g);
-        MutGraph.addEdge(6, 11, g);
-        MutGraph.addEdge(10, 11, g);
-        getPseudoSCCs(g) |> println
-    }
-
     ///
     /// Insert edges into `graph` for the dependencies in the Datalog program `d`. `A(x)
     /// :- B(x), A(x), -C(x).` inserts the edge `B -> A` and `C -> A` in `graph`.
