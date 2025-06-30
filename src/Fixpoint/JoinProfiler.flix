@@ -20,12 +20,21 @@ mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
     use Fixpoint.Util.{getOrCrash, unifyEqualitiesOp}
-    use Fixpoint.SolverApi
+    use Fixpoint.Solver
     use Fixpoint.Util.{collectRowVarRelSymOp}
 
     ///
-    /// Represents statistics about relation sizes and the expected number of tuples
-    /// resulting from a particular join order as a result of program execution. 
+    /// Contains estimates on relation sizes and the expected number of tuples resulting 
+    /// from a particular join as a result of program execution. The estimates are generated
+    /// by `EstimateJoinSize` statements. Since they can appear in loops, we collect 
+    /// estimates for each loop iteration.
+    ///
+    /// The first map maps relations represented by `RowVar`'s to their estimated size in
+    /// each iteration. 
+    ///
+    /// The second map maps a particular join to the expected number of resulting tuples.
+    /// This is done by projecting the tuples in the relation to the join attributes and
+    /// counting the number of duplicates.
     ///
     @Internal
     pub enum JoinProfile {
@@ -46,11 +55,11 @@ mod Fixpoint.JoinProfiler {
         }
     }
     
-    // (non-recursive, recursive rules)
+    // Type alias for non-recursive and recursive rules, respectively.
     type alias Rules = (List[RelOp], List[RelOp])
 
     ///
-    /// Returns a profile about `program` by a version of `program` instrumented with
+    /// Returns a profile on `program` by running `program` instrumented with
     /// `EstimateJoinSize` statements. Additionally, returns a map used to infer which 
     /// `RowVar`'s bind which attributes in another `RowVar`.
     ///
@@ -59,7 +68,7 @@ mod Fixpoint.JoinProfiler {
         let (instrumentedProgram, attributeMap, rowVarToPos) = instrumentProgram(rc, program); 
         let vec = instrumentedProgram |>
             Fixpoint.Debugging.notifyPreLowering("Join Profiler") |>
-            SolverApi.runJoinProfiler;
+            Solver.runJoinProfiler;
         let joinToSizeDup = Map.map(i -> Vector.get(i, vec), rowVarToPos);
         let sizePerIter = joinToSizeDup |> 
             Map.foldLeftWithKey(acc -> k1 -> v1 -> {
@@ -67,13 +76,25 @@ mod Fixpoint.JoinProfiler {
                 let v2 = Vector.map(fst >> Int32.toInt64, v1);
                 Map.insert(k2, v2, acc)
             }, Map#{});
-        let expectedJoinSize = Map.map(Vector.map(match (size, dup) -> Int32.toInt64(size) / (Int32.toInt64(size) - Int32.toInt64(dup))), joinToSizeDup);
+        let expectedJoinSize = joinToSizeDup |> 
+            Map.map(
+                Vector.map(match (size, dup) -> 
+                    Int32.toInt64(size) / (Int32.toInt64(size) - Int32.toInt64(dup)))
+            );
         let profile = JoinProfile.Profile(sizePerIter, expectedJoinSize);
         (profile, attributeMap)
     }
 
     ///
-    /// Collects the
+    /// Adds join attributes to `attributeMap`. Conceptually, this is similar to collecting
+    /// the bound variables in the Datalog rule corresponding to the `RelOp` `rule`.
+    ///
+    /// `vars` is the list of all `RowVar`'s and their `RelSym`'s in `op`.
+    ///
+    /// `attributeMap` represents a SIP-graph. Given a `RowVar` `rv1`, a lookup returns another
+    /// map which, given a different `RowVar` `rv2`, returns the join attributes indexed by
+    /// their position in the corresponding relation for `rv1`. Conceptually, this gives us
+    /// the attributes that `rv1` binds in `rv2`, 
     ///
     def collectBoundVars(
         rc: Region[r], 
@@ -86,8 +107,7 @@ mod Fixpoint.JoinProfiler {
         unifyEqualitiesOp(equalities, constEqualities, rule);
         // equivalentMap is basically a SIP-graph.
         let equivalentMap = MutMap.empty(rc);
-        vars |>
-        List.forEach(match (rv, RelSym.Symbol(_, arity, _)) -> {
+        vars |> List.forEach(match (rv, RelSym.Symbol(_, arity, _)) -> {
             Vector.range(0, arity) |>
             Vector.forEach(i -> 
                 let load = (rv, i);
@@ -96,11 +116,10 @@ mod Fixpoint.JoinProfiler {
             )
         });
         let attributesForRelSym = MutMap.empty(rc);
-        let _ = vars |> List.forEach(match (rvi, relSym) ->{
+        vars |> List.forEach(match (rvi, relSym) -> {
             let mapForI = MutMap.getOrElsePut(rvi, MutMap.empty(rc), attributeMap);
             let boundForI = MutSet.empty(rc);
-            vars |>
-            List.filter(match (rvj, _) -> rvj != rvi) |>
+            vars |> List.filter(match (rvj, _) -> rvj != rvi) |>
             List.forEach(aj -> {
                 let (rvj, RelSym.Symbol(_, arity, _)) = aj;
                 let boundByJ = MutSet.empty(rc);
@@ -110,10 +129,8 @@ mod Fixpoint.JoinProfiler {
                     match MutMap.get(rep, equivalentMap) {
                         case None => ()
                         case Some(v) => 
-                            v |>
-                            List.forEach(match (rv, index) -> 
-                                if(rv == rvi)
-                                    MutSet.add(index, boundByJ)
+                            v |> List.forEach(match (rv, index) -> 
+                                if(rv == rvi) MutSet.add(index, boundByJ)
                                 else ()
                             )
                     }
@@ -122,13 +139,16 @@ mod Fixpoint.JoinProfiler {
                 MutSet.add(MutSet.toList(boundByJ), boundForI)
             });
             let result = MutSet.empty(rc);
-            powerSetForEach(List.toVector(MutSet.toList(boundForI)), result);
+            updateWithPowersetOf(List.toVector(MutSet.toList(boundForI)), result);
             let collectedSoFar = MutMap.getOrElsePut((rvi, relSym), MutSet.empty(rc), attributesForRelSym);
             MutSet.addAll(MutSet.toSet(result), collectedSoFar)
         });
-        attributesForRelSym |> MutMap.toMap |> Map.map(x -> x |> MutSet.toList |> List.map(List.toVector))
+        attributesForRelSym |> MutMap.toMap |> Map.map(MutSet.toList >> List.map(List.toVector))
 
-    def powerSetForEach(values: Vector[List[Int32]], setForJ: MutSet[List[Int32], r]): Unit \ r =
+    ///
+    /// Updates `setForJ` with all elements in the powerset of `values`.
+    ///
+    def updateWithPowersetOf(values: Vector[List[Int32]], setForJ: MutSet[List[Int32], r]): Unit \ r =
         def loop(index, val) = 
             if(Vector.size(values) == index) {
                 let toInsert = Set.foldRight(boundVar -> acc -> boundVar :: acc, Nil, val);
@@ -136,14 +156,25 @@ mod Fixpoint.JoinProfiler {
             } else {
                 Vector.range(index + 1, Vector.length(values) + 1) |> 
                 Vector.forEach(nextIndex -> {
-                    let newVal = List.foldLeft(acc -> boundVar -> Set.insert(boundVar, acc), val, Vector.get(index, values));     
+                    let newVal = List.foldLeft(acc -> boundVar -> 
+                        Set.insert(boundVar, acc), val, Vector.get(index, values)
+                    );     
                     loop(nextIndex, newVal)
                 })
             };
         Vector.range(0, Vector.length(values) + 1) |>
         Vector.forEach(i -> loop(i, Set.empty()))
 
-    def estimateToCollect(rc: Region[r], toEstimate: Map[(RowVar, RelSym), List[Search]], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]): Unit \ r =
+    ///
+    /// Populates `collectFor` with the estimates given by relations and join attributes in 
+    /// `toEstimate`. A `Search` is used to represent the join attributes, which is
+    /// coincidentally also used later to construct an index conforming with that search.
+    ///
+    def estimateToCollect(
+        rc: Region[r], 
+        toEstimate: Map[(RowVar, RelSym), List[Search]],
+        collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]
+    ): Unit \ r =
         Map.forEach(match (rowVar, relSym) -> val -> {
             val |> List.forEach(search ->
                 MutMap.getOrElsePut((relSym, search), MutSet.empty(rc), collectFor) |>
@@ -151,24 +182,37 @@ mod Fixpoint.JoinProfiler {
             )
         }, toEstimate)
 
-    def collectedToEstimateStmts(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]): List[RamStmt] \ r =
+    ///
+    /// Create appropriate `EstimateJoinSize` statements based on write-positions in 
+    /// `rowVarToPos` and estimate information in `collectFor`.
+    ///
+    def collectedToEstimateStmts(
+        counter: Counter[r], 
+        rowVarToPos: MutMap[(RowVar, Search), Int32, r], 
+        collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r]
+    ): List[RamStmt] \ r =
         collectFor |> MutMap.foldLeftWithKey(acc -> match (relSym, search) -> rowVars -> {
             let savePos = Counter.getAndIncrement(counter);
             MutSet.forEach(rowVar -> MutMap.put((rowVar, search), savePos, rowVarToPos), rowVars);
             RamStmt.EstimateJoinSize(relSym, -1, savePos, search) :: acc
         }, Nil)
 
-    def combineStmtWithEstimate(counter: Counter[r], rowVarToPos: MutMap[(RowVar, Search), Int32, r], collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r], stmt: RamStmt): RamStmt \ r = {
+    ///
+    /// Returns a `Seq` statement containing `EstimateJoinSize` statements created based 
+    /// on `rowVarToPos` and `collectFor` and places it immediately before `stmt`.
+    ///
+    def combineStmtWithEstimate(
+        counter: Counter[r], 
+        rowVarToPos: MutMap[(RowVar, Search), Int32, r], 
+        collectFor: MutMap[(RelSym, Search), MutSet[RowVar, r], r], 
+        stmt: RamStmt
+    ): RamStmt \ r = 
         let estimateStmts = collectedToEstimateStmts(counter, rowVarToPos, collectFor);
-        if(List.isEmpty(estimateStmts)) {
-            stmt
-        } else {
-            RamStmt.Seq(Vector#{RamStmt.Par(List.toVector(estimateStmts)), stmt})
-        }
-    }
+        if(List.isEmpty(estimateStmts)) stmt
+        else RamStmt.Seq(Vector#{RamStmt.Par(List.toVector(estimateStmts)), stmt})
 
     ///
-    /// Instruments the program with EstimateJoinSize statements.
+    /// Instruments `program` with `EstimateJoinSize` statements.
     ///
     def instrumentProgram(
         rc: Region[r], 
@@ -188,7 +232,8 @@ mod Fixpoint.JoinProfiler {
             case RamStmt.Par(stmts) => Vector.forEach(collectUntilBody(collectFor), stmts)
             case RamStmt.Until(_, _) => bug!("bug in Fixpoint.JoinProfiler: Nested until statements should not exist")
             case RamStmt.Comment(_) => ()
-            case RamStmt.EstimateJoinSize(_, _, _, _) => bug!("bug in Fixpoint.JoinProfiler: EstimateJoinSize should not exist at this point")
+            case RamStmt.EstimateJoinSize(_, _, _, _) => 
+                bug!("bug in Fixpoint.JoinProfiler: EstimateJoinSize should not exist at this point")
         };
 
         // Note that estimation can be done in parallel with the expressions using them.
@@ -226,18 +271,27 @@ mod Fixpoint.JoinProfiler {
         (instrumentedProgram, collectedAttributeMap, rowVarToPos |> MutMap.toMap)
     }
 
+    /// 
+    /// Returns the number of distinct `EstimateJoinSize` statements in `program`. This is
+    /// used by the interpreter to create an array which stores the results of those 
+    /// statements.
+    ///
+    @Internal
     pub def getJoinEstimateNum(program: ERamProgram): Int32 =
         let ERamProgram.Program(stmt, _, _, _, _, _) = program;
-        getJoinEstimateNumStmt(stmt) + 1
-        
-    def getJoinEstimateNumStmt(s: ERamStmt): Int32 = match s {
+        getJoinEstimateMaxPos(stmt) + 1
+    
+    ///
+    /// Returns the highest write-position of `EstimateJoinSize` statements in `s`. 
+    ///
+    def getJoinEstimateMaxPos(s: ERamStmt): Int32 = match s {
         case ERamStmt.Insert(_) => -1
         case ERamStmt.MergeInto(_, _, _) => -1
         case ERamStmt.Swap(_, _) => -1
         case ERamStmt.Purge(_) => -1
-        case ERamStmt.Seq(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)
-        case ERamStmt.Par(stmts) => Vector.map(getJoinEstimateNumStmt, stmts) |> Vector.foldLeft(Int32.max, -1)
-        case ERamStmt.Until(_, stmt) => getJoinEstimateNumStmt(stmt)
+        case ERamStmt.Seq(stmts) => Vector.map(getJoinEstimateMaxPos, stmts) |> Vector.foldLeft(Int32.max, -1)
+        case ERamStmt.Par(stmts) => Vector.map(getJoinEstimateMaxPos, stmts) |> Vector.foldLeft(Int32.max, -1)
+        case ERamStmt.Until(_, stmt) => getJoinEstimateMaxPos(stmt)
         case ERamStmt.Comment(_) => -1
         case ERamStmt.EstimateJoinSize(_, writeTo, _) => writeTo
     }
