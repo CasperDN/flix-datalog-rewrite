@@ -45,7 +45,7 @@ mod Fixpoint.Phase.Lowering {
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
     @Internal
-    pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
+    pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram[r], Boxing[r]) \ r = match program { 
         case AProgram.Program(stmt, _, meta, indexInfo) =>
             let idToIndex = UniqueInts.empty(rc);
             let (marshall, newFacts, idToMarshall) = Boxing.initialize(rc, program);

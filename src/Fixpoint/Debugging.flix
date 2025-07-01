@@ -118,8 +118,8 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreInterpret(
-        input: (ExecutableRam.RamProgram, BoxingType.Boxing[rc])
-    ): (ExecutableRam.RamProgram, BoxingType.Boxing[rc]) = match fst(input) {
+        input: (ExecutableRam.RamProgram[r], BoxingType.Boxing[r])
+    ): (ExecutableRam.RamProgram[r], BoxingType.Boxing[r]) = match fst(input) {
         case ExecutableRam.RamProgram.Program(stmt, _, _, (index, indexPos), _, _) => unchecked_cast({
             if (Fixpoint.Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);

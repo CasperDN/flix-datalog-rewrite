@@ -87,8 +87,9 @@ mod Test.Exp.Fixpoint.Compose {
         (ra, rb)
 
     @test
-    pub def testFixpointCompose13(): Bool = {
+    pub def testFixpointCompose13(): Bool \ IO = {
         let ans = query coolioQuack(#{ Coolio("quack!"). }) select s from Duck(s);
+        println(ans);
         ans == Vector#{"quack!"}
     }
 

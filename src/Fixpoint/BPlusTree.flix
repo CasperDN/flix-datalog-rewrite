@@ -465,6 +465,15 @@ mod BPlusTree {
 //     ///
 //     pub def arity(t: BPlusTree[k, v, r]): Int32 = t->arity
 
+    ///
+    /// Optionally returns `k => v` where `k` is the minimum key.
+    ///
+    /// Not thread-safe.
+    ///
+    pub def minimumKey(t: BPlusTree[k, v, r]): Option[(k, v)] \ r with Order[k], Eq[v] =
+        Node.minimumKey(t->root)
+
+
 //     ///
 //     /// Updates `t` with `k => f(k, v, v1)` if `k => v1` is in `t`.
 //     ///
@@ -586,6 +595,20 @@ mod BPlusTree {
 //     }
 
     mod Node {
+                ///
+        /// Optionally returns `k => v` where `k` is the minimum key.
+        ///
+        /// Not thread-safe.
+        ///
+        @Internal
+        pub def minimumKey(t: Node[k, v, r]): Option[(k, v)] \ r with Order[k], Eq[v] =
+            let leftMost = leftMostChild(t);
+            if(size(leftMost) == 0) {
+                None
+            } else {
+                Some((Array.get(0, leftMost->keys), Array.get(0, leftMost->values)))
+            }
+
 //         import java.lang.invoke.{VarHandle => JVarHandle}
 //         import java.lang.{Object => JObject}
 //         import java.util.{Objects => JObjects}

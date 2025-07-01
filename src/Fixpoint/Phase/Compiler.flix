@@ -42,11 +42,11 @@ mod Fixpoint.Phase.Compiler {
     /// A rule belongs to the same stratum as its head predicate.
     ///
     @Internal
-    pub def compile(d: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]], strat: Map[PredSym, (Int32, Int32)]): RamProgram = match d {
+    pub def compile(d: Datalog, db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]], strat: Map[PredSym, (Int32, Int32)]): RamProgram = match d {
         case Datalog(facts, _) => region rc {
             let predicates = Predicate.initialize(d, db);
             let stmts = MutList.empty(rc);
-            let compiledFacts = compileFacts(facts, db, predicates);
+            let compiledFacts = unchecked_cast((compileFacts(facts, db, predicates): _ \ IO) as _ \ {});
             // Create map of stratum to list of rules in stratum
             let counter = Counter.fresh(rc);
             let ruleNums = enumerateRules(d);
@@ -98,44 +98,48 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Insert all facts in `facts` in `db` and return the result.
     ///
-    def compileFacts(facts: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]], predicates: Predicates): Facts =
+    def compileFacts(facts: Vector[Constraint], db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]], predicates: Predicates): Facts \ IO = region rc {
+        // Clone old db to ensure we do not mutate them.
         let startingPoint = db |>
             Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match den {
-            case Relational => (Nil, values) ||> Map.foldWithKey(acc -> k -> _ -> k :: acc)
-            case Latticenal(bot, leq, _, _) => (Nil, values) ||> Map.foldWithKey(acc -> k -> v ->
-                // Remove p(;bot) from the facts
-                if(v `leq` bot) {
-                    acc
-                } else {
-                    Vector.append(k, Vector#{v}) :: acc
-                }
-            )
-        });
-
-        (startingPoint, facts) ||> Vector.foldRight(constraint -> acc -> {
-            match constraint {
-                case Constraint(headAtom, _) =>
-                    let HeadAtom(_, den, headTerms) = headAtom;
-                    let x = Vector.map(getLitOrCrash, headTerms);
-                    let isBot = match den {
-                        case Relational => false
-                        case Latticenal(bot, leq, _, _) => 
-                            // Remove p(;bot) from the facts
-                            if(Vector.get(Vector.length(x) - 1, x) `leq` bot) {
-                                true
-                            } else {
-                                false
-                            }
-                    };
-                    if(isBot) {
-                        acc
+            case Relational => 
+                let newTree = BPlusTree.empty(Static);
+                BPlusTree.merge(values, newTree);
+                newTree
+            case Latticenal(bot, leq, _, _) => 
+                let newTree = BPlusTree.empty(Static);
+                values |> BPlusTree.parForEach(k -> v -> {
+                    if(v `leq` bot) {
+                        ()
                     } else {
-                        let sym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
-                        Map.insertWith(List.append, sym, x :: Nil, acc)
+                        BPlusTree.put(k, v, newTree)
                     }
-            }
-        }) |>
-            Map.map(List.toVector)
+                });
+                newTree
+        }) |> Map.toMutMap(rc);
+
+        facts |> Vector.forEach(constraint -> match constraint {
+            case Constraint(headAtom, _) =>
+                let HeadAtom(_, den, headTerms) = headAtom;
+                let x = Vector.map(getLitOrCrash, headTerms);
+                let sym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
+                match den {
+                    case Relational =>
+                        MutMap.getOrElsePut(sym, BPlusTree.empty(Static), startingPoint) |>
+                            BPlusTree.put(x, Boxed.NoValue)
+                    case Latticenal(bot, leq, lub, _) => 
+                        if(Vector.get(Vector.length(x) - 1, x) `leq` bot) {
+                            ()
+                        } else {
+                            let (tuple, lattice) = Vector.splitAt(Vector.length(x) - 1, x);
+                            MutMap.getOrElsePut(sym, BPlusTree.empty(Static), startingPoint) |>
+                                BPlusTree.putWith(lub, tuple, Vector.get(0, lattice));
+                            ()
+                        }
+                }
+        });
+        startingPoint |> MutMap.toMap
+    }
 
 
     ///

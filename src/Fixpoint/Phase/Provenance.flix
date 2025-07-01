@@ -18,7 +18,7 @@
  mod Fixpoint.Phase.Provenance {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, RamId, BoolExp}
-    use Fixpoint.Boxed.BoxedInt64
+    use Fixpoint.Boxed.{BoxedInt64, NoValue}
     use Fixpoint.Counter
 
     ///
@@ -30,16 +30,22 @@
     @Internal
     pub def augmentProgram(withProv: Bool, program: RamProgram): RamProgram = 
         if (not withProv) program
-        else augmentProgramInternal(program)
+        else unchecked_cast((augmentProgramInternal(program): _ \ IO) as _ \ {})
     
     ///
     /// Augment `program` to maintain proof depth of atoms and rule used to generate them.
     /// Further add extend facts to contain a depth and rule.
     ///
-    def augmentProgramInternal(program: RamProgram): RamProgram = match program {
+    def augmentProgramInternal(program: RamProgram): RamProgram \ IO = match program {
         case RamProgram.Program(stmt, facts, predicates, indexInfo) =>
             let augmentedFacts = facts |> 
-                Map.map(Vector.map(tuple -> Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)})));
+                Map.map(values ->
+                    let augmented = BPlusTree.empty(Static);
+                    values |> BPlusTree.forEach(tuple -> _ -> 
+                        augmented |> BPlusTree.put(Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)}), NoValue)
+                    );
+                    augmented
+                );
             let augmentedStmt = augmentStmt(stmt);
             RamProgram.Program(augmentedStmt, augmentedFacts, predicates, indexInfo) |>
             Fixpoint.Debugging.notifyPreLowering("Provenance")

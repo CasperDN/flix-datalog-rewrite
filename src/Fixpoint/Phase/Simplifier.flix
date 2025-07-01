@@ -36,15 +36,16 @@ mod Fixpoint.Phase.Simplifier {
     ///     end
     ///
     @Internal
-    pub def simplifyProgram(program: RamProgram): RamProgram = region rc {match program {
+    pub def simplifyProgram(program: RamProgram): RamProgram = unchecked_cast((region rc {match program {
         case RamProgram.Program(stmt, facts, predicates, index) =>
             let nonEmpty = facts |>
-                Map.filter(Vector.nonEmpty) |>
+                Map.filter(x -> (not BPlusTree.isEmpty(x))) |>
                 Map.foldRightWithKey(k -> _ -> Set.insert(k), Set#{}) |>
                 Set.map(rel -> getRelSymAsType(rel, PredType.Full, predicates));
             let _ = Array.empty(rc, 1);
             RamProgram.Program(simplifyStmt(stmt, nonEmpty, predicates), facts, predicates, index)
-    }}
+    }}: _ \ IO) as _ \ {})
+
     @Internal
     pub def simplifyStmt(stmt: RamStmt, nonEmpty: Set[RelSym], predicates: Predicates): RamStmt =
         Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(nonEmpty, predicates, false, stmt))

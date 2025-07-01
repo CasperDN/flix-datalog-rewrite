@@ -52,7 +52,7 @@ mod Fixpoint.Interpreter {
     type alias Indexes[r: Region] = Array[Index[r], r]
 
     @Internal
-    pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
+    pub type alias Database[r: Region] = MutMap[RelSym, BPlusTree[Vector[Boxed], Boxed, Static], r]
 
     type alias SearchEnv[r: Region] = (
         Vector[SearchTuple[r]], 
@@ -77,13 +77,13 @@ mod Fixpoint.Interpreter {
         rc: Region[r], 
         relSym: RelSym, 
         search: Vector[Int32], 
-        tuples: Vector[(Tuple, Boxed)]
+        tuples: BPlusTree[Tuple, Boxed, r]
     ): Index[r] \ r = 
         let index = BPlusTree.emptyWithArityAndSearch(rc, Fixpoint.Options.usedArity(), search);
-        if(Vector.isEmpty(tuples)) 
+        if(BPlusTree.isEmpty(tuples)) 
             index
         else {
-            Vector.forEach(match (nonLat, lat) -> {
+            BPlusTree.forEach(nonLat -> lat -> {
                 match toDenotation(relSym) {
                     case Relational => 
                         BPlusTree.put(nonLat, lat, index)
@@ -95,20 +95,20 @@ mod Fixpoint.Interpreter {
         }
 
     @Internal
-    pub def estimateJoinSizes(rc: Region[r], input: (RamProgram, Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
+    pub def estimateJoinSizes(rc: Region[r], input: (RamProgram[r], Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
         let expectedJoinSize = Array.empty(rc, getJoinEstimateNum(fst(input)));
         expectedJoinSize |> Array.transform(_ -> MutList.empty(rc));
         let _ = interpretWithInput(rc, Some(expectedJoinSize), input);
         expectedJoinSize        
 
     @Internal
-    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r = 
+    pub def interpret(rc: Region[r], input: (RamProgram[r], Boxing[r])): (Database[r], Predicates) \ r = 
         interpretWithInput(rc, None, input)
 
     def interpretWithInput(
         rc: Region[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
-        input: (RamProgram, Boxing[r])
+        input: (RamProgram[r], Boxing[r])
     ): (Database[r], Predicates) \ r =
         let (program, boxing) = input;
         let indexes = match program {
@@ -120,7 +120,7 @@ mod Fixpoint.Interpreter {
                 let indexes = Array.empty(rc, indexNum);
                 indexMap |>
                 Map.forEach(relSym -> searches -> {
-                    let tuples = Map.getWithDefault(relSym, Vector#{}, facts);
+                    let tuples = Map.getWithDefault(relSym, BPlusTree.empty(rc), facts);
                     searches |> Vector.forEachWithIndex(num -> search -> {
                         let pos = match Map.get((relSym, num), posMap) {
                             case Some(v) => v
@@ -138,7 +138,7 @@ mod Fixpoint.Interpreter {
         db: Indexes[r], 
         boxing: Boxing[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
-        program: RamProgram
+        program: RamProgram[r]
     ): (Database[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
@@ -160,11 +160,11 @@ mod Fixpoint.Interpreter {
     }
 
 
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): Database[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): Database[r] \ r = unchecked_cast(({
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
-            let innerMap = MutMap.empty(rc);
+            let innerMap = BPlusTree.empty(Static);
             let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
                 Vector.map(i ->
                     getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
@@ -172,11 +172,12 @@ mod Fixpoint.Interpreter {
             Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
             BPlusTree.forEach(vec -> latticeElem -> {
                 let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
-                MutMap.put(boxedVec, latticeElem, innerMap)
+                BPlusTree.put(boxedVec, latticeElem, innerMap)
             });
             MutMap.put(relSym, innerMap, res)
         });
         res
+    }: _ \ r + IO) as _ \ r)
 
     def evalStmt(
         rc: Region[r], 

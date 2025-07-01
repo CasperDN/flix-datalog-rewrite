@@ -17,6 +17,7 @@
 
 mod Fixpoint.Phase.JoinOptimizer {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RowVar, RelOp, RelSym}
+    use Fixpoint.AtomicCounter
     use Fixpoint.Util.{getOrCrash, collectRowVarRelSym}
     use Fixpoint.Options.{profilerMinimumFacts, profilerDiscrimination, profilerSeed, profilerFactLowerBound, disableJoinOptimizer}
     use Fixpoint.JoinProfiler
@@ -33,15 +34,19 @@ mod Fixpoint.Phase.JoinOptimizer {
     /// phase is skipped.
     ///
     @Internal
-    pub def scheduleProgram(program: RamProgram): RamProgram = 
+    pub def scheduleProgram(program: RamProgram): RamProgram = unchecked_cast((
         if (disableJoinOptimizer()) program
         else {
             let RamProgram.Program(_, facts, _, _) = program;
-            let numOfFacts = Map.foldLeft(acc -> l -> acc + Vector.length(l) |> Int32.toInt64, 0i64, facts);
+            let numOfFacts = Map.foldLeft(acc -> l -> region rc {
+                let c = AtomicCounter.mkCounter(rc, 0i64);
+                l |> BPlusTree.forEach(_ -> _ -> {AtomicCounter.getAndIncrement(c); ()});
+                AtomicCounter.get(c) + acc
+            }, 0i64, facts);
             if (numOfFacts < profilerMinimumFacts()) {
                 program 
             } else scheduleProgramInternal(program)
-        }
+        }: _ \ IO) as _ \ {})
         
     ///
     /// Performs join reordering of the statements in `program` by running the join
@@ -51,15 +56,22 @@ mod Fixpoint.Phase.JoinOptimizer {
     /// than `profilerFactLowerBound`, the facts in that relation are shuffled and the
     /// first `profilerFactLowerBound` facts are chosen.
     ///
-    def scheduleProgramInternal(program: RamProgram): RamProgram = match program {
+    def scheduleProgramInternal(program: RamProgram): RamProgram \ IO = match program {
         case RamProgram.Program(stmt, facts, predState, indexInfo) => 
             let takeRandomFacts = fs -> {
-                let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
-                if (Vector.length(filtered) < profilerFactLowerBound()) {
-                    // Cast NonDet to Random.
-                    let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
-                    Vector.take(profilerFactLowerBound(), shuffled)
-                } else filtered
+                let newTree = BPlusTree.empty(Static);
+                fs |> BPlusTree.forEach(k -> v -> 
+                    if(Random.randomFloat64() <= profilerDiscrimination())
+                        BPlusTree.put(k, v, fs)
+                    else ()
+                );
+                newTree
+                // let filtered = Vector.filter(_ -> Random.randomFloat64() <= profilerDiscrimination(), fs);
+                // if (Vector.length(filtered) < profilerFactLowerBound()) {
+                //     // Cast NonDet to Random.
+                //     let shuffled = unchecked_cast(Vector.shuffle(fs) as _ \ Random);
+                //     Vector.take(profilerFactLowerBound(), shuffled)
+                // } else filtered
             };
             let profilerFacts = facts |> Map.map(takeRandomFacts |> Random.handleWithSeed(profilerSeed()));
             let programToProfile = RamProgram.Program(stmt, profilerFacts, predState, indexInfo);

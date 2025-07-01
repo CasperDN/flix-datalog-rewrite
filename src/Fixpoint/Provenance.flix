@@ -26,7 +26,7 @@ mod Fixpoint.Provenance {
     use Fixpoint.Counter
     use Fixpoint.Util.getOrCrash
 
-    type alias ProvIDB = Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]]
+    type alias ProvIDB = Map[PredSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]]
 
     type alias BPLookup[r: Region] = BPlusTree[Vector[Boxed], List[(Vector[Boxed], Int64, Int32)], r]
 
@@ -44,7 +44,14 @@ mod Fixpoint.Provenance {
         (searchBits, searchValues)
     }
 
-    def lookup(idb: ProvIDB, rc: Region[r], searchAndVals: Vector[(Int32, Boxed)], arrSize: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r =
+    def lookup(
+        idb: ProvIDB,
+        rc: Region[r],
+        searchAndVals: Vector[(Int32, Boxed)],
+        arrSize: Int32,
+        lookupStruct: ProvLookupStruct[r],
+        pred: PredSym
+    ): Option[List[(Vector[Boxed], Int64, Int32)]] \ r + IO =
         match Map.get(pred, idb) {
             case None => None
             case Some(fullTree) => 
@@ -58,7 +65,7 @@ mod Fixpoint.Provenance {
                         let nonSearch = Vector.range(0, arrSize) |> Vector.filter(v -> not Vector.memberOf(v, search));
                         let extractNonSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, nonSearch), k), Vector.length(nonSearch));
                         fullTree |>
-                        Map.forEach(k -> match (depth, rule) -> {
+                        BPlusTree.forEach(k -> match (depth, rule) -> {
                             let searchPart = extractSearchPart(k);
                             let nonSearchPart = extractNonSearchPart(k);
                             let newVal = ((nonSearchPart), depth, rule);
@@ -104,13 +111,12 @@ mod Fixpoint.Provenance {
         res |> MutList.toList
     }
 
-    pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] = match d {
+    def provQueryInternal(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] \ IO = match d {
         case Provenance(rules, provIdb) => region rc {
-            Array.empty(rc, 10);
             let reorderedRules = Vector.map(identity, rules);
             let annotation = match Map.get(predSym, provIdb) {
                 case None => None
-                case Some(v) => match Map.get(fact, v) {
+                case Some(v) => match BPlusTree.get(fact, v) {
                     case None => None
                     case Some(annotations) => Some(annotations)
                 }
@@ -127,7 +133,12 @@ mod Fixpoint.Provenance {
             bug!("In Fixpoint.Provenance.provQuery: Can only build a proof from a provenance model")
     }
 
-    def buildProof(predSym: PredSym, fact: Vector[Boxed], depth: Int64, ruleUsed: Int32, rules: Vector[Constraint], provIdb: ProvIDB, lookupStruct: ProvLookupStruct[r], rc: Region[r]): ProofTree \ r = {
+
+    @Internal
+    pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] =
+        unchecked_cast((provQueryInternal(predSym, fact, d): _ \ IO) as _ \ {})
+
+    def buildProof(predSym: PredSym, fact: Vector[Boxed], depth: Int64, ruleUsed: Int32, rules: Vector[Constraint], provIdb: ProvIDB, lookupStruct: ProvLookupStruct[r], rc: Region[r]): ProofTree \ r + IO = {
         if(ruleUsed == -1) {
             ProofTree.EDB(predSym, fact)
         } else if(ruleUsed == -2) {
@@ -156,7 +167,7 @@ mod Fixpoint.Provenance {
         provIdb: ProvIDB,
         lookupStruct: ProvLookupStruct[r],
         rule: Constraint
-    ): Vector[(Vector[Boxed], Int64, Int32)] \ r = {
+    ): Vector[(Vector[Boxed], Int64, Int32)] \ r + IO = {
         let Constraint.Constraint(HeadPredicate.HeadAtom(_, _, headTerms), bodyPreds) = rule;
         let bodyValues = Array.init(rc, _ -> None, Vector.length(bodyPreds));
         let getValOfVar = MutMap.empty(rc);
@@ -241,7 +252,7 @@ mod Fixpoint.Provenance {
                         });
                         let isNonMatch = match Map.get(pred, provIdb) {
                             case None => true
-                            case Some(facts) => not Map.memberOf(vals, facts)
+                            case Some(facts) => not BPlusTree.memberOf(vals, facts)
                         };
                         if(not isNonMatch)
                             false

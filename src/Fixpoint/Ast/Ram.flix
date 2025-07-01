@@ -46,7 +46,7 @@ mod Fixpoint.Ast.Ram {
     /// The extensible database (EDB) of a program.
     ///
     @Internal
-    pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
+    pub type alias Facts = Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]
 
     ///
     /// A `Search` describes the order in which entries in a tuple are ordered. These are

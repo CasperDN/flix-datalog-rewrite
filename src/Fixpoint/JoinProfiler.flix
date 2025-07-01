@@ -226,7 +226,7 @@ mod Fixpoint.JoinProfiler {
         (instrumentedProgram, collectedAttributeMap, rowVarToPos |> MutMap.toMap)
     }
 
-    pub def getJoinEstimateNum(program: ERamProgram): Int32 =
+    pub def getJoinEstimateNum(program: ERamProgram[r]): Int32 =
         let ERamProgram.Program(stmt, _, _, _, _, _) = program;
         getJoinEstimateNumStmt(stmt) + 1
         
