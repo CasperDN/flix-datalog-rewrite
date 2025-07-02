@@ -15,8 +15,8 @@ mod PageLink {
             case idStr :: _ :: title :: _ => (map(idStr), title)
             case _ => exit("Error parsing facts file")
         });
-        let f1 = inject edges into PageLink;
-        let f2 = inject ids into PageId;
+        let f1 = inject edges into PageLink/2;
+        let f2 = inject ids into PageId/2;
         println("Created facts");
         f1 <+> f2
 
