@@ -18,28 +18,11 @@
 
 mod Fixpoint.Debugging {
     use Fixpoint.Ast.Datalog.Datalog
-    use Fixpoint.Ast.ExecutableRam
-    use Fixpoint.Ast.Ram
+    use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram}
+    use Fixpoint.Ast.Ram.RamProgram
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.BoxingType
     use Fixpoint.Options
-
-    ///
-    /// Write `s` to standard file. Overwrite if `overwrite` is true, otherwise append.
-    ///
-    def flush(s: String, overwrite: Bool): Unit \ IO = 
-        if (Options.enableDebugToFile()) {
-            let res = 
-                if (overwrite) 
-                    FileWrite.runWithIO(() -> FileWrite.write(str = s, Options.debugFileName()))
-                else 
-                    FileWrite.runWithIO(() -> FileWrite.append(str = s, Options.debugFileName()));
-            match res {
-                case Ok(_) => ()
-                case Err(e) => println(e)
-            } 
-        } else println(s)
-
 
     ///
     /// Invoked before the fixpoint computation.
@@ -90,10 +73,10 @@ mod Fixpoint.Debugging {
     ///
     /// Invoked after every phase during the fixpoint computation.
     ///
-    /// Note: Returns `d` to ensure it is not erased.
+    /// Note: Returns `program` to ensure it is not erased.
     ///
     @Internal
-    pub def notifyPreLowering(phase: String, program: Ram.RamProgram): Ram.RamProgram = match program {
+    pub def notifyPreLowering(phase: String, program: RamProgram): RamProgram = match program {
         case Ram.RamProgram.Program(stmt, _, _, _) => unchecked_cast({
             if (Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
@@ -150,5 +133,21 @@ mod Fixpoint.Debugging {
             }
         } as _ \ {})
     }
+
+    ///
+    /// Write `s` to standard file. Overwrite if `overwrite` is true, otherwise append.
+    ///
+    def flush(s: String, overwrite: Bool): Unit \ IO = 
+        if (Options.enableDebugToFile()) {
+            let res = 
+                if (overwrite) 
+                    FileWrite.runWithIO(() -> FileWrite.write(str = s, Options.debugFileName()))
+                else 
+                    FileWrite.runWithIO(() -> FileWrite.append(str = s, Options.debugFileName()));
+            match res {
+                case Ok(_) => ()
+                case Err(e) => println(e)
+            } 
+        } else println(s)
 
 }
