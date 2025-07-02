@@ -42,13 +42,13 @@ mod Fixpoint.Phase.Stratifier {
     ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
-        let graph = MutGraph.empty(rc);
-        addDepEdges(graph, d);
-        mkStratificationMap(rc, d, graph)
+        let depGraph = MutGraph.empty(rc);
+        addDepEdges(depGraph, d);
+        mkStratificationMap(rc, d, depGraph)
     }
 
     ///
-    /// Given `d` with pseudostrata `pseudoStrata`, constructs a map from `PredSym`s in `d`
+    /// Given `d` with dependency graph `graph`, constructs a map from `PredSym`s in `d`
     /// to their stratum index within their pseudostrata.
     ///
     def mkStratificationMap(rc: Region[r], d: Datalog, graph: MutGraph[r]): Map[PredSym, (Int32, Int32)] \ r =
