@@ -10,7 +10,7 @@ mod Path {
             case _ => exit("Error parsing facts file")
         });
         println("Created facts");
-        inject edges into Edge
+        inject edges into Edge/2
 
     pub def runWithFacts(f: #{ Edge(Int32, Int32) }): Int64 \ IO + Clock = 
         let r = #{

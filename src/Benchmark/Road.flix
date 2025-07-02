@@ -11,7 +11,7 @@ mod Road {
             case _ => exit("Error parsing facts file")
         });
         println("Created facts");
-        inject roads into Road
+        inject roads into Road/2
 
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {
         let f = getFacts();
