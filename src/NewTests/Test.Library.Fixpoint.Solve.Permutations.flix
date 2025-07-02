@@ -1,4 +1,4 @@
-mod TestFile1 {
+mod Test.Exp.Fixpoint.Solve.Permutations {
 
     /////////////////////////////////////////////////////////////////////////////
     // Simple tests                                                            //
@@ -11,7 +11,7 @@ mod TestFile1 {
     def smallN(): Int32 = 10
 
     @Test
-    def test01(): Bool = {
+    def testPermutation01(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -23,7 +23,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test02(): Bool = {
+    def testPermutation02(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -35,7 +35,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test03(): Bool = {
+    def testPermutation03(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -47,7 +47,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test04(): Bool = {
+    def testPermutation04(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -59,7 +59,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test05(): Bool = {
+    def testPermutation05(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -71,7 +71,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test06(): Bool = {
+    def testPermutation06(): Bool = {
         let n = smallN();
         let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
         let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
@@ -99,7 +99,7 @@ mod TestFile1 {
     def smallPathN(): Int32 = 5 * smallN()
 
     @Test
-    def test07(): Bool = {
+    def testPermutationNeg01(): Bool = {
         let n = smallPathN();
         let edge = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into Edge/2;
         let p = #{
@@ -117,7 +117,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test08(): Bool = {
+    def testPermutationNeg02(): Bool = {
         let n = smallPathN();
         let edge = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into Edge/2;
         let p = #{
@@ -135,7 +135,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test09(): Bool = {
+    def testPermutationNeg03(): Bool = {
         let n = smallPathN();
         let edge = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into Edge/2;
         let p = #{
@@ -153,7 +153,7 @@ mod TestFile1 {
     }
 
     @Test
-    def test10(): Bool = {
+    def testPermutationNeg04(): Bool = {
         let n = smallPathN();
         let edge = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into Edge/2;
         let p = #{
@@ -168,134 +168,6 @@ mod TestFile1 {
         };
         let solved = solve edge, p;
         assertPathExample(n, solved)
-    }
-
-    /////////////////////////////////////////////////////////////////////////////
-    // Tests with functional predicates                                        //
-    /////////////////////////////////////////////////////////////////////////////
-
-
-    def isPrime(x: Int32): Bool = 
-        def loop(i) =
-            if (i > x / 2) true 
-            else if (Int32.modulo(x, i) == 0) false 
-            else loop(i+1);
-        if(x < 2) false
-        else loop(2)
-    
-    def primesInRange(b: Int32, e: Int32): Vector[Int32] = 
-        Vector.range(b, e) |> Vector.filter(isPrime)
-
-
-    @Test
-    def test11(): Bool = {
-        let p = #{
-            P(100).
-            Primes(x) :- P(y), let x = primesInRange(0, y).
-        };
-        query p select (x) from Primes(x) |> Vector.sort == Vector#{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}
-    }
-
-    @Test
-    pub def test12(): Bool = {
-        let startinPrimes = inject Vector#{2, 3, 5, 7, 11} into PrimesUntil/1;
-        let p = #{
-            PrimesPlus20(x + 20):- PrimesUntil(x).
-            PrimesUntil(x) :- PrimesPlus20(y), let x = primesInRange(0, y).
-        };
-        query startinPrimes, p select (x) from PrimesUntil(x) |> Vector.sort == Vector#{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887}
-    }
-
-    // @Test
-    // def test12(): Bool = {
-    //     let p = #{
-    //         Primes1(x)             :- let x = primesInRange(0, 100).
-    //     };
-    //     query p select (x) from Primes1(x) |> Vector.sort == Vector#{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}
-    // }
-
-    /////////////////////////////////////////////////////////////////////////////
-    // Tests with if-guards                                                    //
-    /////////////////////////////////////////////////////////////////////////////
-
-    @Test
-    def testGuard01(): Bool = {
-        let nat = Vector.range(0, 100);
-        let f = inject nat into Nat/1;
-        let even = Vector.filter(x -> Int32.modulo(x, 2) == 0, nat);
-        let r = #{
-            Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
-        };
-        Vector.sort(query f, r select x from Even(x)) == even
-    }
-
-    @Test
-    def testGuard02(): Bool = {
-        let nat = Vector.range(0, 100);
-        let f = inject nat into Nat/1;
-        let odd = Vector.filter(x -> Int32.modulo(x, 2) != 0, nat);
-        let r = #{
-            Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
-        };
-        Vector.sort(query f, r select x from Odd(x)) == odd
-    }
-
-    @Test
-    def testGuard03(): Bool = {
-        let nat = Vector.range(0, 100);
-        let f = inject nat into Nat/1;
-        let even = Vector.filter(x -> Int32.modulo(x, 2) == 0, nat);
-        let odd = Vector.filter(x -> Int32.modulo(x, 2) != 0, nat);
-        let r = #{
-            Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
-            Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
-        };
-        Vector.sort(query f, r select x from Even(x)) == even and
-            Vector.sort(query f, r select x from Odd(x)) == odd
-    }
-
-    @Test
-    pub def testGuard04(): Bool = {
-        let nat = Vector.range(0, 100);
-        let f = inject nat into Nat/1;
-        let even = Vector.filter(x -> Int32.modulo(x, 2) == 0, nat);
-        let odd = Vector.filter(x -> Int32.modulo(x, 2) != 0, nat);
-        let r = #{
-            Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
-            Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
-        };
-        let res = even |> Vector.flatMap(e -> odd |> Vector.map(o -> (e, o))) |> Vector.sort;
-        Vector.sort(query f, r select (x, y) from Even(x), Odd(y)) == res
-    }
-
-    @Test
-    def testGuard05(): Bool = {
-        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x + 1));
-        let f = inject tuples into A/2;
-        let r = #{
-            R(x, y) :- A(x, y), if(x + 1 == y).
-        };
-        Vector.sort(query f, r select (x, y) from R(x, y)) == tuples
-    }
-
-    @Test
-    def testGuard06(): Bool = {
-        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x, 2 * x));
-        let f = inject tuples into A/3;
-        let r = #{
-            R(x, y, z) :- A(x, y, z), if(x + y == 2 * x).
-        };
-        Vector.sort(query f, r select (x, y, z) from R(x, y, z)) == tuples
-    }
-    
-    @Test
-    def testGuard07(): Bool = {
-        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x, 2 * x));
-        let f = inject tuples into A/3;
-        let r = #{
-            R(x, y, z) :- A(x, y, z), if(x + y == z).
-        };
-        Vector.sort(query f, r select (x, y, z) from R(x, y, z)) == tuples
-    }
+    }   
 
 }
