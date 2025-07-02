@@ -49,6 +49,34 @@ mod Fixpoint.Phase.Lowering {
     /// at position 2 should have value 38.
     ///
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
+
+    ///
+    /// Contains information with relation to computing meets. For `(list, disjoint)` `list` will
+    /// contain the currently bound `RowVar`'s in reverse order. `MutDisjointSets` contains
+    /// information about which `RowVar`'s lattice-values are should be meeted.
+    ///
+    /// As an example consider
+    /// ```
+    /// search x ∈ A do
+    ///   search y ∈ B do
+    ///     project (0; Meet(x, y)) into ΔC'
+    ///   end
+    /// end
+    /// ```
+    /// 
+    /// First MeetWithMap will be `(Nil, {})`. When it starts lowering `search y ∈ B do` it will
+    /// have registered `x` and be `(x :: Nil, {})`. When it starts lowering `project` it will be
+    /// `(y :: x :: Nil, {})`. It will then lower `Meet(x, y)` which updates `disjoint` so it now
+    /// looks like `{y = x}`.
+    ///
+    /// The above code will be translated to something like
+    /// ```
+    /// search x ∈ A do
+    ///   search y ∈ B do
+    ///     project (0; Meet(x, y)) into ΔC'
+    ///   end
+    /// end
+    /// ```
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
     @Internal
@@ -274,7 +302,7 @@ mod Fixpoint.Phase.Lowering {
             let (_, meetDisjointSet) = meetWithMap;
             let prevRv = lowerMeet(t1, idToIndex, meetWithMap);
             MutDisjointSets.makeSet(rv, meetDisjointSet);
-            MutDisjointSets.makeSet(rv, meetDisjointSet);
+            MutDisjointSets.makeSet(prevRv, meetDisjointSet);
             MutDisjointSets.union(rv, prevRv, meetDisjointSet);
             rv
         case _ => unreachable!()
