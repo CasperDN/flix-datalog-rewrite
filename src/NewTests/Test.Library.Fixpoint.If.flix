@@ -26,7 +26,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Empty(x) :- A(x), if(false).
         };
-        Vector.isEmpty(query f, r select x from Empty(x))
+        query f, r select x from Empty(x) |> Vector.isEmpty
     }
 
     @Test
@@ -36,7 +36,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Empty(x) :- A(x), if(true).
         };
-        Vector.sort(query f, r select x from Empty(x)) == tuples
+        query f, r select x from Empty(x) |> Vector.sort == tuples
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
         };
-        Vector.sort(query f, r select x from Even(x)) == even
+        query f, r select x from Even(x) |> Vector.sort == even
     }
 
     @Test
@@ -62,7 +62,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
-        Vector.sort(query f, r select x from Odd(x)) == odd
+        query f, r select x from Odd(x) |> Vector.sort == odd
     }
 
     @Test
@@ -75,8 +75,8 @@ mod Test.Exp.Fixpoint.If {
             Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
-        Vector.sort(query f, r select x from Even(x)) == even and
-            Vector.sort(query f, r select x from Odd(x)) == odd
+        query f, r select x from Even(x) |> Vector.sort == even and
+            query f, r select x from Odd(x) |> Vector.sort == odd
     }
 
     @Test
@@ -90,7 +90,7 @@ mod Test.Exp.Fixpoint.If {
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
         let res = even |> Vector.flatMap(e -> odd |> Vector.map(o -> (e, o))) |> Vector.sort;
-        Vector.sort(query f, r select (x, y) from Even(x), Odd(y)) == res
+        query f, r select (x, y) from Even(x), Odd(y) |> Vector.sort == res
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y) :- A(x, y), if(x + 1 == y).
         };
-        Vector.sort(query f, r select (x, y) from R(x, y)) == tuples
+        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
     }
 
     @Test
@@ -114,7 +114,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y) :- A(x, y), if(x + 1 == x + 1).
         };
-        Vector.sort(query f, r select (x, y) from R(x, y)) == tuples
+        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z) :- A(x, y, z), if(x + y == 2 * x).
         };
-        Vector.sort(query f, r select (x, y, z) from R(x, y, z)) == tuples
+        query f, r select (x, y, z) from R(x, y, z) |> Vector.sort == tuples
     }
     
     @Test
@@ -138,7 +138,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z) :- A(x, y, z), if(x + y == z).
         };
-        Vector.sort(query f, r select (x, y, z) from R(x, y, z)) == tuples
+        query f, r select (x, y, z) from R(x, y, z) |> Vector.sort == tuples
     }
 
     @Test
@@ -162,7 +162,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z, w) :- A(x, y, z, w), if(x + y + z == w).
         };
-        Vector.sort(query f, r select (x, y, z, w) from R(x, y, z, w)) == tuples
+        query f, r select (x, y, z, w) from R(x, y, z, w) |> Vector.sort == tuples
     }
 
     @Test
@@ -172,7 +172,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y) :- A(x, y), if(x + x + x == y).
         };
-        Vector.sort(query f, r select (x, y) from R(x, y)) == tuples
+        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
     }
     
     /////////////////////////////////////////////////////////////////////////////
@@ -186,7 +186,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y) :- A(x, y), if(x + x + x + x == y).
         };
-        Vector.sort(query f, r select (x, y) from R(x, y)) == tuples
+        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
     }
 
 }

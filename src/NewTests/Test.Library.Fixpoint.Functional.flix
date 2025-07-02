@@ -97,15 +97,4 @@ mod Test.Library.Fixpoint.Functional {
         query p select x from Nat(x) |> Vector.sort == res
     }
 
-    pub def testFunctional05(): Unit \ IO = {
-        let p = #{
-            Start(1).
-            End(10).
-            StartP(p) :-  Start(x), End(y), let p = Vector.range(x, y).
-            Nat(q) :- Start(x), End(y), let p = Vector.range(x, y), StartP(p), let q = Vector.range(y, p + y).
-        };
-        // let res = Vector#{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-        query p select x from Nat(x) |> println
-    }
-
 }
