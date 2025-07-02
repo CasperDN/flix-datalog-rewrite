@@ -16,31 +16,38 @@
  */
 
 mod Fixpoint.Phase.Lowering {
-    use Fixpoint.Ast.ExecutableRam.{ConstWrites => EConstWrites}
-    use Fixpoint.Ast.ExecutableRam.{RamProgram => EProgram, RamStmt => ERamStmt, RelOp => ERelOp, RamTerm => ERamTerm, BoolExp => EBoolExp}
-    use Fixpoint.Ast.ExecutableRam.BoolExp.{Not => ENot, IsEmpty => EIsEmpty, NotMemberOf => ENotMemberOf, Leq => ELeq, Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5}
-    use Fixpoint.Ast.ExecutableRam.RamTerm.{Lit => ELit, Meet => EMeet, ProvMax => EProvMax, App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar}
-    use Fixpoint.Ast.ExecutableRam.RelOp.{Search => ESearch, Query => EQuery, Functional => EFunctional, Project => EProject, If => EIf}
     use Fixpoint.Ast.ExecutableRam.WriteTuple
-    use Fixpoint.Ast.Ram.{RowVar, IndexInformation, getTermRamId, RamId, toDenotation, arityOf, arityOfNonLat, Search}
-    use Fixpoint.Ast.Ram.{RamProgram => AProgram, RamStmt => ARamStmt, RelOp => ARelOp, RelSym, RamTerm => ARamTerm, BoolExp => ABoolExp}
-    use Fixpoint.Ast.Ram.BoolExp.{Not => ANot, IsEmpty => AIsEmpty, NotMemberOf => ANotMemberOf, NotBot => ANotBot, Leq => ALeq, Eq => AEq, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5}
-    use Fixpoint.Ast.Ram.RamTerm.{Lit => ALit, RowLoad => ARowLoad, ProvMax => AProvMax, Meet => AMeet, App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5}
-    use Fixpoint.Ast.Ram.RelOp.{Search => ASearch, Query => AQuery, Functional => AFunctional, Project => AProject, If => AIf}
+    use Fixpoint.Ast.ExecutableRam.{BoolExp => EBoolExp, ConstWrites => EConstWrites, RamProgram => EProgram, RamStmt => ERamStmt, RamTerm => ERamTerm, RelOp => ERelOp}
+    use Fixpoint.Ast.ExecutableRam.BoolExp.{Eq => EEq, Guard1 => EGuard1, Guard2 => EGuard2, Guard3 => EGuard3, Guard4 => EGuard4, Guard5 => EGuard5, IsEmpty => EIsEmpty, Leq => ELeq, Not => ENot, NotMemberOf => ENotMemberOf}
+    use Fixpoint.Ast.ExecutableRam.RamTerm.{App1 => EApp1, App2 => EApp2, App3 => EApp3, App4 => EApp4, App5 => EApp5, LoadFromTuple => ELoadFromTuple, LoadLatVar => ELoadLatVar, Lit => ELit, Meet => EMeet, ProvMax => EProvMax}
+    use Fixpoint.Ast.ExecutableRam.RelOp.{Functional => EFunctional, If => EIf, Project => EProject, Query => EQuery, Search => ESearch}
+    use Fixpoint.Ast.Ram.{arityOf, arityOfNonLat, getTermRamId, IndexInformation, RamId, RelSym, RowVar, Search, toDenotation}
+    use Fixpoint.Ast.Ram.{BoolExp => ABoolExp, RamProgram => AProgram, RamStmt => ARamStmt, RamTerm => ARamTerm, RelOp => ARelOp}
+    use Fixpoint.Ast.Ram.BoolExp.{Eq => AEq, Guard1 => AGuard1, Guard2 => AGuard2, Guard3 => AGuard3, Guard4 => AGuard4, Guard5 => AGuard5, IsEmpty => AIsEmpty, Leq => ALeq, Not => ANot, NotMemberOf => ANotMemberOf, NotBot => ANotBot}
+    use Fixpoint.Ast.Ram.RamTerm.{App1 => AApp1, App2 => AApp2, App3 => AApp3, App4 => AApp4, App5 => AApp5, Lit => ALit, Meet => AMeet, ProvMax => AProvMax, RowLoad => ARowLoad}
+    use Fixpoint.Ast.Ram.RelOp.{Functional => AFunctional, If => AIf, Project => AProject, Query => AQuery, Search => ASearch}
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
-    use Fixpoint.Boxed
-    use Fixpoint.Boxed.BoxedBool
     use Fixpoint.Boxing
-    use Fixpoint.Boxing.Equality
     use Fixpoint.BoxingType.{Boxing, RamIdToPos};
-    use Fixpoint.Counter
-    use Fixpoint.Debugging
     use Fixpoint.UniqueInts
     use Fixpoint.Util.getOrCrash
 
-    // Maps RowVars to their memory-position.
+    ///
+    /// Maps RowVars to their memory-position (position in an array the interpreter will use).
+    ///
     type alias IdToIndex[r: Region] = UniqueInts[RowVar, r]
+
+    ///
+    /// Maps RowVars to a lsit of writes that should be performed whenever the RowVar is rebound.
+    ///
     type alias WriteTos[r: Region] = MutMap[RowVar, List[WriteTuple], r]
+
+    ///
+    /// Maps a memory position to writes. 
+    ///
+    /// As an example [2 => [0 => 38i64]] means that the first attribute of the RowVar placed
+    /// at position 2 should have value 38.
+    ///
     type alias ConstWrites[r: Region] = MutMap[Int32, MutMap[Int32, Int64, r], r]
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
@@ -50,7 +57,7 @@ mod Fixpoint.Phase.Lowering {
             let idToIndex = UniqueInts.empty(rc);
             let (marshall, newFacts, idToMarshall) = Boxing.initialize(rc, program);
             let writeTo = (MutMap.empty(rc), MutMap.empty(rc));
-            let loweredStmt = lowerStmt(stmt, rc, idToIndex, (idToMarshall, marshall), writeTo, indexInfo);
+            let loweredStmt = lowerStmt(rc, idToIndex, (idToMarshall, marshall), writeTo, indexInfo, stmt);
 
             let constWrites = snd(writeTo) |> MutMap.foldWithKey(acc1 -> outerPos -> inner ->
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)
@@ -63,12 +70,11 @@ mod Fixpoint.Phase.Lowering {
             (EProgram.Program(loweredStmt, newFacts, meta, indexInfo, (Array.toVector(arities), constWrites), idToMarshall), marshall)
     }
 
-    @Internal
-    def lowerStmt(stmt: ARamStmt, rc: Region[r], idToIndex: IdToIndex[r], marshalling: (RamIdToPos, Boxing[r]), writeTo: (WriteTos[r], ConstWrites[r]), indexInfo: IndexInformation): ERamStmt \ r =
-        let lowerStmtRec = x -> lowerStmt(x, rc, idToIndex, marshalling, writeTo, indexInfo);
+    def lowerStmt(rc: Region[r], idToIndex: IdToIndex[r], marshalling: (RamIdToPos, Boxing[r]), writeTo: (WriteTos[r], ConstWrites[r]), indexInfo: IndexInformation, stmt: ARamStmt): ERamStmt \ r =
+        let lowerStmtRec = lowerStmt(rc, idToIndex, marshalling, writeTo, indexInfo);
         match stmt {
             case ARamStmt.Insert(op) =>
-                let newOp = lowerOp(op, rc, idToIndex, marshalling, writeTo, indexInfo, (Nil, MutDisjointSets.empty(rc)));
+                let newOp = lowerOp(rc, idToIndex, marshalling, writeTo, indexInfo, (Nil, MutDisjointSets.empty(rc)), op);
                 ERamStmt.Insert(newOp)
 
             // For all of these we have to do the operation for all indexes created for the relations.
@@ -115,7 +121,7 @@ mod Fixpoint.Phase.Lowering {
                 }
             case ARamStmt.Seq(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Seq
             case ARamStmt.Par(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Par
-            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
+            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(lowerBool(idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
             case ARamStmt.EstimateJoinSize(_, relIndex, estWriteTo, attr) => 
                 ERamStmt.EstimateJoinSize(relIndex, estWriteTo, attr)
             case ARamStmt.Comment(s) => ERamStmt.Comment(s)
@@ -150,16 +156,16 @@ mod Fixpoint.Phase.Lowering {
     }
 
     def lowerOp(
-        op: ARelOp,
         rc: Region[r],
         idToIndex: IdToIndex[r],
         marshalling: (RamIdToPos, Boxing[r]), 
         writeTo: (WriteTos[r], ConstWrites[r]), 
         indexInfo: IndexInformation,
-        meetWithMap: MeetWithMap[r]
+        meetWithMap: MeetWithMap[r],
+        op: ARelOp
     ): ERelOp \ r =
-        let lowerOpRec: ARelOp -> ERelOp \ r = x -> lowerOp(x, rc, idToIndex, marshalling, writeTo, indexInfo, meetWithMap);
-        let lowerOpRecNewRowVar = rv -> x -> lowerOp(x, rc, idToIndex, marshalling, writeTo, indexInfo, addRowVarToMeetWithMap(rv, meetWithMap));
+        let lowerOpRec = lowerOp(rc, idToIndex, marshalling, writeTo, indexInfo, meetWithMap);
+        let lowerOpRecNewRowVar = rv -> lowerOp(rc, idToIndex, marshalling, writeTo, indexInfo, addRowVarToMeetWithMap(rv, meetWithMap));
         match op {
             case ASearch(rv, relSym, body) =>
                 let den = toDenotation(relSym);
@@ -204,28 +210,28 @@ mod Fixpoint.Phase.Lowering {
                 let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
                 EFunctional(
                     lowerRowVar(rv, idToIndex), f, 
-                    Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms), 
+                    Vector.map(lowerTerm(idToIndex, marshalling, meetWithMap), terms), 
                     thisWriteTo, loweredBody, to
                 )
             case AProject(terms, s, _) => 
                 let (_, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((s, 0), placements));
                 let den = toDenotation(s);
-                let loweredTerms = Vector.map(x -> lowerTerm(x, idToIndex, marshalling, meetWithMap), terms);
+                let loweredTerms = Vector.map(lowerTerm(idToIndex, marshalling, meetWithMap), terms);
                 EProject(
                     loweredTerms, newRelPos, den
                 )
             case AIf(boolExps, body) =>
-                EIf(Vector.filterMap(x -> lowerBool(x, idToIndex, marshalling, indexInfo, meetWithMap), boolExps), lowerOpRec(body))
+                EIf(Vector.filterMap(lowerBool(idToIndex, marshalling, indexInfo, meetWithMap), boolExps), lowerOpRec(body))
         }
 
     def lowerTerm(
-        term: ARamTerm, 
         idToIndex: IdToIndex[r], 
         marshalling: (RamIdToPos, Boxing[r]), 
-        meetWithMap: MeetWithMap[r]
+        meetWithMap: MeetWithMap[r],
+        term: ARamTerm
     ): ERamTerm \ r =
-        let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
+        let lowerT = lowerTerm(idToIndex, marshalling, meetWithMap);
         let (idToMarshall, marshall) = marshalling;
         let termToM = t -> getOrCrash(Map.get(getTermRamId(t), idToMarshall));
         match term {
@@ -275,11 +281,17 @@ mod Fixpoint.Phase.Lowering {
     }
     
     // NotBot is removed as it is handled separately by the interpreter.
-    def lowerBool(bool: ABoolExp, idToIndex: IdToIndex[r], marshalling: (RamIdToPos, Boxing[r]), indexInfo: IndexInformation, meetWithMap: MeetWithMap[r]): Option[EBoolExp] \ r = 
-        let lowerT = x -> lowerTerm(x, idToIndex, marshalling, meetWithMap);
+    def lowerBool(
+        idToIndex: IdToIndex[r],
+        marshalling: (RamIdToPos, Boxing[r]),
+        indexInfo: IndexInformation,
+        meetWithMap: MeetWithMap[r],
+        bool: ABoolExp
+    ): Option[EBoolExp] \ r = 
+        let lowerT = lowerTerm(idToIndex, marshalling, meetWithMap);
         match bool {
             case ANot(s) => 
-                lowerBool(s, idToIndex, marshalling, indexInfo, meetWithMap) |>
+                lowerBool(idToIndex, marshalling, indexInfo, meetWithMap, s) |>
                 Option.map(ENot)
             case AIsEmpty(s) =>
                 let (_, placements) = indexInfo;
@@ -325,8 +337,9 @@ mod Fixpoint.Phase.Lowering {
         let toTuplePos = lowerRowVar(toTuple, idToIndex);
         MutMap.getOrElsePut(toTuplePos, MutMap.empty(rc), constWrite) |>
             MutMap.putWith(v1 -> v2 -> 
-            if (v1 != v2) 
-                bug!("Bug in Fixpoint.Lowering: Different value for position. Should have been removed by Hoisting")
-            else v1, toIndex, value)
+                if (v1 != v2) 
+                    bug!("Bug in Fixpoint.Lowering: Different value for position. Should have been removed by Hoisting")
+                else v1
+            , toIndex, value)
 
 }
