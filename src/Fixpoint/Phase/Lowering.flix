@@ -15,6 +15,44 @@
  * limitations under the License.
  */
 
+///
+/// This phase transforms the abstract `Ram` into a low-level `ExecutableRam` in a format
+/// the Interpreter understands.
+///
+/// Concretely it does the following
+/// 
+/// 1. Replaces `Boxed` by `Int64`, except for lattice-elements
+/// 2. For relations with multiple indexes replace `MergeInto(newRel, otherRel)` with
+/// `MergeInto(newRel, otherRelIndex1)`, `MergeInto(newRel, otherRelIndex2)`, ...
+/// 3. Does similar for `Purge` and `Swap`.
+/// 4. Augment every XXX statement with information about where the relevant
+/// indexes are stored
+/// 5. Remove `NotBot` as it is handled explicitly by the interpreter.
+/// 6. Assign memory positions to `RowVar`'s.
+/// 7. Collect information about where `RowVar` `rv1`'s values are needed.
+///
+/// An example of (7) would be the following transformation from
+/// ```
+/// search a ∈ A do
+///     query {b ∈ B | b[0] = a[0]} do
+///         project (a[0]) into R
+///     end
+/// end
+/// ```
+/// to
+/// ```
+/// search a ∈ A | write a[0] lookupArrForB[0] do
+///     query {b ∈ B | lookupArrForB } do
+///         project (a[0]) into R
+///     end
+/// end
+/// ```
+///
+/// The purpose is to only do this once and avoid creating new objects constantly.
+/// If the nesting was deeper we only do the write once when we bind `a`, not every
+/// time we have to query `b`. We also only create `lookupArrForB` once, if we ignore
+/// parallelism.
+///
 mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.ExecutableRam.WriteTuple
     use Fixpoint.Ast.ExecutableRam.{BoolExp => EBoolExp, ConstWrites => EConstWrites, RamProgram => EProgram, RamStmt => ERamStmt, RamTerm => ERamTerm, RelOp => ERelOp}
@@ -83,6 +121,9 @@ mod Fixpoint.Phase.Lowering {
     pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
         case AProgram.Program(stmt, _, meta, indexInfo) =>
             let idToIndex = UniqueInts.empty(rc);
+            // Map Boxed to Int64. `newFacts` is `facts` after this tranformation has been applied
+            // `marshall` can help transform `Boxed` to `Int64` or the reverse. To do this
+            // it need some information about which should be applied and `idToMarshall` provides this.
             let (marshall, newFacts, idToMarshall) = Boxing.initialize(rc, program);
             let writeTo = (MutMap.empty(rc), MutMap.empty(rc));
             let loweredStmt = lowerStmt(rc, idToIndex, (idToMarshall, marshall), writeTo, indexInfo, stmt);
@@ -105,7 +146,7 @@ mod Fixpoint.Phase.Lowering {
                 let newOp = lowerOp(rc, idToIndex, marshalling, writeTo, indexInfo, (Nil, MutDisjointSets.empty(rc)), op);
                 ERamStmt.Insert(newOp)
 
-            // For all of these we have to do the operation for all indexes created for the relations.
+            // The operation should simply be repeated for all indexes built on `deltaRel`.
             case ARamStmt.MergeInto(newRel, deltaRel) =>
                 let (constructed, placements) = indexInfo;
                 let newRelPos = getOrCrash(Map.get((newRel, 0), placements));
@@ -124,9 +165,14 @@ mod Fixpoint.Phase.Lowering {
                 let lowerToPurge = index -> ERamStmt.Purge(index);
                 let deltaRels = Vector.length(getOrCrash(Map.get(deltaRel, constructed)));
                 let swapPart = ERamStmt.Swap(newRelPos, getOrCrash(Map.get((deltaRel, 0), placements)));
+                // If there is only 1 index on `deltaRel` we can simply swap.
                 if (deltaRels == 1) {
                     swapPart
                 } else {
+                    // We can still swap `newRel` and `deltaRelIndex[0]`. All other indexes will
+                    // instead treated as a `Purge(deltaRel[i])` followed by a `MergeInto(newRel, deltaRel[i])`.
+                    // Purges are cheap and performed sequentially. Merges can be expensive and are performed in
+                    // parallel.
                     let merges = 
                         Vector.range(1, deltaRels) |>
                         Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))));
@@ -138,10 +184,11 @@ mod Fixpoint.Phase.Lowering {
                         ERamStmt.Seq(Vector#{ERamStmt.Seq(purges), ERamStmt.Par(merges), swapPart})
                     }
                 }
-            case ARamStmt.Purge(s) =>
+            // The operation should simply be repeated for all indexes built on `rel`.
+            case ARamStmt.Purge(rel) =>
                 let (constructed, placements) = indexInfo;
-                let indexNums = Vector.range(0, Vector.length(getOrCrash(Map.get(s, constructed))));
-                let purges = Vector.map(i -> ERamStmt.Purge(getOrCrash(Map.get((s, i), placements))), indexNums);
+                let indexNums = Vector.range(0, Vector.length(getOrCrash(Map.get(rel, constructed))));
+                let purges = Vector.map(i -> ERamStmt.Purge(getOrCrash(Map.get((rel, i), placements))), indexNums);
                 if (Vector.length(purges) == 1) {
                     Vector.get(0, purges)
                 } else {
@@ -149,7 +196,11 @@ mod Fixpoint.Phase.Lowering {
                 }
             case ARamStmt.Seq(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Seq
             case ARamStmt.Par(xs) => Vector.map(x -> lowerStmtRec(x), xs) |> ERamStmt.Par
-            case ARamStmt.Until(test, body) => ERamStmt.Until(Vector.filterMap(lowerBool(idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))), test), lowerStmtRec(body))
+            case ARamStmt.Until(test, body) =>
+            let newTests = test |>
+                Vector.filterMap(lowerBool(idToIndex, marshalling, indexInfo, (Nil, MutDisjointSets.empty(rc))));
+            let newBody = lowerStmtRec(body);
+            ERamStmt.Until(newTests, newBody)
             case ARamStmt.EstimateJoinSize(_, relIndex, estWriteTo, attr) => 
                 ERamStmt.EstimateJoinSize(relIndex, estWriteTo, attr)
             case ARamStmt.Comment(s) => ERamStmt.Comment(s)
@@ -314,10 +365,10 @@ mod Fixpoint.Phase.Lowering {
         marshalling: (RamIdToPos, Boxing[r]),
         indexInfo: IndexInformation,
         meetWithMap: MeetWithMap[r],
-        bool: ABoolExp
+        bexp: ABoolExp
     ): Option[EBoolExp] \ r = 
         let lowerT = lowerTerm(idToIndex, marshalling, meetWithMap);
-        match bool {
+        match bexp {
             case ANot(s) => 
                 lowerBool(idToIndex, marshalling, indexInfo, meetWithMap, s) |>
                 Option.map(ENot)
