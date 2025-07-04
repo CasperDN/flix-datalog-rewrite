@@ -6,7 +6,7 @@ mod CopyPaste {
 
 
     pub def getFacts(): #{ A(Int32) | t } = 
-        inject List.range(0, n()) into A
+        inject List.range(0, n()) into A/1
 
     pub def runSingle(): Unit \ IO = Clock.runWithIO(() -> {
         let f = getFacts();

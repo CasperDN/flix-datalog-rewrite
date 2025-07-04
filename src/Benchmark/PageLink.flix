@@ -27,10 +27,10 @@ mod PageLink {
             case small :: big :: Nil => (small, big)
             case _ => exit("Error parsing facts file")
         });
-        let f1 = inject edges into PageLink;
-        let f2 = inject ids into PageId;
-        let f3 = inject restrictedTuples into Protected;
-        let f4 = inject leqTuples into Leq;
+        let f1 = inject edges into PageLink/2;
+        let f2 = inject ids into PageId/2;
+        let f3 = inject restrictedTuples into Protected/2;
+        let f4 = inject leqTuples into Leq/2;
         f1 <+> f2 <+> f3 <+> f4
 
 
@@ -60,10 +60,10 @@ mod PageLink {
             case small :: big :: Nil => (small, big)
             case _ => exit("Error parsing facts file")
         });
-        let f1 = inject edges into PageLink;
-        let f2 = inject ids into PageId;
-        let f3 = inject restrictedTuples into Protected;
-        let f4 = inject leqTuples into Leq;
+        let f1 = inject edges into PageLink/2;
+        let f2 = inject ids into PageId/2;
+        let f3 = inject restrictedTuples into Protected/2;
+        let f4 = inject leqTuples into Leq/2;
         f1 <+> f2 <+> f3 <+> f4
 
     pub def runSingle(): Unit \ IO + Sys = 

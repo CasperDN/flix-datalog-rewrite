@@ -111,7 +111,7 @@ mod Road {
             case src :: dst :: Nil => (map(src), map(dst))
             case _ => exit("Error parsing facts file")
         });
-        inject roads into Road
+        inject roads into Road/2
 
     pub def getSmallFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} =
         let path = "${factFolder()}/road-3000.csv";
@@ -121,7 +121,7 @@ mod Road {
             case src :: dst :: Nil => (map(src), map(dst))
             case _ => exit("Error parsing facts file")
         });
-        inject roads into Road
+        inject roads into Road/2
 
     pub def runSingle(): Unit \ IO + Sys = Clock.runWithIO(() -> {
         let f = getFacts();

@@ -305,9 +305,9 @@ def query1(c: List[(Int32, String)],
             Customer(customerId, customerName),
             Product(orderId, productName, productPrice), if (productPrice > 10).
     };
-    let customers = inject c into Customer;
-    let orders = inject o into Order;
-    let products = inject p into Product;
+    let customers = inject c into Customer/2;
+    let orders = inject o into Order/3;
+    let products = inject p into Product/3;
     query customers, orders, products, rules select (customerName, orderDate, productName) from Result(customerName, orderDate, productName) |> Vector.toList
 
 def ex2_01(): Unit \ IO = 
@@ -337,7 +337,7 @@ def latticeTest(): Unit \ IO =
     let func = () -> {
         let start = Clock.currentTime(TimeUnit.Seconds);
         let map = List.map(x -> (x, x + 1), List.range(1, 200));
-        let injected = inject map into Edge;
+        let injected = inject map into Edge/2;
         let path = injected <+> #{
             Path(x, y; Down.Down(1)) :- Edge(x, y).
             Path(x, y; n + Down.Down(1)) :- Path(x, z; n), Edge(z, y).
@@ -359,7 +359,7 @@ def main(): Unit \ IO =
     let func = () -> {
         let start = Clock.currentTime(TimeUnit.Seconds);
         let map = List.map(x -> (x, x + 1), List.range(1, 1000));
-        let injected = inject map into Edge;
+        let injected = inject map into Edge/2;
         let path = injected <+> #{
             Edge(x, y) :- Edge(y, x).
             Path(x, y) :- Edge(x, y).
@@ -481,7 +481,7 @@ pub def mainApp(): Unit \ IO =
 pub def pathh(): Unit \ IO = Clock.runWithIO(() ->{
     let now = Clock.now();
     let edges = List.range(0, 5000) |> List.map(i -> (i, i+1));
-    let f = inject edges into Edge;
+    let f = inject edges into Edge/2;
     let r = #{
         A(1).
         Path(x, y) :- Edge(x, y).
@@ -496,7 +496,7 @@ pub def pathh(): Unit \ IO = Clock.runWithIO(() ->{
 pub def pathE(): Unit \ IO = Clock.runWithIO(() ->{
     let now = Clock.now();
     let edges = List.range(0, 2000) |> List.map(i -> (i, i+1));
-    let f = inject edges into Edge;
+    let f = inject edges into Edge/2;
     let r = #{
         Path(x, y) :- Edge(x, y).
         Path(x, z) :- Path(x, y), Edge(y, z).
@@ -509,7 +509,7 @@ pub def pathE(): Unit \ IO = Clock.runWithIO(() ->{
 
 pub def runLatticeWithFacts(): Int64 \ IO = Clock.runWithIO(() -> {
     let edges = List.range(0, 200) |> List.map(i -> (i, i+1));
-    let f = inject edges into Road;
+    let f = inject edges into Road/2;
     let r = #{
         Road(x, y) :- Road(y, x).
         Path(x, y; Road.init(y, 1, x)) :- Road(x, y).
@@ -533,8 +533,8 @@ pub def dumb3333(): Unit \ IO =
 pub def dumb(): Unit \ IO = 
     let aFacts = List.range(0,101);
     let bFacts = List.range(0,10);
-    let f1 = inject aFacts into A;
-    let f2 = inject bFacts into B;
+    let f1 = inject aFacts into A/1;
+    let f2 = inject bFacts into B/1;
     let r = #{
         A(x) :- D(x).
         D(x) :- A(x).
@@ -547,7 +547,7 @@ pub def dumb(): Unit \ IO =
 
 pub def dumb2(): Unit \ IO = 
     let aFacts = List.range(0,1000);
-    let f1 = inject aFacts into A;
+    let f1 = inject aFacts into A/1;
     let r = #{
         C(a, b) :- A(a), A(b).
     };
