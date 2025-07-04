@@ -240,6 +240,7 @@ mod Fixpoint.Boxing {
         MutList.size(list)
     }
 
+    @Internal
     pub def unboxWith(box: Boxed, index: Int32, info: Boxing[r]): Int64 \ r =
         let (_, _, symInfo, _) = info;
         match box {
@@ -255,6 +256,7 @@ mod Fixpoint.Boxing {
             case Boxed.NoValue         => bug!("None should never be in a position to be unboxed unboxed")
         }
 
+    @Internal
     pub def boxWith(v: Int64, index: Int32, info: Boxing[r]): Boxed \ r = 
         let (_, _, symInfo, _) = info;
         match getType(index, symInfo) {
@@ -284,6 +286,7 @@ mod Fixpoint.Boxing {
         use Fixpoint.Util.getOrCrash
         use Fixpoint.Predicate.{PredType, idToFullPredId, fullIdtoPredType, relSymsOfProgram}
 
+        @Internal
         pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
             let RamProgram.Program(s, _, predTrack, _) = d;
