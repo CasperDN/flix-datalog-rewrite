@@ -32,7 +32,7 @@ mod Fixpoint.Boxing {
     use Fixpoint.Boxed
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedFloat32, BoxedFloat64, BoxedObject}
     use Fixpoint.BoxingType.{Boxing, TypeInfo, Types, setType, getType, RamIdToPos, UnifiedTypePos}
-    use Fixpoint.Predicates.relSymsOfProgram
+    use Fixpoint.Predicate.relSymsOfProgram
     use Fixpoint.ReadWriteLock
     use Fixpoint.Util.getOrCrash
 
@@ -282,7 +282,7 @@ mod Fixpoint.Boxing {
         use Fixpoint.BoxingType.RamIdToPos
         use Fixpoint.Counter
         use Fixpoint.Util.getOrCrash
-        use Fixpoint.Predicates.{PredType, idToFullPredID, fullIDtoPredType, relSymsOfProgram}
+        use Fixpoint.Predicate.{PredType, idToFullPredId, fullIdtoPredType, relSymsOfProgram}
 
         pub def computeMapping(d: RamProgram): RamIdToPos = region rc {
             let disjointSet = MutDisjointSets.empty(rc);
@@ -430,9 +430,9 @@ mod Fixpoint.Boxing {
             }, Vector.range(0, arity))
 
         def unifyPredTypes(predSym: Int64, arity: Int32, predTrack: Predicates, set: MutDisjointSets[RamId, r]): Unit \ r =
-            let fullSymbol = idToFullPredID(predSym, predTrack);
-            let deltaSymbol = fullIDtoPredType(fullSymbol, PredType.Delta, predTrack);
-            let newSymbol = fullIDtoPredType(fullSymbol, PredType.New, predTrack);
+            let fullSymbol = idToFullPredId(predSym, predTrack);
+            let deltaSymbol = fullIdtoPredType(fullSymbol, PredType.Delta, predTrack);
+            let newSymbol = fullIdtoPredType(fullSymbol, PredType.New, predTrack);
             // The `+ 2` is to ensure safety with provenance annotations.
             Vector.forEach(i -> {
                 MutDisjointSets.makeSet(RamId.RelPos(fullSymbol, i), set);

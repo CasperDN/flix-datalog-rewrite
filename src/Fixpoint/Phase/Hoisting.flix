@@ -374,6 +374,7 @@ mod Fixpoint.Phase.Hoisting {
             case RamTerm.App5(f, t1, t2, t3, t4, t5, id)=> RamTerm.App5(f, replaceRec(t1), replaceRec(t2), replaceRec(t3), replaceRec(t4), replaceRec(t5), id)
     }
 
+
     ///
     /// Returns `true` if `bool` is ground with respect to `termMap` and `equalitySets`.
     ///

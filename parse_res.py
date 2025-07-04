@@ -69,16 +69,18 @@ def project(dictionary: dict, values):
 
 # res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Provenance/WithProv.txt", True)
 
-res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/PathFirst.txt", True)
+# res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Stratification/PathFirst.txt", True)
+
+res = read("C:/Users/caspe/OneDrive/Skrivebord/Uni/Speciale/Results/Inliner/All.txt", True)
 
 # keptValues = ["join_time", "inter_time", "compile_time", "marshall_time", "total"]
 # keptValues = ["compile_time", "inter_time", "marshall_time"]
-keptValues = ["inter_time"]
+# keptValues = ["inter_time"]
 
 
 
 
-res = project(res, keptValues)
+# res = project(res, keptValues)
 
 # res = filter_list(res, "Insertions", 10000)
 

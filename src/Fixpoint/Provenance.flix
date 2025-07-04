@@ -52,7 +52,6 @@ mod Fixpoint.Provenance {
                 let innerMap = MutMap.getOrElsePut(pred, MutMap.empty(rc), lookupStruct);
                 match MutMap.get(search, innerMap) {
                     case Some(tree) => BPlusTree.get(vals, tree)
-                    // case _ =>
                     case None =>
                         let tree = BPlusTree.emptyWithSearch(rc, search);
                         let extractSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, search), k), Vector.length(search));
@@ -83,7 +82,6 @@ mod Fixpoint.Provenance {
             case IDB(pred, fact, subs) => 
                 let factString = Vector.join(", ", fact);
                 let indentCur = String.repeat(indentChild, " ");
-                // let indentString = String.repeat(indentChild + 4, " ");
                 let subProofs = Vector.joinWith(sub -> toString(sub, indentChild + 4), "${String.lineSeparator()}", subs);
                 "${indentCur}${pred}(${factString}). Proof:${String.lineSeparator()}${subProofs}"
         }
@@ -109,8 +107,6 @@ mod Fixpoint.Provenance {
     pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] = match d {
         case Provenance(rules, provIdb) => region rc {
             Array.empty(rc, 10);
-            // unchecked_cast(println(predSym) as _ \ rc);
-            // unchecked_cast(println(fact) as _ \ rc);
             let reorderedRules = Vector.map(identity, rules);
             let annotation = match Map.get(predSym, provIdb) {
                 case None => None
@@ -124,9 +120,7 @@ mod Fixpoint.Provenance {
                 case Some((depth, ruleUsed)) => 
                     let lookupStruct = MutMap.empty(rc);
                     let tree = buildProof(predSym, fact, depth, ruleUsed, reorderedRules, provIdb, lookupStruct, rc);
-                    Some(flatMap(tree))
-                    // unchecked_cast({println(tree); Some(flatMap(tree))} as _ \ {})
-                    
+                    Some(flatMap(tree))                    
             }
         }
         case _ => 
@@ -149,8 +143,6 @@ mod Fixpoint.Provenance {
             let childProofs = Vector.zip(relevantPreds, bodyAtoms) |> Vector.map(match (bodyP, (bodyFact, bodyDepth, bodyRule)) -> match bodyP {
                 case BodyPredicate.BodyAtom(p, _, _, _, _) =>
                     buildProof(p, bodyFact, bodyDepth, bodyRule, rules, provIdb, lookupStruct, rc)
-                // case BodyPredicate.BodyAtom(_, _, Polarity.Negative, _, _) =>
-                //     ProofTree.Negative(predSym, bodyFact)
                 case _      => unreachable!()
             });
             ProofTree.IDB(predSym, fact, childProofs)
@@ -234,12 +226,6 @@ mod Fixpoint.Provenance {
                                                 Vector.get(Counter.getAndIncrement(c2), bodyFact)
                                             }
                                         });
-                                        // def smallLoop(pos) = {
-                                        //     if(Counter.get(c1) )
-                                        // }
-                                        // let completeFact = Vector.init(i -> {
-                                        //     Vector.find(match (_, _))
-                                        // }, Vector.length(expected));
                                         Array.put(Some((completeFact, bodyDepth, bodyRule)), index, bodyValues);
                                         putVals(nowBoundVars, bodyFact);
                                         loop(index + 1)
@@ -247,20 +233,6 @@ mod Fixpoint.Provenance {
                                 })
                             }
                         }
-                        // let filter = List.toVector(filterAsList);
-                        // match Map.get(pred, provIdb) {
-                        //     case None => false
-                        //     case Some(facts) => facts |> Map.exists(bodyFact -> match (bodyDepth, bodyRule) -> {
-                        //         let matchingTuple = bodyDepth < depth and filter |> Vector.forAll(match (i, val) -> Vector.get(i, bodyFact) == val);
-                        //         if(not matchingTuple) {
-                        //             false
-                        //         } else {
-                        //             Array.put(Some((bodyFact, bodyDepth, bodyRule)), index, bodyValues);
-                        //             putVals(expected, bodyFact);
-                        //             loop(index + 1)
-                        //         }
-                        //     })
-                        // }
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Negative, _, expected) =>
                         let vals = expected |> Vector.map(t -> match t {
                             case BodyTerm.Var(v) => getVal(v)

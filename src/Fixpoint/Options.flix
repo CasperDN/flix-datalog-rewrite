@@ -43,18 +43,6 @@ mod Fixpoint.Options {
     pub def debugFileName(): String = "fixpoint_debug.txt" 
 
     ///
-    /// Disables the join index selection phase.
-    ///
-    @Internal
-    pub def disableIndexSelection(): Bool = false
-
-    ///
-    /// Disables parallelism in the interpreter.
-    ///
-    @Internal
-    pub def disableParallelism(): Bool = false
-
-    ///
     /// Disables the join optimization phase.
     ///
     @Internal
@@ -79,8 +67,7 @@ mod Fixpoint.Options {
     pub def parLevel(): Int32 = 2
 
     ///
-    /// Returns the seed used in the random number generator to generate
-    /// the representative input used by the profiler.
+    /// Returns the minimum number of facts the profiler will sample.
     ///
     @Internal
     pub def profilerFactLowerBound(): Int32 = 10

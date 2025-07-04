@@ -27,7 +27,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Counter
     use Fixpoint.Util.{getOrCrash}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
-    use Fixpoint.Predicates.{allFullRelSyms}
+    use Fixpoint.Predicate.{allFullRelSyms}
 
     ///
     /// A
@@ -64,7 +64,6 @@ mod Fixpoint.Interpreter {
     type alias Context[r: Region] = (
         Indexes[r],
         SearchEnv[r],
-        // AllowedBranches,
         Boxing[r]
     )
     
@@ -142,8 +141,7 @@ mod Fixpoint.Interpreter {
         program: RamProgram
     ): (Database[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
-            let time = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r);
-            unchecked_cast(println("Start-inter: ${time}") as _ \ r);
+            unchecked_cast(println("Start-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
             constWrites |> Vector.forEach(match (id1, id2, val) -> {
@@ -155,7 +153,6 @@ mod Fixpoint.Interpreter {
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
             let ctxt = (db, env, boxing);
             evalStmt(rc, ctxt, expectedJoinSize, Fixpoint.Options.parLevel(), stmt);
-            
             // let elapsed = unchecked_cast(Clock.runWithIO(Clock.now) as _ \ r) - time;
             unchecked_cast(println("End-inter: ${Clock.runWithIO(Clock.now)}") as _ \ r);
             // Don't insert when doing join size estimation. It is not used and is expensive.
@@ -191,8 +188,7 @@ mod Fixpoint.Interpreter {
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         parLevel: AllowedBranches,
         stmt: RamStmt
-    ): Unit \ r = 
-    match stmt {
+    ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
             evalOp(rc, ctxt, parLevel, relOp)
         case RamStmt.MergeInto(srcIndex, dstIndex, Relational) =>
@@ -225,19 +221,14 @@ mod Fixpoint.Interpreter {
                 evalStmt(rc, ctxt, expectedJoinSize, parLevel, stmt)
             }
         case RamStmt.Comment(_) => ()
-        case RamStmt.Par(stmts) =>
-        if(Fixpoint.Options.disableParallelism()) {
-            evalStmt(rc, ctxt, expectedJoinSize, parLevel, RamStmt.Seq(stmts))
-        } else {
-            region rc2 {
-                stmts |> Vector.forEach(innerStmt -> unchecked_cast({
-                    let _: Unit = spawn unchecked_cast({
-                        let threadCtxt = makeCtxt(rc, ctxt);
-                        evalStmt(rc, threadCtxt, expectedJoinSize, parLevel, innerStmt)
-                    } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
-                    ()
-                } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
-            }
+        case RamStmt.Par(stmts) => region rc2 {
+            stmts |> Vector.forEach(innerStmt -> unchecked_cast({
+                let _: Unit = spawn unchecked_cast({
+                    let threadCtxt = makeCtxt(rc, ctxt);
+                    evalStmt(rc, threadCtxt, expectedJoinSize, parLevel, innerStmt)
+                } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
+                ()
+            } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
         }
         case RamStmt.EstimateJoinSize(indexPos, writeTo, attr) =>
             let prevRef = Ref.fresh(rc, None);
@@ -266,7 +257,7 @@ mod Fixpoint.Interpreter {
         let (db, env, boxing) = ctxt;
         match op {
             case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
-                if(Fixpoint.Options.disableParallelism() or parLevel == 0) {
+                if(parLevel == 0) {
                     lookupIndex(searchIndex, db) |>
                         BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt, parLevel))
                 } else {
@@ -294,7 +285,7 @@ mod Fixpoint.Interpreter {
                 let tuple = Vector.map(evalTerm(env, boxing), terms);
                 BPlusTree.put(tuple, Boxed.NoValue, relIndex)
             case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
-                if(Fixpoint.Options.disableParallelism() or parLevel == 0) {
+                if(parLevel == 0) {
                     lookupIndex(searchIndex, db) |> 
                     BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt, parLevel))
                 } else {

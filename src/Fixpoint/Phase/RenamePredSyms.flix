@@ -15,12 +15,18 @@
  * limitations under the License.
  */
 
-//
+///
 /// Purpose of phase: For `PredSym(name, id)` we want `id` to be unique, for the whole program.
-/// This phase passes over the Datalog-Ast and replaces the id and after everything is done
+/// This phase passes over the Datalog-Ast and replaces the `id` and after everything is done
 /// recreates the old `PredSym`s for the resulting model.
-//
-mod Fixpoint.Phase.FixPredSyms {
+///
+/// This is necessary as Flix uses the id-part for generating local predicates, not as unique identifiers.
+///
+///
+/// This purpose of this module is to transform `PredSym`s defined by `(name, id)`, to `PredSym`s
+/// uniquely defined by their `id`.
+///
+mod Fixpoint.Phase.RenamePredSyms {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -37,10 +43,13 @@ mod Fixpoint.Phase.FixPredSyms {
 
     ///
     /// Maps all `PredSym`s in `d` to have unique ids. Returns the resulting
-    /// program and information which `unfixPredSym` can use to recreate the original program.
+    /// program and information which `renamePredSyms` can use to recreate the original program.
+    ///
+    /// This function expects `PredSym`s to be defined by their `(name, id)`, while afterwards they
+    /// will be uniquely defined by their `id`.
     ///
     @Internal
-    pub def fixPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
+    pub def assignUniqueIdentifiersToPredSyms(rc: Region[r], d: Datalog): (Datalog, FixInformation) \ r =
         let mapping = UniqueInts.empty(rc);
         let fixed = fixPredSymsInternal(d, mapping);
         (fixed, UniqueInts.reverse(mapping))
@@ -64,10 +73,10 @@ mod Fixpoint.Phase.FixPredSyms {
     }
 
     ///
-    /// Applies `fixing` to the `d` to restore the `PredSym`s to the original values.
+    /// Replaces `PredSym(name, id)` in `d` with `Map.get(id, fixing)`.
     ///
     @Internal
-    pub def unfixPredSym(d: Datalog, fixing: FixInformation): Datalog = match d {
+    pub def renamePredSyms(d: Datalog, fixing: FixInformation): Datalog = match d {
         case Datalog(facts, rules) => 
             let transformer = mapBack(fixing);
             Datalog(remapConstraints(facts, transformer), remapConstraints(rules, transformer))
@@ -92,6 +101,9 @@ mod Fixpoint.Phase.FixPredSyms {
     /// Maps `pred` back to its original `PredSym` according to `reversing`.
     ///
     def mapBack(reversing: FixInformation, pred: PredSym): PredSym = 
+        // The `id`s are assigned 0 to n for `n` `PredSym`s. They should
+        // be well within the range for `Int32`. Also no new `PredSym`s should
+        // have been created. There is no recovery for either.
         let PredSym(_, id) = pred;
         getOrCrash(Map.get(getOrCrash(Int64.tryToInt32(id)), reversing))
 
