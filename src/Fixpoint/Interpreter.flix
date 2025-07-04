@@ -17,20 +17,20 @@
  */
 
 mod Fixpoint.Interpreter {
-    use Fixpoint.Ast.ExecutableRam.{RamStmt, RelOp, RamTerm, BoolExp, RamProgram, WriteTuple}
-    use Fixpoint.Ast.Ram.{RelSym, toDenotation, Predicates, arityOfNonLat, toId, RamId, Search}
+    use Fixpoint.Ast.ExecutableRam.{BoolExp, RamProgram, RamStmt, RamTerm, RelOp, WriteTuple}
+    use Fixpoint.Ast.Ram.{arityOfNonLat, Predicates, RamId, RelSym, Search, toDenotation, toId}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
     use Fixpoint.Boxing.{boxWith, unboxWith}
     use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
-    use Fixpoint.Util.{getOrCrash}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
-    use Fixpoint.Predicate.{allFullRelSyms}
+    use Fixpoint.Predicate.allFullRelSyms
+    use Fixpoint.Util.getOrCrash
 
     ///
-    /// A
+    /// A tuple/fact.
     ///
     type alias Tuple = Vector[Int64]
 
@@ -39,6 +39,22 @@ mod Fixpoint.Interpreter {
     ///
     type alias AllowedBranches = Int32
 
+    ///
+    /// A modifiable tuple that can be used to search a relation.
+    ///
+    /// Consider
+    /// ```
+    /// search a ∈ A do
+    ///     search b ∈ B | b[0] = a[1] do
+    ///         ...
+    ///     end
+    /// end
+    /// ```
+    /// After each `a` is met the `SearchTuple` for `b` is updated. Assuming `B`
+    /// has arity `2` the `SearchTuple`s for `a[1]=3` would be `[Int64.MinValue, 3]`
+    /// and `[Int64.MaxValue, 3]`, indicating that we want tuples where the second
+    /// value is `3`.
+    ///
     type alias SearchTuple[r: Region] = Array[Int64, r]
 
     ///
@@ -51,9 +67,21 @@ mod Fixpoint.Interpreter {
     ///
     type alias Indexes[r: Region] = Array[Index[r], r]
 
+    ///
+    /// The `IDB` or result as it is exposed to the Solver. It simply
+    /// maps `RelSym` to an `Index` which uses `MutMap` instead of a
+    /// `BPlusTree`.
+    ///
     @Internal
     pub type alias Database[r: Region] = MutMap[RelSym, MutMap[Vector[Boxed], Boxed, r], r]
 
+    ///
+    /// A `SearchEnv` contains the dynamic information about the state of the Interpreter.
+    ///
+    /// The first 2 values contain information about which `SearchTuple` should be used by
+    /// `Query` statements. The third value contains the current tuple of the bound `RowVar`'s
+    /// The fouth contains the current lattice values of the bound `RowVar`'s.
+    ///
     type alias SearchEnv[r: Region] = (
         Vector[SearchTuple[r]], 
         Vector[SearchTuple[r]], 
@@ -61,18 +89,35 @@ mod Fixpoint.Interpreter {
         Array[Boxed, r]
     )
 
+    ///
+    /// A `Context` contains all knowledge the Interpreter needs/uses while executing a RAM program.
+    ///
+    /// The first value is an array of the current indexes for the relations. The second is described above.
+    /// The third is information relating to translating to/from the `Int64` used to represent the `Boxed`
+    /// values.
+    ///
     type alias Context[r: Region] = (
         Indexes[r],
         SearchEnv[r],
         Boxing[r]
     )
     
+    ///
+    /// Returns the index at position `pos` in `indexes`.
+    ///
     def lookupIndex(pos: Int32, indexes: Indexes[r]): Index[r] \ r = 
         Array.get(pos, indexes)
 
+    ///
+    /// Stores `index` at `pos` in `indexes`.
+    ///
     def storeIndex(index: Index[r], pos: Int32, indexes: Indexes[r]): Unit \ r = 
         Array.put(index, pos, indexes)
 
+    ///
+    /// Returns an `Index` in region `rc`, for `relSym`, using `search` as order and
+    /// initialized with `tuples`.
+    ///
     def mkIndex(
         rc: Region[r], 
         relSym: RelSym, 
@@ -101,16 +146,24 @@ mod Fixpoint.Interpreter {
         let _ = interpretWithInput(rc, Some(expectedJoinSize), input);
         expectedJoinSize        
 
+    ///
+    /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)`.
+    ///
     @Internal
     pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r = 
         interpretWithInput(rc, None, input)
 
+    ///
+    /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)` writing
+    /// join estimates to `expectedJoinSize`, if necessary.
+    ///
     def interpretWithInput(
         rc: Region[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         input: (RamProgram, Boxing[r])
     ): (Database[r], Predicates) \ r =
         let (program, boxing) = input;
+        // Create `Indexes` from `program`.
         let indexes = match program {
             case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) => 
                 let indexNum = match Map.maximumValue(posMap) {
@@ -124,7 +177,7 @@ mod Fixpoint.Interpreter {
                     searches |> Vector.forEachWithIndex(num -> search -> {
                         let pos = match Map.get((relSym, num), posMap) {
                             case Some(v) => v
-                            case None => bug!("In Fixpoint.Interpreter.interpret: ${relSym} has no index!")
+                            case None => bug!("In Fixpoint.Interpreter.interpretWithInput: ${relSym} has no index!")
                         };
                         storeIndex(mkIndex(rc, relSym, search, tuples), pos, indexes)
                     })
@@ -133,6 +186,9 @@ mod Fixpoint.Interpreter {
         };
         interpretWithDatabase(rc, indexes, boxing, expectedJoinSize, program)
 
+    ///
+    /// Executes `program` using `boxing` as `Boxing` information, `db` as initial `Indexes`.
+    ///
     def interpretWithDatabase(
         rc: Region[r], 
         db: Indexes[r], 
@@ -159,7 +215,11 @@ mod Fixpoint.Interpreter {
             }
     }
 
-
+    ///
+    /// Transforms `db` into `Database`.
+    ///
+    /// For all `RelSym` some `Index` for relation is selected and all values are boxed and copied to a `MutMap`.
+    ///
     def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): Database[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
@@ -178,6 +238,9 @@ mod Fixpoint.Interpreter {
         });
         res
 
+    ///
+    /// Evaluate `stmt`, under `ctxt` with at most `parLevel` allowed new branches `RelOp.Search`.
+    ///
     def evalStmt(
         rc: Region[r], 
         ctxt: Context[r], 
@@ -217,14 +280,15 @@ mod Fixpoint.Interpreter {
                 evalStmt(rc, ctxt, expectedJoinSize, parLevel, stmt)
             }
         case RamStmt.Comment(_) => ()
+        // Imortant to note: all threads spawned on region `rc2` will have terminated before we exit `rc2`.
         case RamStmt.Par(stmts) => region rc2 {
             stmts |> Vector.forEach(innerStmt -> unchecked_cast({
                 let _: Unit = spawn unchecked_cast({
                     let threadCtxt = makeCtxt(rc, ctxt);
                     evalStmt(rc, threadCtxt, expectedJoinSize, parLevel, innerStmt)
-                } as _ \ IO) @ rc2; // spawn may not take an r effect, so we cast it to IO
+                } as _ \ IO) @ rc2; // spawn may not take an `r` effect, so we cast it to `IO`
                 ()
-            } as _ \ rc2)) // The IO effect is undesirable, so we cast it back to an r effect
+            } as _ \ rc2)) // The `IO` effect is undesirable, so we cast it back to an `r` effect
         }
         case RamStmt.EstimateJoinSize(indexPos, writeTo, attr) =>
             let prevRef = Ref.fresh(rc, None);
@@ -249,6 +313,9 @@ mod Fixpoint.Interpreter {
             MutList.push((size, dup), Array.get(writeTo, getOrCrash(expectedJoinSize)))
     }
 
+    ///
+    /// Evaluate `op`, under `ctxt` with at most `parLevel` allowed new branches `RelOp.Search`.
+    ///
     def evalOp(rc: Region[r], ctxt: Context[r], parLevel: AllowedBranches, op: RelOp): Unit \ r = 
         let (db, env, boxing) = ctxt;
         match op {
@@ -326,6 +393,14 @@ mod Fixpoint.Interpreter {
                 })
         }
 
+    ///
+    /// Handle all writes in `writes` reading from `t` and writing to `minEnv` and `maxEnv`.
+    ///
+    /// For `t=[8, 42]`, `writes=[(1, 2, 0)]` it would do the update `minEnv[2][0] = t[1]`.
+    /// The same update is done for `maxEnv`.
+    ///
+    /// Lastly `t` is saved at `tuplePos` in `tupleEnv`, i.e. `tupleEnv[tuplePos] = t`.
+    ///
     def handleWriteTuples(
         t: Tuple,
         writes: Vector[WriteTuple],
@@ -340,6 +415,15 @@ mod Fixpoint.Interpreter {
         });
         Array.put(t, tuplePos, tupleEnv)
 
+    ///
+    /// Handles executing `body` for a `Search(Relational)` or `Query(Relation)`
+    /// RelOp with current bound tuple `t`.
+    ///
+    /// Should only be used when new threads are being spawned.
+    ///
+    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
+    /// to be performed. See `handleWriteTuples`.
+    ///
     def parRelationHandlingBodyFunc(
         rc: Region[r],
         tuplePos: Int32,
@@ -352,6 +436,9 @@ mod Fixpoint.Interpreter {
     ): Unit \ r =
         relationHandlingBodyFunc(rc, tuplePos, writes, body, makeCtxt(rc, ctxt), parLevel, t, ignored)
 
+    ///
+    /// Clones `ctxt` for a concurrent thread.
+    ///
     def makeCtxt(rc: Region[r], ctxt: Context[r]): Context[r] \ r = {
         let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
         let threadMinEnv = minEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
@@ -362,7 +449,14 @@ mod Fixpoint.Interpreter {
         (db, threadEnv, boxing)
     }
 
-
+    ///
+    /// Handles executing `body` for a `Search` or `Query` relation with current bound tuple `t`.
+    ///
+    /// Assumes exclusive access to `ctxt`.
+    ///
+    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
+    /// to be performed. See `handleWriteTuples`.
+    ///
     def relationHandlingBodyFunc(
         rc: Region[r],
         tuplePos: Int32,
@@ -378,6 +472,15 @@ mod Fixpoint.Interpreter {
         handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
         evalOp(rc, ctxt, parLevel, body)
 
+    ///
+    /// Handles executing `body` for a `Search(Latticenal)` or `Query(Latticenal)`
+    /// RelOp with current bound tuple `t` and lattice value `l`.
+    ///
+    /// Should only be used when new threads are being spawned.
+    ///
+    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
+    /// to be performed. See `handleWriteTuples`.
+    ///
     def parLatticeHandlingBodyFunc(
         rc: Region[r],
         tuplePos: Int32,
@@ -392,9 +495,17 @@ mod Fixpoint.Interpreter {
         t: Tuple,
         l: Boxed
     ): Unit \ r =
-    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), parLevel, t, l)
+        latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), parLevel, t, l)
 
-
+    ///
+    /// Handles executing `body` for a `Search(Latticenal)` or `Query(Latticenal)`
+    /// RelOp with current bound tuple `t` and lattice value `l`.
+    ///
+    /// Assumes exclusive access to `ctxt`.
+    ///
+    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
+    /// to be performed. See `handleWriteTuples`.
+    ///
     def latticeHandlingBodyFunc(
         rc: Region[r],
         tuplePos: Int32,
@@ -425,6 +536,9 @@ mod Fixpoint.Interpreter {
             }
         }
 
+    ///
+    /// Evaluates `terms`, where the last value of `terms` will 
+    ///
     def evalTermsWithLat(ctxt: Context[r], terms: Vector[RamTerm]): Tuple \ r =
         let (_, env, boxing) = ctxt;
         let evalT = evalTerm(env, boxing);
@@ -432,6 +546,10 @@ mod Fixpoint.Interpreter {
         Vector.range(0, len - 1) |> 
         Vector.map(i -> evalT(Vector.get(i, terms)))
 
+    ///
+    /// Evaluate `exps` under context `ctxt` and returns true iff all `BoolExp` in `exps`
+    /// are true.
+    ///
     def evalBoolExps(ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
         let (db, env, boxing) = ctxt;
         let evalT = evalTerm(env, boxing);
@@ -486,6 +604,10 @@ mod Fixpoint.Interpreter {
         };
         exps |> Vector.forAll(evalBoolExp)
 
+    ///
+    /// Returns the (Boxed) result of evaluating `term` under `env` using `boxing`
+    /// to box/unbox values as needed.
+    ///
     def evalBoxedTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Boxed \ r = 
         let evalT = evalBoxedTerm(env, boxing);
         match term {
@@ -529,6 +651,10 @@ mod Fixpoint.Interpreter {
                 f(v1)(v2)(v3)(v4)(v5)
         }
 
+    ///
+    /// Returns the (Int64) result of evaluating `term` under `env` using `boxing`
+    /// to box/unbox values as needed.
+    ///
     def evalTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Int64 \ r = 
         let evalBoxedT = evalBoxedTerm(env, boxing);
         match term {
