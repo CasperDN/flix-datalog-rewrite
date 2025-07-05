@@ -104,6 +104,7 @@ mod Fixpoint.Provenance {
         res |> MutList.toList
     }
 
+    @Internal
     pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] = match d {
         case Provenance(rules, provIdb) => region rc {
             Array.empty(rc, 10);
