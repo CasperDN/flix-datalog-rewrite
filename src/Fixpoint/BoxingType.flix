@@ -64,30 +64,30 @@ mod Fixpoint.BoxingType {
     ///
     @Internal
     pub enum Types {
-        case Unknown
-        case Bool
-        case Char
-        case Int8
-        case Int16
-        case Int32
-        case Int64
-        case Float32
-        case Float64
-        case Object
+        case TyUnknown
+        case TyBool
+        case TyChar
+        case TyInt8
+        case TyInt16
+        case TyInt32
+        case TyInt64
+        case TyFloat32
+        case TyFloat64
+        case TyObject
     }
 
     instance ToString[Types] {
         pub def toString(t: Types): String = match t {
-        case Types.Unknown => "Unknown"
-        case Types.Bool    => "Bool"
-        case Types.Char    => "Char"
-        case Types.Int8    => "Int8"
-        case Types.Int16   => "Int16"
-        case Types.Int32   => "Int32"
-        case Types.Int64   => "Int64"
-        case Types.Float32 => "Float32"
-        case Types.Float64 => "Float64"
-        case Types.Object  => "Object"
+        case Types.TyUnknown => "Unknown"
+        case Types.TyBool    => "Bool"
+        case Types.TyChar    => "Char"
+        case Types.TyInt8    => "Int8"
+        case Types.TyInt16   => "Int16"
+        case Types.TyInt32   => "Int32"
+        case Types.TyInt64   => "Int64"
+        case Types.TyFloat32 => "Float32"
+        case Types.TyFloat64 => "Float64"
+        case Types.TyObject  => "Object"
         }
     }
 
