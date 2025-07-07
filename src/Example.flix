@@ -175,3 +175,8 @@ pub def dumb(): Unit \ IO =
     };
     query f1, f2, r select x from C(x)  |> println;
     ()
+
+
+def forceEval(): Unit \ IO = {
+    println("Hej")
+}

@@ -118,13 +118,10 @@ mod Fixpoint.Phase.Lowering {
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
     @Internal
-    pub def lowerProgram(rc: Region[r], program: AProgram): (EProgram, Boxing[r]) \ r = match program {
+    pub def lowerProgram(rc: Region[r], withProv: Bool, program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
         case AProgram.Program(stmt, _, meta, indexInfo) =>
             let idToIndex = UniqueInts.empty(rc);
-            // Map Boxed to Int64. `newFacts` is `facts` after this tranformation has been applied
-            // `boxing` can help transform `Boxed` to `Int64` or the reverse. To do this
-            // it need some information about which should be applied and `idToBoxing` provides this.
-            let (boxing, newFacts, idToBoxing) = Boxing.initialize(rc, program);
+            let (boxing, newFacts, idToBoxing) = Boxing.initialize(rc, withProv, program);
             let writeTo = (MutMap.empty(rc), MutMap.empty(rc));
             let loweredStmt = lowerStmt(rc, idToIndex, (idToBoxing, boxing), writeTo, indexInfo, stmt);
 

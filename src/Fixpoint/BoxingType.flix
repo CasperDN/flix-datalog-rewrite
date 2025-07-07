@@ -64,35 +64,35 @@ mod Fixpoint.BoxingType {
     ///
     @Internal
     pub enum Types {
-        case Unknown
-        case Bool
-        case Char
-        case Int8
-        case Int16
-        case Int32
-        case Int64
-        case Float32
-        case Float64
-        case Object
+        case TyUnknown
+        case TyBool
+        case TyChar
+        case TyInt8
+        case TyInt16
+        case TyInt32
+        case TyInt64
+        case TyFloat32
+        case TyFloat64
+        case TyObject
     }
 
     instance ToString[Types] {
         pub def toString(t: Types): String = match t {
-        case Types.Unknown => "Unknown"
-        case Types.Bool    => "Bool"
-        case Types.Char    => "Char"
-        case Types.Int8    => "Int8"
-        case Types.Int16   => "Int16"
-        case Types.Int32   => "Int32"
-        case Types.Int64   => "Int64"
-        case Types.Float32 => "Float32"
-        case Types.Float64 => "Float64"
-        case Types.Object  => "Object"
+        case Types.TyUnknown => "Unknown"
+        case Types.TyBool    => "Bool"
+        case Types.TyChar    => "Char"
+        case Types.TyInt8    => "Int8"
+        case Types.TyInt16   => "Int16"
+        case Types.TyInt32   => "Int32"
+        case Types.TyInt64   => "Int64"
+        case Types.TyFloat32 => "Float32"
+        case Types.TyFloat64 => "Float64"
+        case Types.TyObject  => "Object"
         }
     }
 
     ///
-    /// Describes the placement of type-information of a group of values that share the
+    /// Describes the placement of type information of a group of values that share the
     /// same type.
     ///
     @Internal
@@ -129,19 +129,19 @@ mod Fixpoint.BoxingType {
     /// `Boxing=(values, valueToRep, typeInfo, locks)` contains the information needed to
     /// convert between Boxed objects and their Int64 representation
     ///
-    /// The i'th value of each Vector belongs to a specific `UnifiedTypePos`. The
+    /// The `i`'th value of each Vector belongs to a specific `UnifiedTypePos`. The
     /// description of the values will be for some `i`.
     /// 
-    /// `valueToRep` maps Boxed objects to their `Int64` representation.
+    /// `valueToRep` maps `Boxed` objects to their `Int64` representation.
     ///
-    /// `values` contains the Boxed objects being stored.
+    /// `values` contains the `Boxed` objects being stored.
     ///
-    /// The following invariant is kept `values(valueToRep[boxedValue]) == boxedValue`. This
-    /// design limits us to 2^32 objects of a given type.
+    /// The following invariant is kept: `values(valueToRep[boxedValue]) == boxedValue`.
+    /// This design limits us to 2^32 objects of a given type.
     ///
-    /// Furthermore for lattice `Bot` should be represented by `0`.
+    /// Furthermore, for lattice `Bot` should be represented by `0`.
     ///
-    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`. 
+    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`.
     /// If we have yet to meet any values associated with position `i`, `typeInfo[i]` will be `Unknown`.
     ///
     /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with. 
