@@ -92,7 +92,7 @@ mod Fixpoint.BoxingType {
     }
 
     ///
-    /// Describes the placement of type-information of a group of values that share the
+    /// Describes the placement of type information of a group of values that share the
     /// same type.
     ///
     @Internal
@@ -129,19 +129,19 @@ mod Fixpoint.BoxingType {
     /// `Boxing=(values, valueToRep, typeInfo, locks)` contains the information needed to
     /// convert between Boxed objects and their Int64 representation
     ///
-    /// The i'th value of each Vector belongs to a specific `UnifiedTypePos`. The
+    /// The `i`'th value of each Vector belongs to a specific `UnifiedTypePos`. The
     /// description of the values will be for some `i`.
     /// 
-    /// `valueToRep` maps Boxed objects to their `Int64` representation.
+    /// `valueToRep` maps `Boxed` objects to their `Int64` representation.
     ///
-    /// `values` contains the Boxed objects being stored.
+    /// `values` contains the `Boxed` objects being stored.
     ///
-    /// The following invariant is kept `values(valueToRep[boxedValue]) == boxedValue`. This
-    /// design limits us to 2^32 objects of a given type.
+    /// The following invariant is kept: `values(valueToRep[boxedValue]) == boxedValue`.
+    /// This design limits us to 2^32 objects of a given type.
     ///
-    /// Furthermore for lattice `Bot` should be represented by `0`.
+    /// Furthermore, for lattice `Bot` should be represented by `0`.
     ///
-    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`. 
+    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`.
     /// If we have yet to meet any values associated with position `i`, `typeInfo[i]` will be `Unknown`.
     ///
     /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with. 

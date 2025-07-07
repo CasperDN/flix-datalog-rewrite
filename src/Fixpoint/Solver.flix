@@ -104,7 +104,7 @@ mod Fixpoint.Solver {
             Fixpoint.Phase.IndexSelection.indexProgram |>
             Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
             Fixpoint.Phase.Provenance.augmentProgram(withProv) |>
-            Fixpoint.Phase.Lowering.lowerProgram(rc)
+            Fixpoint.Phase.Lowering.lowerProgram(rc, withProv)
         };
         let model = match d {
             case Datalog(_, r) =>
@@ -135,7 +135,7 @@ mod Fixpoint.Solver {
             program |> 
             Fixpoint.Phase.Hoisting.hoistProgram |> 
             Fixpoint.Phase.IndexSelection.indexProgram |> 
-            Fixpoint.Phase.Lowering.lowerProgram(rc) |>
+            Fixpoint.Phase.Lowering.lowerProgram(rc, false) |>
             Fixpoint.Interpreter.estimateJoinSizes(rc);
         expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector
     }
