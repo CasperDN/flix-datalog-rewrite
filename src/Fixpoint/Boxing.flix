@@ -30,9 +30,9 @@
 /// ```
 /// We know that A[0] and B[0] should share the same value, and if we project the
 /// representing `Int64` from `B` to `A` then we should be able to compute the
-/// `Boxed` value. We therefore unify the 2, effectively declaring that the types
+/// `Boxed` value. We therefore unify the two, effectively declaring that the types
 /// are the same. The same is done for `A[1]` and `C[0]`. On the other hand unifying
-/// `A[0]` and `A[1]` is not secure, as it could mix 2 unrelating types.
+/// `A[0]` and `A[1]` is not secure, as it could mix two unrelated types.
 ///
 /// The `initialize` method computes a unification and transforms all `Boxed` facts
 /// to `Int64` and returns a `BoxingType.Boxing`.
@@ -67,8 +67,8 @@ mod Fixpoint.Boxing {
     @Internal
     pub def initialize(rc: Region[r], withProv: Bool, program: RamProgram): (Boxing[r], EFacts, RamIdToPos) \ r =
         let mapping = Equality.computeMapping(program, withProv);
-        let boxingInfo = initializeInternal(rc, program, mapping);
-        let (facts, newBoxingInfo) = initializeFacts(rc, program, boxingInfo, mapping);
+        let boxingInfo = initializeInternal(rc, program, mapping, withProv);
+        let (facts, newBoxingInfo) = initializeFacts(rc, program, boxingInfo, mapping, withProv);
         (newBoxingInfo, facts, mapping)
 
     ///
@@ -79,13 +79,13 @@ mod Fixpoint.Boxing {
     /// This procedure will be heavily simplified by https://github.com/flix/flix/issues/11034
     /// where most of the code is removed.
     ///
-    def initializeFacts(rc1: Region[r], program: RamProgram, boxingInfo: Boxing[r], mapping: RamIdToPos): (EFacts, Boxing[r]) \ r = region rc2 {
+    def initializeFacts(rc1: Region[r], program: RamProgram, boxingInfo: Boxing[r], mapping: RamIdToPos, withProv: Bool): (EFacts, Boxing[r]) \ r = region rc2 {
         let RamProgram.Program(_, facts, _, _) = program;
         let factsAsVec = Map.toVector(facts);
         let counters = initializeCounters(rc1, boxingInfo);
         let newFacts = Array.empty(rc2, Vector.length(factsAsVec));
         let funcsToBeRun = factsAsVec |> Vector.mapWithIndex(i -> match (relSym, factVec) -> () -> {
-            let mappedResult = mapAllFacts(rc1, relSym, factVec, boxingInfo, counters, mapping);
+            let mappedResult = mapAllFacts(rc1, relSym, factVec, boxingInfo, counters, mapping, withProv);
             Array.put((relSym, mappedResult), i, newFacts)
         });
         spawnFuncs(funcsToBeRun);
@@ -97,7 +97,7 @@ mod Fixpoint.Boxing {
     /// Returns a correct `Boxing` constructed from `counters` and `boxingInfo`.
     ///
     /// After the simple initialization `boxingInfo` is missing the map back from `Int64`
-    /// to `Boxed`. This simply creates the it from the old `boxingInfo`.
+    /// to `Boxed`. This function simply creates it from the old `boxingInfo`.
     ///
     def fixBoxingAfterInit(rc: Region[r], counters: Vector[AtomicCounter[r]], boxingInfo: Boxing[r]): Boxing[r] \ r = {
         let (_, boxToRepVec, typeInfo, locks) = boxingInfo;
@@ -119,13 +119,14 @@ mod Fixpoint.Boxing {
     ///
     /// Spawns all functions in `funcs` and await their termination.
     ///
-    def spawnFuncs(funcs: Vector[Unit -> Unit \ ef]): Unit \ ef = region rc2 {
-        unchecked_cast({
-            let _: Unit = spawn unchecked_cast(
-                ((funcs |> Vector.forEach(f -> f())): _ \ ef)
-            as _ \ IO) @ rc2;
+    def spawnFuncs(funcs: Vector[Unit -> Unit \ ef]): Unit \ ef = region rc {
+        unchecked_cast((
+            funcs |> Vector.forEach(f -> {
+            let _: Unit = spawn {
+                unchecked_cast((f(): _ \ ef) as _ \ IO)
+            } @ rc;
             ()
-        } as _ \ ef)
+        }): _ \ IO) as _ \ ef)
     }
 
     ///
@@ -150,25 +151,26 @@ mod Fixpoint.Boxing {
     /// Returns a vector of the `Int64` values representing the `Boxed` values
     /// in `facts`.
     ///
-    def mapAllFacts(rc1: Region[r],
+    def mapAllFacts(
+        rc1: Region[r],
         relSym: RelSym,
         facts: Vector[Vector[Boxed]],
         boxingInfo: Boxing[r],
         counters: Vector[AtomicCounter[r]],
-        mapping: RamIdToPos
+        mapping: RamIdToPos,
+        withProv: Bool
     ): Vector[(Vector[Int64], Boxed)] \ r = {
         let relSymId = Ram.toId(relSym);
         let numOfFacts = Vector.length(facts);
-        // We need to test for whether there are provenance facts. If `numOfFacts > 0` and
+        // We need to test whether there are provenance facts. If `numOfFacts > 0` and
         // `arity != Vector.length(facts[0])` then there are provenance facts and positions
-        // need to be extended by RamId(-1).
+        // that need to be extended by RamId(-1).
         let nonExtendedPositions = Vector.range(0, arityOf(relSym)) |>
             Vector.map(i -> getOrCrash(Map.get(RamId.RelPos(relSymId, i), mapping)));
-        let positions = if(numOfFacts == 0 or arityOf(relSym) == Vector.length(Vector.get(0, facts))) {
-            nonExtendedPositions
-        } else {
-            Vector.append(nonExtendedPositions, Vector#{getOrCrash(Map.get(RamId.Id(-1), mapping)), getOrCrash(Map.get(RamId.Id(-1), mapping))})
-        };
+        let positions =
+            if (not withProv) nonExtendedPositions
+            else Vector.append(nonExtendedPositions, 
+                Vector#{getOrCrash(Map.get(RamId.Id(-1), mapping)), getOrCrash(Map.get(RamId.Id(-1), mapping))});
         let threadNum = threads();
         let resultArr = Array.empty(rc1, numOfFacts);
         // Map the facts in parallel, unless there are relatively few.
@@ -244,7 +246,7 @@ mod Fixpoint.Boxing {
     ///
     /// Construct a `Boxing` from `program` given a map from `RamId` to `UnifiedTypePos`.
     ///
-    def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToPos): Boxing[r] \ r =
+    def initializeInternal(rc: Region[r], program: RamProgram, map: RamIdToPos, withProv: Bool): Boxing[r] \ r =
         let max = 1 + snd(Option.getWithDefault((RamId.Id(-1), -1), Map.maximumValue(map)));
         let intToBox = Vector.init(_ -> MutList.empty(rc), max);
         let boxToInt = Vector.init(_ -> BPlusTree.empty(rc), max);
@@ -252,7 +254,11 @@ mod Fixpoint.Boxing {
         let posToIndex = Array.init(rc, _ -> Types.TyUnknown, max);
         let info = (intToBox, boxToInt, posToIndex, locks);
         let relSyms = relSymsOfProgram(program);
-        setType(Types.TyInt64, getOrCrash(Map.get(RamId.Id(-1), map)), posToIndex);
+        if(withProv) {
+            setType(Types.TyInt64, getOrCrash(Map.get(RamId.Id(-1), map)), posToIndex)
+        } else {
+            ()
+        };
         // Add bot first to make sure it corresponds to 0.
         List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
             List.forEach(x -> match x {
@@ -364,7 +370,7 @@ mod Fixpoint.Boxing {
     ///
     /// Construct a map from `RamId` to `UnifiedTypePos`.
     ///
-    /// See the description of the module.
+    /// See the description of the Boxing module.
     ///
     mod Equality {
         use Fixpoint.Ast.Ram.getTermRamId
@@ -399,7 +405,9 @@ mod Fixpoint.Boxing {
             // Given the equivalence relation just computed assign unique positions for each
             // equivalence relation.
             computeMappingStmt(disjointSet, mutMap, counter, withProv, stmt);
-            registerRamId(disjointSet, mutMap, counter, RamId.Id(-1));
+            if(withProv) {
+                registerRamId(disjointSet, mutMap, counter, RamId.Id(-1))
+            } else ();
             MutMap.toMap(mutMap)
         }
 
@@ -558,8 +566,10 @@ mod Fixpoint.Boxing {
             unifyRelSyms(fullSymbol, newSymbol, set, withProv);
             let arity = Ram.arityOf(fullSymbol);
             let id1 = Ram.toId(fullSymbol);
-            MutDisjointSets.union(RamId.RelPos(id1, arity), RamId.Id(-1), set);
-            MutDisjointSets.union(RamId.RelPos(id1, arity + 1), RamId.Id(-1), set)
+            if(withProv) {
+                MutDisjointSets.union(RamId.RelPos(id1, arity), RamId.Id(-1), set);
+                MutDisjointSets.union(RamId.RelPos(id1, arity + 1), RamId.Id(-1), set)
+            } else ()
 
         ///
         /// Unify the `i`'th `RamTerm` in `terms` with `RamId.InId(id, i)`.
@@ -604,13 +614,17 @@ mod Fixpoint.Boxing {
             match op {
                 case RelOp.Search(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), body) =>
                     let usedArity = getProvSafeIdArity(arity, withProv);
-                    Vector.forEach(i -> insert(RamId.TuplePos(rv, i)), Vector.range(0, usedArity));
-                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, usedArity));
+                    Vector.range(0, usedArity) |> Vector.forEach(i -> {
+                        insert(RamId.TuplePos(rv, i));
+                        insert(RamId.RelPos(predSym, i))
+                    });
                     recurse(body)
                 case RelOp.Query(rv, RelSym.Symbol(PredSym.PredSym(_, predSym), arity, _), bools, _, body) =>
                     let usedArity = getProvSafeIdArity(arity, withProv);
-                    Vector.forEach(i -> insert(RamId.TuplePos(rv, i)), Vector.range(0, usedArity));
-                    Vector.forEach(i -> insert(RamId.RelPos(predSym, i)), Vector.range(0, usedArity));
+                    Vector.range(0, usedArity) |> Vector.forEach(i -> {
+                        insert(RamId.TuplePos(rv, i));
+                        insert(RamId.RelPos(predSym, i))
+                    });
                     Vector.forEach(computeMappingBool(set, map, counter), bools);
                     recurse(body)
                 case RelOp.Functional(RowVar.Named(id), _, inputTerms, body, arity) => // equality on the input should be handled elsewhere.
