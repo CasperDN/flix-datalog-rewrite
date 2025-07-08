@@ -117,6 +117,11 @@ mod Fixpoint.Phase.Lowering {
     /// ```
     type alias MeetWithMap[r: Region] = (List[RowVar], MutDisjointSets[RowVar, r])
 
+    ///
+    /// Lower `program` from `Ram` to `ExecutableRam`.
+    ///
+    /// Returns the result along with the `Boxing` used for the program
+    ///
     @Internal
     pub def lowerProgram(rc: Region[r], withProv: Bool, program: AProgram): (EProgram, Boxing[r]) \ r = match program { 
         case AProgram.Program(stmt, _, meta, indexInfo) =>
