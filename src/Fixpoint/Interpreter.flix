@@ -143,22 +143,23 @@ mod Fixpoint.Interpreter {
     pub def estimateJoinSizes(rc: Region[r], input: (RamProgram, Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
         let expectedJoinSize = Array.empty(rc, getJoinEstimateNum(fst(input)));
         expectedJoinSize |> Array.transform(_ -> MutList.empty(rc));
-        let _ = interpretWithInput(rc, Some(expectedJoinSize), input);
+        let _ = interpretWithInput(rc, false, Some(expectedJoinSize), input);
         expectedJoinSize        
 
     ///
     /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)`.
     ///
     @Internal
-    pub def interpret(rc: Region[r], input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r = 
-        interpretWithInput(rc, None, input)
+    pub def interpret(rc: Region[r], withProv: Bool, input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r = 
+        interpretWithInput(rc, withProv, None, input)
 
     ///
     /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)` writing
     /// join estimates to `expectedJoinSize`, if necessary.
     ///
     def interpretWithInput(
-        rc: Region[r], 
+        rc: Region[r],
+        withProv: Bool,
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         input: (RamProgram, Boxing[r])
     ): (Database[r], Predicates) \ r =
@@ -184,7 +185,7 @@ mod Fixpoint.Interpreter {
                 });
                 indexes
         };
-        interpretWithDatabase(rc, indexes, boxing, expectedJoinSize, program)
+        interpretWithDatabase(rc, indexes, boxing, expectedJoinSize, withProv, program)
 
     ///
     /// Executes `program` using `boxing` as `Boxing` information, `db` as initial `Indexes`.
@@ -194,6 +195,7 @@ mod Fixpoint.Interpreter {
         db: Indexes[r], 
         boxing: Boxing[r], 
         expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        withProv: Bool,
         program: RamProgram
     ): (Database[r], Predicates) \ r = match program {
         case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
@@ -210,7 +212,7 @@ mod Fixpoint.Interpreter {
             evalStmt(rc, ctxt, expectedJoinSize, Fixpoint.Options.parLevel(), stmt);
             // Don't insert when doing join size estimation. It is not used and is expensive.
             match expectedJoinSize {
-                case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes), predState)
+                case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes, withProv), predState)
                 case Some(_) => (MutMap.empty(rc), predState)
             }
     }
@@ -220,12 +222,15 @@ mod Fixpoint.Interpreter {
     ///
     /// For all `RelSym` some `Index` for relation is selected and all values are boxed and copied to a `MutMap`.
     ///
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos): Database[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos, withProv: Bool): Database[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
             let innerMap = MutMap.empty(rc);
-            let curBoxingInfo = Vector.range(0, arityOfNonLat(relSym) + 2) |>
+            let usedArity =
+                if(withProv) arityOfNonLat(relSym) + 2
+                else arityOfNonLat(relSym);
+            let curBoxingInfo = Vector.range(0, usedArity) |>
                 Vector.map(i ->
                     getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );

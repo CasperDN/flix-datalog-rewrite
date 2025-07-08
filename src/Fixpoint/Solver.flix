@@ -110,7 +110,7 @@ mod Fixpoint.Solver {
             case Datalog(_, r) =>
                 compiler(d, Map.empty()) |>  
                 Fixpoint.Debugging.notifyPreInterpret |>
-                Fixpoint.Interpreter.interpret(rc) |> 
+                Fixpoint.Interpreter.interpret(rc, withProv) |> 
                 toModelWithoutFull(withProv, r)
             case Model(_) => 
                 d
@@ -120,7 +120,7 @@ mod Fixpoint.Solver {
                 let cs = Datalog(f, r);
                 compiler(cs, m) |> 
                 Fixpoint.Debugging.notifyPreInterpret |>
-                Fixpoint.Interpreter.interpret(rc) |> 
+                Fixpoint.Interpreter.interpret(rc, withProv) |> 
                 toModelWithoutFull(withProv, r)
             case Join(Provenance(_, _), cs) => ???
             case _ => bug!("Datalog Boxing bug")
