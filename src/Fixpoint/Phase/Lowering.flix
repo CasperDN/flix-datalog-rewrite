@@ -25,7 +25,7 @@
 /// 2. For relations with multiple indexes replace `MergeInto(newRel, otherRel)` with
 /// `MergeInto(newRel, otherRelIndex1)`, `MergeInto(newRel, otherRelIndex2)`, ...
 /// 3. Does similar for `Purge` and `Swap`.
-/// 4. Augment every XXX statement with information about where the relevant
+/// 4. Augment every statement with information about where the relevant
 /// indexes are stored
 /// 5. Remove `NotBot` as it is handled explicitly by the interpreter.
 /// 6. Assign memory positions to `RowVar`'s.
