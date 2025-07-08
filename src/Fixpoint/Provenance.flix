@@ -145,21 +145,22 @@ mod Fixpoint.Provenance {
     ///
     /// The returned `List` is in `Pre-order`.
     ///
-    /// Note that this function is not tail-recursive.
-    ///
     def filterAndFlattenProof(p: ProofTree, filterFunc: PredSym -> Bool): List[(PredSym, Vector[Boxed])] = region rc {
         let res = MutList.empty(rc);
-        def recurse(t) = match t {
-            case ProofTree.EDB(pred, fact) =>
-                if (filterFunc(pred)) MutList.push((pred, fact), res)
-                else ()
-            case ProofTree.Negative(_, _) => ()
-            case ProofTree.IDB(pred, fact, subTrees) => {
+        def recurse(workList: List[ProofTree]) = match workList {
+            case Nil => ()
+            case ProofTree.EDB(pred, fact) :: tail =>
                 if (filterFunc(pred)) MutList.push((pred, fact), res)
                 else ();
-                subTrees |> Vector.forEach(recurse)
+                recurse(tail)
+            case ProofTree.Negative(_, _) :: tail => recurse(tail)
+            case ProofTree.IDB(pred, fact, subTrees) :: tail => {
+                if (filterFunc(pred)) MutList.push((pred, fact), res)
+                else ();
+                let furtherWork = (tail, subTrees) ||> Vector.foldLeft(acc -> cur -> cur :: acc);
+                recurse(furtherWork)
         }};
-        recurse(p);
+        recurse(p :: Nil);
         res |> MutList.toList
     }
 
