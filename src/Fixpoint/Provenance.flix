@@ -16,6 +16,16 @@
  */
 
 ///
+/// This module reconstructs the proof tree given a provenance model.
+/// It does so by re-evaluating the program in a top-down fashion
+/// to prove the sought after atom. This search is augmented with
+/// knowledge about which facts are true and the rules used to
+/// construct them.
+///
+/// The current implementation assumes that all negative atoms are placed after positive atoms.
+/// More precicely it assumes that all variables in the negative atoms have
+/// been bound when it encounters them.
+///
 /// The current implementation does not output the negative atoms. They can be derived from the positive.
 ///
 mod Fixpoint.Provenance {
@@ -26,33 +36,52 @@ mod Fixpoint.Provenance {
     use Fixpoint.Counter
     use Fixpoint.Util.getOrCrash
 
+    ///
+    /// A `ProvIDB` maps from `PredSym` to a map from the facts of the `PredSym`
+    /// to `(depth, ruleUsed)`.
+    ///
     type alias ProvIDB = Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]]
 
+    ///
+    /// A `BPLookoup` is a over the facts for a specific `PredSym`.
+    ///
+    /// For a fact set of `(1, 2, 3), (4, 5, 6), (7, 8, 9)`, we might want
+    /// to index based on the second attribute. The `BPLookup` would be
+    /// `{[2] => [1, 3], [5] => [4, 6], [8] => [7, 9]}`.
+    ///
     type alias BPLookup[r: Region] = BPlusTree[Vector[Boxed], List[(Vector[Boxed], Int64, Int32)], r]
 
+    ///
+    /// A mutable map from `PredSym` to a `MutMap` from the the wanted lookup-slice to
+    /// a `BPLookup` on said slice.
+    ///
+    /// Using the previous example with predicate `P` we would have
+    /// `{P => {[1] => [2] => [1, 3], [5] => [4, 6], [8] => [7, 9]}}`
+    ///
     type alias ProvLookupStruct[r: Region] = MutMap[PredSym, MutMap[Vector[Int32], BPLookup[r], r], r]
 
-    enum ProofTree {
-        case EDB(PredSym, Vector[Boxed])
-        case Negative(PredSym, Vector[Boxed])
-        case IDB(PredSym, Vector[Boxed], Vector[ProofTree])
-    }
-
-    def extractSearch(search: Vector[(Int32, Boxed)]): (Vector[Int32], Vector[Boxed]) =  {
-        let searchBits = Vector.map(match (x, _) -> x, search);
-        let searchValues = Vector.map(match (_, x) -> x, search);
-        (searchBits, searchValues)
-    }
-
-    def lookup(idb: ProvIDB, rc: Region[r], searchAndVals: Vector[(Int32, Boxed)], arrSize: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r =
+    ///
+    /// Returns the list of facts for `pred` which satisfies `searchAndVals`.
+    ///
+    /// If `searchAndVals = [(0, BoxedInt32(2)), (3, BoxedInt32(3))]` this should be
+    /// understood as the first value of the fact of `pred` should be `BoxedInt32(2)`
+    /// and the fourth should be `BoxedInt32(3)`.
+    ///
+    /// Returns `None` if no values match.
+    ///
+    /// Returns `Some(v)` where `v` is a list of `(missingFactPart, depth, rule)`. Here
+    /// `missingFactPart` refers to the value-part in the `BPLookup`.
+    ///
+    def lookup(rc: Region[r], idb: ProvIDB, searchAndVals: Vector[(Int32, Boxed)], arrSize: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r =
         match Map.get(pred, idb) {
             case None => None
             case Some(fullTree) => 
-                let (search, vals) = extractSearch(searchAndVals);
+                let (search, vals) = Vector.unzip(searchAndVals);
                 let innerMap = MutMap.getOrElsePut(pred, MutMap.empty(rc), lookupStruct);
                 match MutMap.get(search, innerMap) {
                     case Some(tree) => BPlusTree.get(vals, tree)
                     case None =>
+                        // We have never encountered this search before. Initialize it.
                         let tree = BPlusTree.emptyWithSearch(rc, search);
                         let extractSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, search), k), Vector.length(search));
                         let nonSearch = Vector.range(0, arrSize) |> Vector.filter(v -> not Vector.memberOf(v, search));
@@ -69,7 +98,27 @@ mod Fixpoint.Provenance {
                 }
         }
 
+    ///
+    /// A proof tree of an atom.
+    ///
+    /// `EDB(P, tuple)` signifies that `P(tuple)` is a ground atom, with respect
+    /// to `ProvIDB`.
+    ///
+    /// `Negative(P, tuple)` signifies that `P(tuple)` is not in the model, with
+    /// respect to `ProvIDB`.
+    ///
+    /// `IDB(P, tuple, subproofs)` signifies that `P(tuple)` is in the model, with
+    /// respect to `ProvIDB`, and it is not a ground atom. Furthermore `subproofs`
+    /// contains the proofs/facts of the body which (could have) derived `P(tuple)`.
+    ///
+    enum ProofTree {
+        case EDB(PredSym, Vector[Boxed])
+        case Negative(PredSym, Vector[Boxed])
+        case IDB(PredSym, Vector[Boxed], Vector[ProofTree])
+    }
+
     mod ProofTree {
+        @Internal
         pub def toString(p: ProofTree, indentChild: Int32): String = match p {
             case EDB(pred, fact) => 
                 let indentCur = String.repeat(indentChild, " ");
@@ -91,13 +140,23 @@ mod Fixpoint.Provenance {
         pub def toString(p: ProofTree): String = ProofTree.toString(p, 0)
     }
 
-    def flatMap(p: ProofTree): List[(PredSym, Vector[Boxed])] = region rc {
+    ///
+    /// Flattens the proof `p` to a `List`, removing facts that do not satisfy `filterFunc`.
+    ///
+    /// The returned `List` is in `Pre-order`.
+    ///
+    /// Note that this function is not tail-recursive.
+    ///
+    def filterAndFlattenProof(p: ProofTree, filterFunc: PredSym -> Bool): List[(PredSym, Vector[Boxed])] = region rc {
         let res = MutList.empty(rc);
         def recurse(t) = match t {
-            case ProofTree.EDB(pred, fact) => MutList.push((pred, fact), res)
+            case ProofTree.EDB(pred, fact) =>
+                if (filterFunc(pred)) MutList.push((pred, fact), res)
+                else ()
             case ProofTree.Negative(_, _) => ()
             case ProofTree.IDB(pred, fact, subTrees) => {
-                MutList.push((pred, fact), res);
+                if (filterFunc(pred)) MutList.push((pred, fact), res)
+                else ();
                 subTrees |> Vector.forEach(recurse)
         }};
         recurse(p);
@@ -121,7 +180,7 @@ mod Fixpoint.Provenance {
                 case Some((depth, ruleUsed)) => 
                     let lookupStruct = MutMap.empty(rc);
                     let tree = buildProof(predSym, fact, depth, ruleUsed, reorderedRules, provIdb, lookupStruct, rc);
-                    Some(flatMap(tree))                    
+                    Some(filterAndFlattenProof(tree, _ -> true))
             }
         }
         case _ => 
@@ -171,37 +230,64 @@ mod Fixpoint.Provenance {
             case (HeadTerm.App5(_, _, _, _, _, _)) => true
             case _ => false
         });
-
+        ///
+        /// Returns the current value of `varName`.
+        ///
         def getVal(varName) = getOrCrash(MutMap.get(varName, getValOfVar));
-        def putVals(bodyTerms, matchedVFact) = bodyTerms |> Vector.forEachWithIndex(i -> v ->
-            MutMap.put(v, Vector.get(i, matchedVFact), getValOfVar)
+
+        ///
+        /// Register the values new values of `varNames` to be `matchedFacts`.
+        ///
+        /// Concretely, we update the `getValOfVar` to contain `varNames[i] => matchedFacts[i]`.
+        ///
+        def putVals(varNames, matchedFact) = varNames |> Vector.forEachWithIndex(i -> v ->
+            MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
         );
-        let guardFromApp = () -> headApps |>
-            Vector.forAll(match (app, val) -> match app {
+        ///
+        /// Returns true if all guards are satisfied by the current variable assignment.
+        ///
+        def areGuardsTrue(): Bool = {
+            headApps |> Vector.forAll(match (app, val) -> match app {
                 case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
                 case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
                 case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
                 case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
                 case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
                 case _ => unreachable!()
-            });
+            })
+        };
         
+        ///
+        /// Attempts to satisfy `bodyPreds`, having satisfied already found a satisfying assignment
+        /// for `bodyPreds[i]`, where `0 <= i < index`.
+        ///
+        /// Destructively updates `getValOfVar` and `bodyValues` with newly bound values.
+        ///
+        /// Returns `true` if the current values in `getValOfVar` and `bodyValues` satisfies `rule`
+        /// and `false` otherwise.
+        ///
         def loop(index) = {
             if (index == Vector.length(bodyPreds)) {
-                guardFromApp()
+                // TODO: Can be removed???
+                areGuardsTrue()
             } else {
-                // This could, for performance something that was done once and only once. Would
-                // require new representation.
+                // This could, for performance, be something that was done once and only once.
+                // It would however require a new representation of a Datalog program.
                 match Vector.get(index, bodyPreds) {
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Positive, _, expected) =>
-                        let filterAsList = expected |> Vector.foldLeft(match (acc, i) -> t -> match t {
+                        // Collect the bound variables in a list as needed by `lookup`.
+                        // `(2, val)` being in the list means that attribute 2 of the tuple
+                        // must have value `val`. View a a `zipWithIndex |> filterWithIndex`.
+                        let filterAsList = ((Nil, 0), expected) ||> Vector.foldLeft(match (acc, i) -> t -> match t {
                             case BodyTerm.Wild => (acc, i + 1)
                             case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
                                 case None => (acc, i + 1)
                                 case Some(val) => ((i, val) :: acc, i + 1)
                             }
                             case BodyTerm.Lit(val) => ((i, val) :: acc, i + 1)
-                        }, (Nil, 0)) |> fst |> List.toVector |> Vector.reverse;
+                        }) |> fst |> List.toVector |> Vector.reverse;
+                        // List of `VarSym` of variables that become bound when the atom is
+                        // satisfied.
                         let nowBoundVars = expected |> Vector.filterMap(t -> match t {
                             case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
                                 case None => Some(v)
@@ -209,10 +295,11 @@ mod Fixpoint.Provenance {
                             }
                             case _ => None
                         });
-                        let matches = lookup(provIdb, rc, filterAsList, Vector.length(expected), lookupStruct, pred);
+                        let matches = lookup(rc, provIdb, filterAsList, Vector.length(expected), lookupStruct, pred);
                         match matches {
                             case None => false
                             case Some(facts) => {
+                                // Try to find any fact that matches the current assignment of variables.
                                 facts |> List.exists(match (bodyFact, bodyDepth, bodyRule) -> {
                                     if(bodyDepth >= depth) {
                                         false
@@ -235,26 +322,27 @@ mod Fixpoint.Provenance {
                             }
                         }
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Negative, _, expected) =>
-                        let vals = expected |> Vector.map(t -> match t {
+                        // `not pred(tuple)` is true if `pred(tuple)` is not in the model. 
+                        let tuple = expected |> Vector.map(t -> match t {
                             case BodyTerm.Var(v) => getVal(v)
                             case BodyTerm.Lit(val) => val
                             case BodyTerm.Wild => unreachable!()
                         });
                         let isNonMatch = match Map.get(pred, provIdb) {
                             case None => true
-                            case Some(facts) => not Map.memberOf(vals, facts)
+                            case Some(facts) => not Map.memberOf(tuple, facts)
                         };
                         if(not isNonMatch)
                             false
                         else {
                             // No need to save the match. Negative atoms cannot bind variables.
-                            Array.put(Some((vals, -2i64, -2)), index, bodyValues);
+                            Array.put(Some((tuple, -2i64, -2)), index, bodyValues);
                             loop(index + 1)
                         }
-                    case BodyPredicate.Guard0(f) =>
-                        if(f())
-                            loop(index + 1)
-                        else false
+                    case BodyPredicate.Guard0(_) =>
+                        // No need to evaluate `f()`, it must be `true`, otherwise what we know is a fact
+                        // would not have been created by this rule.
+                        loop(index + 1)
                     case BodyPredicate.Guard1(f, v1) =>
                         if(f(getVal(v1)))
                             loop(index + 1)

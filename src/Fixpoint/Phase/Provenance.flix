@@ -15,6 +15,17 @@
  * limitations under the License.
  */
 
+///
+/// This module augments the program to track when and how facts were created.
+///
+/// EDB facts will be augmented with time/depth `0` and rule `-1`.
+///
+/// The program is augmented to compute ensure that computed facts track which
+/// rule created them and at which depth they were time/created.
+///
+/// Time/depth should be understood as follows: If a fact depend on some fact
+/// which has time/depth `k` then this facts has at most time/depth `k + 1`.
+///
  mod Fixpoint.Phase.Provenance {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, RamId, BoolExp}
@@ -28,17 +39,17 @@
     /// rule used to generate them. Further add extend facts to contain a depth and rule.
     ///
     @Internal
-    pub def augmentProgram(withProv: Bool, program: RamProgram): RamProgram = 
+    pub def augmentProgram(withProv: Bool, program: RamProgram): RamProgram =
         if (not withProv) program
         else augmentProgramInternal(program)
-    
+
     ///
     /// Augment `program` to maintain proof depth of atoms and rule used to generate them.
-    /// Further add extend facts to contain a depth and rule.
+    /// Further extend facts to contain a depth and rule.
     ///
     def augmentProgramInternal(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predicates, indexInfo) =>
-            let augmentedFacts = facts |> 
+            let augmentedFacts = facts |>
                 Map.map(Vector.map(tuple -> Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)})));
             let augmentedStmt = augmentStmt(stmt);
             RamProgram.Program(augmentedStmt, augmentedFacts, predicates, indexInfo) |>
@@ -63,14 +74,14 @@
     ///
     /// Augments `op` with `ProvMax` terms.
     ///
-    def augmentOp(rowVarsArity: List[(RowVar, Int32)], op: RelOp): RelOp \ r = match op {   
-        case RelOp.Search(rowVar, relSym, body) => 
-            augmentOp((rowVar, arityOf(relSym)) :: rowVarsArity, body) |> 
+    def augmentOp(rowVarsArity: List[(RowVar, Int32)], op: RelOp): RelOp \ r = match op {
+        case RelOp.Search(rowVar, relSym, body) =>
+            augmentOp((rowVar, arityOf(relSym)) :: rowVarsArity, body) |>
             RelOp.Search(rowVar, relSym)
-        case RelOp.Query(rowVar, relSym, bools, index, body) => 
+        case RelOp.Query(rowVar, relSym, bools, index, body) =>
             augmentOp((rowVar, arityOf(relSym)) :: rowVarsArity, body) |>
             RelOp.Query(rowVar, relSym, bools, index)
-        case RelOp.Functional(_, _, _, _, _) => 
+        case RelOp.Functional(_, _, _, _, _) =>
             bug!("In Fixpoint.Phase.Provenance.augmentOp: Cannot do provenance with functional")
         case RelOp.Project(terms, relSym, ruleNum) =>
             let newTerms = Vector.append(
@@ -81,7 +92,7 @@
                 }
             );
             RelOp.Project(newTerms, relSym, ruleNum)
-        case RelOp.If(boolExps, body) =>  
+        case RelOp.If(boolExps, body) =>
             augmentOp(rowVarsArity, body) |> RelOp.If(boolExps)
     }
 }
