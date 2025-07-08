@@ -25,6 +25,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.Boxing.{boxWith, unboxWith}
     use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
+    use Fixpoint.Options.{usedArity, parLevel}
     use Fixpoint.JoinProfiler.getJoinEstimateNum
     use Fixpoint.Predicate.allFullRelSyms
     use Fixpoint.Util.getOrCrash
@@ -124,7 +125,7 @@ mod Fixpoint.Interpreter {
         search: Vector[Int32], 
         tuples: Vector[(Tuple, Boxed)]
     ): Index[r] \ r = 
-        let index = BPlusTree.emptyWithArityAndSearch(rc, Fixpoint.Options.usedArity(), search);
+        let index = BPlusTree.emptyWithArityAndSearch(rc, usedArity(), search);
         if(Vector.isEmpty(tuples)) 
             index
         else {
@@ -209,7 +210,7 @@ mod Fixpoint.Interpreter {
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
             let ctxt = (db, env, boxing);
-            evalStmt(rc, ctxt, expectedJoinSize, Fixpoint.Options.parLevel(), stmt);
+            evalStmt(rc, ctxt, expectedJoinSize, parLevel(), stmt);
             // Don't insert when doing join size estimation. It is not used and is expensive.
             match expectedJoinSize {
                 case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes, withProv), predState)
@@ -273,7 +274,7 @@ mod Fixpoint.Interpreter {
         case RamStmt.Purge(index) => 
             let (db, _, _) = ctxt;
             let oldIndex = lookupIndex(index, db);
-            let newIndex = BPlusTree.emptyWithArityAndSearch(rc, Fixpoint.Options.usedArity(), BPlusTree.search(oldIndex));
+            let newIndex = BPlusTree.emptyWithArityAndSearch(rc, usedArity(), BPlusTree.search(oldIndex));
             storeIndex(newIndex, index, db)
         case RamStmt.Seq(stmts) => 
             Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize, parLevel), stmts)
