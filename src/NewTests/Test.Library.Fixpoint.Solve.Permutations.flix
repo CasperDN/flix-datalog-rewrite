@@ -1,4 +1,4 @@
-mod Test.Exp.Fixpoint.Solve.Permutations {
+mod Test.Library.Fixpoint.Solve.Permutations {
 
     /////////////////////////////////////////////////////////////////////////////
     // Simple tests with Int32                                                 //
