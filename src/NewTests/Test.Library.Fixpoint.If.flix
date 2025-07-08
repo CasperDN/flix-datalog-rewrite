@@ -36,12 +36,16 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Empty(x) :- A(x), if(true).
         };
-        query f, r select x from Empty(x) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select x from Empty(x)
     }
 
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 1 parameter                                          //
     /////////////////////////////////////////////////////////////////////////////
+
+    def zeroModuloUntil(modulo: Int32, n: Int32): Vector[Int32] = {
+        Vector.range(0, n) |> Vector.filter(x -> Int32.modulo(x, modulo) == 0)
+    }
 
     @Test
     def testIfGuardOne01(): Bool = {
@@ -51,7 +55,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
         };
-        query f, r select x from Even(x) |> Vector.sort == even
+        even `Assert.eq` query f, r select x from Even(x)
     }
 
     @Test
@@ -62,7 +66,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
-        query f, r select x from Odd(x) |> Vector.sort == odd
+        odd `Assert.eq` query f, r select x from Odd(x)
     }
 
     @Test
@@ -75,8 +79,8 @@ mod Test.Exp.Fixpoint.If {
             Even(x) :- Nat(x), if(Int32.modulo(x, 2) == 0).
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
-        query f, r select x from Even(x) |> Vector.sort == even and
-            query f, r select x from Odd(x) |> Vector.sort == odd
+        even `Assert.eq` query f, r select x from Even(x) and
+            odd `Assert.eq` query f, r select x from Odd(x)
     }
 
     @Test
@@ -90,7 +94,7 @@ mod Test.Exp.Fixpoint.If {
             Odd(x) :- Nat(x), if(Int32.modulo(x, 2) != 0).
         };
         let res = even |> Vector.flatMap(e -> odd |> Vector.map(o -> (e, o))) |> Vector.sort;
-        query f, r select (x, y) from Even(x), Odd(y) |> Vector.sort == res
+        res `Assert.eq` query f, r select (x, y) from Even(x), Odd(y)
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -104,7 +108,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y) :- A(x, y), if(x + 1 == y).
         };
-        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
     @Test
@@ -112,9 +116,32 @@ mod Test.Exp.Fixpoint.If {
         let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x + 1));
         let f = inject tuples into A/2;
         let r = #{
-            R(x, y) :- A(x, y), if(x + 1 == x + 1).
+            R(x, y) :- A(x, y), if(x + 1 == y).
         };
-        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select (x, y) from R(x, y)
+    }
+
+    @Test
+    def testIfGuardTwo03(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x + 1));
+        let tenth = zeroModuloUntil(10, 400);
+        let f = inject tuples into A/2;
+        let r = #{
+            R(x, y) :- A(x, y), if(Vector.memberOf(x + y, tenth)).
+        };
+        let res = tuples |> Vector.filter(match (x, y) -> Vector.memberOf(x + y, tenth)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
+    }
+
+    @Test
+    def testIfGuardTwo04(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (Int32.toString(x), Int32.toString(2 * x)));
+        let f = inject tuples into A/2;
+        let r = #{
+            R(x, y) :- A(x, y), if(String.exists(c -> c == '3', x + y)).
+        };
+        let res = tuples |> Vector.filter(match (x, y) -> String.exists(c -> c == '3', x + y)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -128,7 +155,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z) :- A(x, y, z), if(x + y == 2 * x).
         };
-        query f, r select (x, y, z) from R(x, y, z) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
     }
     
     @Test
@@ -138,7 +165,7 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z) :- A(x, y, z), if(x + y == z).
         };
-        query f, r select (x, y, z) from R(x, y, z) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
     }
 
     @Test
@@ -146,11 +173,34 @@ mod Test.Exp.Fixpoint.If {
         let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x, 2 * x));
         let f = inject tuples into A/3;
         let r = #{
-            R(x, y, z) :- A(x, y, z), if(x + x == x).
+            R(x, y, z) :- A(x, y, z), if(x + y + z == 0).
         };
-        query f, r select (x, y, z) from R(x, y, z) == Vector#{(0, 0, 0)}
+        Vector#{(0, 0, 0)} `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
     }
 
+    @Test
+    def testIfGuardThree04(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x * 2, x * 3));
+        let tenth = zeroModuloUntil(10, 1000);
+        let f = inject tuples into A/3;
+        let r = #{
+            R(x, y, z) :- A(x, y, z), if(Vector.memberOf(x + y + z, tenth)).
+        };
+        let res = tuples |> Vector.filter(match (x, y, z) -> Vector.memberOf(x + y + z, tenth)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
+    }
+
+    @Test
+    def testIfGuardThree05(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (Int32.toString(x), Int32.toString(2 * x), Int32.toString(3 * x)));
+        let f = inject tuples into A/3;
+        let r = #{
+            R(x, y, z) :- A(x, y, z), if(String.exists(c -> c == '3', x + y + z)).
+        };
+        let res = tuples |> Vector.filter(match (x, y, z) -> String.exists(c -> c == '3', x + y + z)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
+    }
+    
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 4 parameters                                         //
     /////////////////////////////////////////////////////////////////////////////
@@ -162,31 +212,57 @@ mod Test.Exp.Fixpoint.If {
         let r = #{
             R(x, y, z, w) :- A(x, y, z, w), if(x + y + z == w).
         };
-        query f, r select (x, y, z, w) from R(x, y, z, w) |> Vector.sort == tuples
+        tuples `Assert.eq` query f, r select (x, y, z, w) from R(x, y, z, w)
+    }
+    
+    @Test
+    def testIfGuardFour02(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, 2 * x, 3 * x, 4 * x));
+        let tenth = zeroModuloUntil(10, 1200);
+        let f = inject tuples into A/4;
+        let r = #{
+            R(x, y, z, w) :- A(x, y, z, w), if(Vector.memberOf(x + y + z + w, tenth)).
+        };
+        let res = tuples |> Vector.filter(match (x, y, z, w) -> Vector.memberOf(x + y + z + w, tenth)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z, w) from R(x, y, z, w)
     }
 
     @Test
-    def testIfGuardFour02(): Bool = {
-        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, 3 * x));
-        let f = inject tuples into A/2;
+    def testIfGuardFour03(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (Int32.toString(x), Int32.toString(2 * x), Int32.toString(3 * x), Int32.toString(4 * x)));
+        let f = inject tuples into A/4;
         let r = #{
-            R(x, y) :- A(x, y), if(x + x + x == y).
+            R(x, y, z, w) :- A(x, y, z, w), if(String.exists(c -> c == '3', x + y + z + w)).
         };
-        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
+        let res = tuples |> Vector.filter(match (x, y, z, w) -> String.exists(c -> c == '3', x + y + z + w)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z, w) from R(x, y, z, w)
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 5 parameters                                         //
     /////////////////////////////////////////////////////////////////////////////
 
     @Test
     def testIfGuardFive01(): Bool = {
-        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, 4 * x));
-        let f = inject tuples into A/2;
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, 2 * x, 3 * x, 4 * x, 5 * x));
+        let tenth = zeroModuloUntil(10, 2000);
+        let f = inject tuples into A/5;
         let r = #{
-            R(x, y) :- A(x, y), if(x + x + x + x == y).
+            R(x, y, z, w, a) :- A(x, y, z, w, a), if(Vector.memberOf(x + y + z + w + a, tenth)).
         };
-        query f, r select (x, y) from R(x, y) |> Vector.sort == tuples
+        let res = tuples |> Vector.filter(match (x, y, z, w, a) -> Vector.memberOf(x + y + z + w + a, tenth)) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z, w, a) from R(x, y, z, w, a)
+    }
+
+    @Test
+    def testIfGuardFive02(): Bool = {
+        let tuples = Vector.range(0, 100) |> Vector.map(x -> (Int32.toString(x), Int32.toString(2 * x), Int32.toString(3 * x), Int32.toString(4 * x), Int32.toString(5 * x)));
+        let f = inject tuples into A/5;
+        let r = #{
+            R(x, y, z, w, a) :- A(x, y, z, w, a), if(String.length(x + y + z + w + a) > 5).
+        };
+        let res = tuples |> Vector.filter(match (x, y, z, w, a) -> String.length(x + y + z + w + a) > 5) |> Vector.sort;
+        res `Assert.eq` query f, r select (x, y, z, w, a) from R(x, y, z, w, a)
     }
 
 }
