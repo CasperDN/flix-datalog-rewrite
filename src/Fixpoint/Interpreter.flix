@@ -446,10 +446,10 @@ mod Fixpoint.Interpreter {
     ///
     def copyCtx(rc: Region[r], ctx: Context[r]): Context[r] \ r = {
         let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctx;
-        let threadMinEnv = minEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
-        let threadMaxEnv = maxEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
-        let threadTupleEnv = Array.copyOfRange(rc, 0, Array.length(tupleEnv), tupleEnv);
-        let threadLatEnv = Array.copyOfRange(rc, 0, Array.length(latEnv), latEnv);
+        let threadMinEnv = minEnv |> Vector.map(Array.copy(rc));
+        let threadMaxEnv = maxEnv |> Vector.map(Array.copy(rc));
+        let threadTupleEnv = Array.copy(rc, tupleEnv);
+        let threadLatEnv = Array.copy(rc, latEnv);
         let threadEnv = (threadMinEnv, threadMaxEnv, threadTupleEnv, threadLatEnv);
         (db, threadEnv, boxing)
     }
