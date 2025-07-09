@@ -18,7 +18,7 @@
 mod Test.Library.Fixpoint.Application {
 
     /////////////////////////////////////////////////////////////////////////////
-    // Tests with application of 1 arguments                                   //
+    // Tests with application of 1 argument                                    //
     /////////////////////////////////////////////////////////////////////////////
 
     @Test
