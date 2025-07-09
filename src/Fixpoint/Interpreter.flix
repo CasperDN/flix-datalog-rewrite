@@ -26,7 +26,6 @@ mod Fixpoint.Interpreter {
     use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
     use Fixpoint.Options.{usedArity, parLevel}
-    use Fixpoint.JoinProfiler.getJoinEstimateNum
     use Fixpoint.Predicate.allFullRelSyms
     use Fixpoint.Util.getOrCrash
 
@@ -38,10 +37,27 @@ mod Fixpoint.Interpreter {
     ///
     /// The number of times the interpreter can branch recursively on a `RelOp.Search`.
     ///
+    /// For example, given:
+    /// ```
+    /// search a ∈ A do
+    ///     search b ∈ B do
+    ///         search c ∈ C do
+    ///             ...
+    ///         end
+    ///     end
+    /// end
+    /// ```
+    /// We do not want to spawn `k` threads in every layer with a `search`, as this would
+    /// lead to `k^d` threads for a nesting of depth `d`. We therefore limit the interpreter
+    /// to only spawn threads for the `AllowedBranches` highest `search` `RelOp`s.
+    ///
+    /// For the example if we allow 2 branches we would not spawn threads for when evaluating
+    /// `search c ∈ C do`.
+    ///
     type alias AllowedBranches = Int32
 
     ///
-    /// A modifiable tuple that can be used to search a relation.
+    /// A mutable tuple that can be used to search a relation.
     ///
     /// Consider
     /// ```
@@ -81,11 +97,11 @@ mod Fixpoint.Interpreter {
     ///
     /// The first 2 values contain information about which `SearchTuple` should be used by
     /// `Query` statements. The third value contains the current tuple of the bound `RowVar`'s
-    /// The fouth contains the current lattice values of the bound `RowVar`'s.
+    /// The fourth contains the current lattice values of the bound `RowVar`'s.
     ///
     type alias SearchEnv[r: Region] = (
-        Vector[SearchTuple[r]], 
-        Vector[SearchTuple[r]], 
+        Vector[SearchTuple[r]],
+        Vector[SearchTuple[r]],
         Array[Tuple, r],
         Array[Boxed, r]
     )
@@ -102,17 +118,17 @@ mod Fixpoint.Interpreter {
         SearchEnv[r],
         Boxing[r]
     )
-    
+
     ///
     /// Returns the index at position `pos` in `indexes`.
     ///
-    def lookupIndex(pos: Int32, indexes: Indexes[r]): Index[r] \ r = 
+    def lookupIndex(pos: Int32, indexes: Indexes[r]): Index[r] \ r =
         Array.get(pos, indexes)
 
     ///
     /// Stores `index` at `pos` in `indexes`.
     ///
-    def storeIndex(index: Index[r], pos: Int32, indexes: Indexes[r]): Unit \ r = 
+    def storeIndex(index: Index[r], pos: Int32, indexes: Indexes[r]): Unit \ r =
         Array.put(index, pos, indexes)
 
     ///
@@ -120,18 +136,18 @@ mod Fixpoint.Interpreter {
     /// initialized with `tuples`.
     ///
     def mkIndex(
-        rc: Region[r], 
-        relSym: RelSym, 
-        search: Vector[Int32], 
+        rc: Region[r],
+        relSym: RelSym,
+        search: Vector[Int32],
         tuples: Vector[(Tuple, Boxed)]
-    ): Index[r] \ r = 
+    ): Index[r] \ r =
         let index = BPlusTree.emptyWithArityAndSearch(rc, usedArity(), search);
-        if(Vector.isEmpty(tuples)) 
+        if (Vector.isEmpty(tuples))
             index
         else {
             Vector.forEach(match (nonLat, lat) -> {
                 match toDenotation(relSym) {
-                    case Relational => 
+                    case Relational =>
                         BPlusTree.put(nonLat, lat, index)
                     case Latticenal(_, _, lub, _) =>
                         BPlusTree.putWith(lub, nonLat, lat, index)
@@ -140,34 +156,25 @@ mod Fixpoint.Interpreter {
             index
         }
 
-    @Internal
-    pub def estimateJoinSizes(rc: Region[r], input: (RamProgram, Boxing[r])): Array[MutList[(Int32, Int32), r], r] \ r = 
-        let expectedJoinSize = Array.empty(rc, getJoinEstimateNum(fst(input)));
-        expectedJoinSize |> Array.transform(_ -> MutList.empty(rc));
-        let _ = interpretWithInput(rc, false, Some(expectedJoinSize), input);
-        expectedJoinSize        
-
     ///
     /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)`.
     ///
     @Internal
-    pub def interpret(rc: Region[r], withProv: Bool, input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r = 
-        interpretWithInput(rc, withProv, None, input)
+    pub def interpret(rc: Region[r], withProv: Bool, input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r =
+        interpretWithInput(rc, withProv, input)
 
     ///
-    /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)` writing
-    /// join estimates to `expectedJoinSize`, if necessary.
+    /// Executes the `RamProgram` in `fst(input)` using the `Boxing` in `snd(input)`.
     ///
     def interpretWithInput(
         rc: Region[r],
         withProv: Bool,
-        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
         input: (RamProgram, Boxing[r])
     ): (Database[r], Predicates) \ r =
         let (program, boxing) = input;
         // Create `Indexes` from `program`.
         let indexes = match program {
-            case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) => 
+            case RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) =>
                 let indexNum = match Map.maximumValue(posMap) {
                     case None => 0
                     case Some((_, v)) => v + 1
@@ -186,16 +193,15 @@ mod Fixpoint.Interpreter {
                 });
                 indexes
         };
-        interpretWithDatabase(rc, indexes, boxing, expectedJoinSize, withProv, program)
+        interpretWithDatabase(rc, indexes, boxing, withProv, program)
 
     ///
     /// Executes `program` using `boxing` as `Boxing` information, `db` as initial `Indexes`.
     ///
     def interpretWithDatabase(
-        rc: Region[r], 
-        db: Indexes[r], 
-        boxing: Boxing[r], 
-        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        rc: Region[r],
+        db: Indexes[r],
+        boxing: Boxing[r],
         withProv: Bool,
         program: RamProgram
     ): (Database[r], Predicates) \ r = match program {
@@ -209,13 +215,9 @@ mod Fixpoint.Interpreter {
             let tupleEnv = Array.repeat(rc, Vector.length(arities), Vector#{});
             let latEnv = arities |> Vector.length |> Array.empty(rc);
             let env = (minEnv, maxEnv, tupleEnv, latEnv);
-            let ctxt = (db, env, boxing);
-            evalStmt(rc, ctxt, expectedJoinSize, parLevel(), stmt);
-            // Don't insert when doing join size estimation. It is not used and is expensive.
-            match expectedJoinSize {
-                case None => (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes, withProv), predState)
-                case Some(_) => (MutMap.empty(rc), predState)
-            }
+            let ctx = (db, env, boxing);
+            evalStmt(rc, ctx, parLevel(), stmt);
+            (marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes, withProv), predState)
     }
 
     ///
@@ -228,8 +230,10 @@ mod Fixpoint.Interpreter {
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
             let innerMap = MutMap.empty(rc);
+            // If we are doing provenance computations we need to also rebox the annotations.
+            // Since there are `2` annotations we add `2` in this case.
             let usedArity =
-                if(withProv) arityOfNonLat(relSym) + 2
+                if (withProv) arityOfNonLat(relSym) + 2
                 else arityOfNonLat(relSym);
             let curBoxingInfo = Vector.range(0, usedArity) |>
                 Vector.map(i ->
@@ -245,128 +249,146 @@ mod Fixpoint.Interpreter {
         res
 
     ///
-    /// Evaluate `stmt`, under `ctxt` with at most `parLevel` allowed new branches `RelOp.Search`.
+    /// Evaluate `stmt`, under `ctx` with branching/spawning threads only being allowed in
+    /// the `parLevel` next `RelOp.Search`.
+    ///
+    /// For `ctx = (db, env, boxing)` the following changes can happen:
+    ///
+    ///     1. We can discover and record a previously unknown type in `boxing`.
+    ///     2. We can add a new binding between a `BoxedObject` and an `Int64` in `boxing`.
+    ///     3. We can add a tuple to one of the indexes of `db`
+    ///     4. We can bind a tuple to a new value changing `env`.
+    ///     5. We can purge or swap indexes in `db`.
     ///
     def evalStmt(
-        rc: Region[r], 
-        ctxt: Context[r], 
-        expectedJoinSize: Option[Array[MutList[(Int32, Int32), r], r]],
+        rc: Region[r],
+        ctx: Context[r],
         parLevel: AllowedBranches,
         stmt: RamStmt
     ): Unit \ r = match stmt {
         case RamStmt.Insert(relOp) =>
-            evalOp(rc, ctxt, parLevel, relOp)
+            evalOp(rc, ctx, parLevel, relOp)
         case RamStmt.MergeInto(srcIndex, dstIndex, Relational) =>
-            let (db, _, _) = ctxt;
+            let (db, _, _) = ctx;
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
             BPlusTree.merge(src, dst)
         case RamStmt.MergeInto(srcIndex, dstIndex, Latticenal(_, _, lub, _)) =>
-            let (db, _, _) = ctxt;
+            let (db, _, _) = ctx;
             let src = lookupIndex(srcIndex, db);
             let dst = lookupIndex(dstIndex, db);
             BPlusTree.mergeWith(lub, src, dst)
         case RamStmt.Swap(lhs, rhs) =>
-            let (db, _, _) = ctxt;
+            let (db, _, _) = ctx;
             let temp = lookupIndex(lhs, db);
             storeIndex(lookupIndex(rhs, db), lhs, db);
             storeIndex(temp, rhs, db)
-        case RamStmt.Purge(index) => 
-            let (db, _, _) = ctxt;
+        case RamStmt.Purge(index) =>
+            let (db, _, _) = ctx;
             let oldIndex = lookupIndex(index, db);
             let newIndex = BPlusTree.emptyWithArityAndSearch(rc, usedArity(), BPlusTree.search(oldIndex));
             storeIndex(newIndex, index, db)
-        case RamStmt.Seq(stmts) => 
-            Vector.forEach(evalStmt(rc, ctxt, expectedJoinSize, parLevel), stmts)
+        case RamStmt.Seq(stmts) =>
+            Vector.forEach(evalStmt(rc, ctx, parLevel), stmts)
         case RamStmt.Until(test, body) =>
-            if (evalBoolExps(ctxt, test)) {
+            if (evalBoolExps(ctx, test)) {
                 ()
             } else {
-                evalStmt(rc, ctxt, expectedJoinSize, parLevel, body);
-                evalStmt(rc, ctxt, expectedJoinSize, parLevel, stmt)
+                evalStmt(rc, ctx, parLevel, body);
+                evalStmt(rc, ctx, parLevel, stmt)
             }
         case RamStmt.Comment(_) => ()
-        // Imortant to note: all threads spawned on region `rc2` will have terminated before we exit `rc2`.
+        // Note: The region construct ensures that all threads spawned in rc2 will have completed before we leave its lexical scope.
         case RamStmt.Par(stmts) => region rc2 {
             stmts |> Vector.forEach(innerStmt -> unchecked_cast({
                 let _: Unit = spawn unchecked_cast({
-                    let threadCtxt = makeCtxt(rc, ctxt);
-                    evalStmt(rc, threadCtxt, expectedJoinSize, parLevel, innerStmt)
+                    let threadCtx = copyCtx(rc, ctx);
+                    evalStmt(rc, threadCtx, parLevel, innerStmt)
                 } as _ \ IO) @ rc2; // spawn may not take an `r` effect, so we cast it to `IO`
                 ()
             } as _ \ rc2)) // The `IO` effect is undesirable, so we cast it back to an `r` effect
         }
         case RamStmt.EstimateJoinSize(indexPos, writeTo, attr) =>
-            let prevRef = Ref.fresh(rc, None);
-            let dupRef = Counter.fresh(rc);
-            let sizeRef = Counter.fresh(rc);
-            let (db, _, _) = ctxt;
-            let relIndex = lookupIndex(indexPos, db);
-            relIndex |> BPlusTree.forEach(curr -> _ -> {
-                let isDup = 
-                    Ref.get(prevRef) |> 
-                    Option.exists(prev -> 
-                        attr |> Vector.forAll(i -> Vector.get(i, prev) == Vector.get(i, curr))
-                    );
-                if (isDup) {
-                    Counter.increment(dupRef)
-                } else ();
-                Ref.put(Some(curr), prevRef);
-                Counter.increment(sizeRef)
-            });
-            let size = Counter.get(sizeRef);
-            let dup = Counter.get(dupRef);
-            MutList.push((size, dup), Array.get(writeTo, getOrCrash(expectedJoinSize)))
+            ???
     }
 
     ///
-    /// Evaluate `op`, under `ctxt` with at most `parLevel` allowed new branches `RelOp.Search`.
+    /// Evaluates `op`, under `ctx` with branching/spawning threads only being allowed in
+    /// the `parLevel` next `RelOp.Search`.
     ///
-    def evalOp(rc: Region[r], ctxt: Context[r], parLevel: AllowedBranches, op: RelOp): Unit \ r = 
-        let (db, env, boxing) = ctxt;
+    /// For `ctx = (db, env, boxing)` the following changes can happen:
+    ///
+    ///     1. We can discover and record a previously unknown type in `boxing`.
+    ///     2. We can add a new binding between a `BoxedObject` and an `Int64` in `boxing`.
+    ///     3. We can add a tuple to one of the indexes of `db`
+    ///     4. We can bind a tuple to a new value changing `env`.
+    ///
+    /// What cannot happen purge or and swap of indexes in `db`.
+    ///
+    def evalOp(rc: Region[r], ctx: Context[r], parLevel: AllowedBranches, op: RelOp): Unit \ r =
+        let (db, env, boxing) = ctx;
         match op {
             case RelOp.Search(tuplePos, searchIndex, _, Relational, writes, body) =>
-                if(parLevel == 0) {
+                if (parLevel == 0) {
+                    // We have exhausted all allowed attempts to spawn threads. Recurse sequentially.
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.forEach(relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt, parLevel))
+                        BPlusTree.forEach(evalSearchOrQueryOp(rc, tuplePos, writes, body, ctx, parLevel))
                 } else {
-                    let newCtxt = (db, env, boxing);
+                    // We are allowed to spawn threads. Try to do so.
+                    let newCtx = (db, env, boxing);
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.parForEach(parRelationHandlingBodyFunc(rc, tuplePos, writes, body, newCtxt, parLevel - 1))
+                        BPlusTree.parForEach(parEvalSearchOrQueryOp(rc, tuplePos, writes, body, newCtx, parLevel - 1))
                 }
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
-                    relationHandlingBodyFunc(rc, tuplePos, writes, body, ctxt, parLevel),
+                    evalSearchOrQueryOp(rc, tuplePos, writes, body, ctx, parLevel),
                     // We could here use Vector.toArray, but it would create a copy. To avoid memory
                     // allocation we simply cast.
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
                     unchecked_cast((Vector.get(tuplePos, maxEnv): Array[Int64, r]) as Tuple)
                 )
             case RelOp.If(test, then) =>
-                if (evalBoolExps(ctxt, test))
-                    evalOp(rc, ctxt, parLevel, then)
+                if (evalBoolExps(ctx, test))
+                    evalOp(rc, ctx, parLevel, then)
                 else
                     ()
-            case RelOp.Project(terms, rel, Relational) =>
-                let relIndex = lookupIndex(rel, db);
-                let tuple = Vector.map(evalTerm(env, boxing), terms);
-                BPlusTree.put(tuple, Boxed.NoValue, relIndex)
-            case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
-                if(parLevel == 0) {
-                    lookupIndex(searchIndex, db) |> 
-                    BPlusTree.forEach(latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt, parLevel))
+            case RelOp.Project(terms, rel, den) => match den {
+                case Relational =>
+                    let relIndex = lookupIndex(rel, db);
+                    let tuple = Vector.map(evalTerm(env, boxing), terms);
+                    BPlusTree.put(tuple, Boxed.NoValue, relIndex)
+                case Latticenal(bot, leq, lub, _) =>
+                    // Add the binding `tuple => latVal` to `relIndex` if and only if `latVal is not
+                    // `bot`. If `tuple => otherLat` was in `relIndex` replace it with
+                    // `tuple => lub(latVal, otherLat)`.
+
+                    // Note that a previous `RelOp.If` should have asserted that `latVal` is not less
+                    // than the current value for `tuple` in the full relation.
+                    let relIndex = lookupIndex(rel, db);
+                    let len = Vector.length(terms);
+                    let tuple = evalTermsWithLat(ctx, terms);
+                    let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
+                    if (latVal `leq` bot) ()
+                    else BPlusTree.putWith(lub, tuple, latVal, relIndex)
+            }
+            case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) =>
+                if (parLevel == 0) {
+                    // We have exhausted all allowed attempts to spawn threads. Recurse sequentially.
+                    lookupIndex(searchIndex, db) |>
+                    BPlusTree.forEach(evalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, ctx, parLevel))
                 } else {
-                    let newCtxt = (db, env, boxing);
-                    lookupIndex(searchIndex, db) |> 
-                    BPlusTree.parForEach(parLatticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, newCtxt, parLevel))
+                    // We are allowed to spawn threads. Try to do so.
+                    let newCtx = (db, env, boxing);
+                    lookupIndex(searchIndex, db) |>
+                    BPlusTree.parForEach(parEvalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, newCtx, parLevel))
                 }
-            case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) => 
+            case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
                 lookupIndex(searchIndex, db) |>
                 BPlusTree.rangeQueryWith(
-                    latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, ctxt, parLevel),
+                    evalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, ctx, parLevel),
                     // We could here use Vector.toArray, but it would create a copy. To avoid memory
                     // allocation we simply cast.
                     unchecked_cast((Vector.get(tuplePos, minEnv): Array[Int64, r]) as Tuple),
@@ -375,39 +397,35 @@ mod Fixpoint.Interpreter {
             case RelOp.Project(terms, rel, Latticenal(bot, leq, lub, _)) =>
                 let relIndex = lookupIndex(rel, db);
                 let len = Vector.length(terms);
-                let tuple = evalTermsWithLat(ctxt, terms);
+                let tuple = evalTermsWithLat(ctx, terms);
                 let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
                 if (latVal `leq` bot) ()
                 else BPlusTree.putWith(lub, tuple, latVal, relIndex)
             case RelOp.Functional(tupleIndex, f, terms, writes, body, i2) =>
-                let args = 
-                    terms |> 
+                let args =
+                    terms |>
                     Vector.map(evalBoxedTerm(env, boxing));
-                let result = 
-                    f(args)|> 
+                let result =
+                    f(args)|>
                     Vector.map(vec ->
                         Vector.mapWithIndex(i -> x -> unboxWith(x, Vector.get(i, i2), boxing), vec)
                     );
                 let (minEnv, maxEnv, tupleEnv, _) = env;
                 result |> Vector.forEach(t -> {
-                    writes |> Vector.forEach(match (srcIndex, dst, dstIndex) -> {
-                        Array.put(Vector.get(srcIndex, t), dstIndex, Vector.get(dst, minEnv));
-                        Array.put(Vector.get(srcIndex, t), dstIndex, Vector.get(dst, maxEnv))
-                    });
-                    Array.put(t, tupleIndex, tupleEnv);
-                    evalOp(rc, ctxt, parLevel, body)
+                    bindTuple(t, writes, minEnv, maxEnv, tupleIndex, tupleEnv);
+                    evalOp(rc, ctx, parLevel, body)
                 })
         }
 
     ///
-    /// Handle all writes in `writes` reading from `t` and writing to `minEnv` and `maxEnv`.
+    /// Handle `writes` using `t` as 'from' and writing to `minEnv` and `maxEnv`.
     ///
     /// For `t=[8, 42]`, `writes=[(1, 2, 0)]` it would do the update `minEnv[2][0] = t[1]`.
     /// The same update is done for `maxEnv`.
     ///
     /// Lastly `t` is saved at `tuplePos` in `tupleEnv`, i.e. `tupleEnv[tuplePos] = t`.
     ///
-    def handleWriteTuples(
+    def bindTuple(
         t: Tuple,
         writes: Vector[WriteTuple],
         minEnv: Vector[SearchTuple[r]],
@@ -422,31 +440,12 @@ mod Fixpoint.Interpreter {
         Array.put(t, tuplePos, tupleEnv)
 
     ///
-    /// Handles executing `body` for a `Search(Relational)` or `Query(Relation)`
-    /// RelOp with current bound tuple `t`.
+    /// Clones `ctx` for a concurrent thread.
     ///
-    /// Should only be used when new threads are being spawned.
+    /// After copying only `db` and `boxing` are shared.
     ///
-    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
-    /// to be performed. See `handleWriteTuples`.
-    ///
-    def parRelationHandlingBodyFunc(
-        rc: Region[r],
-        tuplePos: Int32,
-        writes: Vector[WriteTuple],
-        body: RelOp,
-        ctxt: Context[r],
-        parLevel: AllowedBranches,
-        t: Tuple,
-        ignored: Boxed
-    ): Unit \ r =
-        relationHandlingBodyFunc(rc, tuplePos, writes, body, makeCtxt(rc, ctxt), parLevel, t, ignored)
-
-    ///
-    /// Clones `ctxt` for a concurrent thread.
-    ///
-    def makeCtxt(rc: Region[r], ctxt: Context[r]): Context[r] \ r = {
-        let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctxt;
+    def copyCtx(rc: Region[r], ctx: Context[r]): Context[r] \ r = {
+        let (db, (minEnv, maxEnv, tupleEnv, latEnv), boxing) = ctx;
         let threadMinEnv = minEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
         let threadMaxEnv = maxEnv |> Vector.map(x -> Array.copyOfRange(rc, 0, Array.length(x), x));
         let threadTupleEnv = Array.copyOfRange(rc, 0, Array.length(tupleEnv), tupleEnv);
@@ -456,112 +455,137 @@ mod Fixpoint.Interpreter {
     }
 
     ///
-    /// Handles executing `body` for a `Search` or `Query` relation with current bound tuple `t`.
+    /// Binds the `RowVar` that has been assigned to index `tuplePos`
+    /// to the value `t`. Afterwards exectues `body`.
     ///
-    /// Assumes exclusive access to `ctxt`.
+    /// Assumes exclusive access to `ctx`.
     ///
     /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
-    /// to be performed. See `handleWriteTuples`.
+    /// to be performed. See `bindTuple`.
     ///
-    def relationHandlingBodyFunc(
+    def evalSearchOrQueryOp(
         rc: Region[r],
         tuplePos: Int32,
         writes: Vector[WriteTuple],
         body: RelOp,
-        ctxt: Context[r],
+        ctx: Context[r],
         parLevel: AllowedBranches,
         t: Tuple,
         _: Boxed
     ): Unit \ r =
-        let (_, env, _) = ctxt;
+        let (_, env, _) = ctx;
         let (minEnv, maxEnv, tupleEnv, _) = env;
-        handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
-        evalOp(rc, ctxt, parLevel, body)
+        bindTuple(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
+        evalOp(rc, ctx, parLevel, body)
 
     ///
-    /// Handles executing `body` for a `Search(Latticenal)` or `Query(Latticenal)`
-    /// RelOp with current bound tuple `t` and lattice value `l`.
+    /// Copies `ctx` after which the `RowVar` that has been assigned to index `tuplePos`
+    /// is bound to the value `t`. Finally `body` is executed.
     ///
     /// Should only be used when new threads are being spawned.
     ///
     /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
-    /// to be performed. See `handleWriteTuples`.
+    /// to be performed. See `bindTuple`.
     ///
-    def parLatticeHandlingBodyFunc(
+    /// `ignored` is because the `forEach` method on B+ trees gives the key-value pair, and we do not
+    /// care about the `Boxed.NoValue` that non-lattice relations have.
+    ///
+    def parEvalSearchOrQueryOp(
         rc: Region[r],
         tuplePos: Int32,
-        meetWith: Int32,
-        glb: Boxed -> Boxed -> Boxed,
-        leq: Boxed -> Boxed -> Bool,
-        bot: Boxed,
         writes: Vector[WriteTuple],
         body: RelOp,
-        ctxt: Context[r],
+        ctx: Context[r],
         parLevel: AllowedBranches,
         t: Tuple,
-        l: Boxed
+        ignored: Boxed
     ): Unit \ r =
-        latticeHandlingBodyFunc(rc, tuplePos, meetWith, glb, leq, bot, writes, body, makeCtxt(rc, ctxt), parLevel, t, l)
+        evalSearchOrQueryOp(rc, tuplePos, writes, body, copyCtx(rc, ctx), parLevel, t, ignored)
 
     ///
-    /// Handles executing `body` for a `Search(Latticenal)` or `Query(Latticenal)`
-    /// RelOp with current bound tuple `t` and lattice value `l`.
+    /// Binds the `RowVar` that has been assigned to index `tuplePos`
+    /// to the value `t` and lattice value `l`. Afterwards exectues `body`.
     ///
-    /// Assumes exclusive access to `ctxt`.
+    /// Assumes exclusive access to `ctx`.
     ///
     /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
-    /// to be performed. See `handleWriteTuples`.
+    /// to be performed. See `bindTuple`.
     ///
-    def latticeHandlingBodyFunc(
+    def evalSearchOrQueryOpLattice(
         rc: Region[r],
         tuplePos: Int32,
         meetWith: Int32,
-        glb: Boxed -> Boxed -> Boxed,
-        leq: Boxed -> Boxed -> Bool,
         bot: Boxed,
+        leq: Boxed -> Boxed -> Bool,
+        glb: Boxed -> Boxed -> Boxed,
         writes: Vector[WriteTuple],
         body: RelOp,
-        ctxt: Context[r],
+        ctx: Context[r],
         parLevel: AllowedBranches,
         t: Tuple,
         l: Boxed
     ): Unit \ r =
-        let (_, env, _) = ctxt;
+        let (_, env, _) = ctx;
         let (minEnv, maxEnv, tupleEnv, latEnv) = env;
-        handleWriteTuples(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
+        bindTuple(t, writes, minEnv, maxEnv, tuplePos, tupleEnv);
         // Recurse only if the meet is not bottom
         if (meetWith == tuplePos) {
             Array.put(l, tuplePos, latEnv);
-            evalOp(rc, ctxt, parLevel, body)
+            evalOp(rc, ctx, parLevel, body)
         } else {
             let meet = l `glb` Array.get(meetWith, latEnv);
             if (meet `leq` bot) ()
             else {
                 Array.put(meet, tuplePos, latEnv);
-                evalOp(rc, ctxt, parLevel, body)
+                evalOp(rc, ctx, parLevel, body)
             }
         }
 
     ///
-    /// Evaluates `terms`, where the last value of `terms` will 
+    /// Copies `ctx` after which the `RowVar` that has been assigned to index `tuplePos`
+    /// is bound to the value `t` and lattice value `l`. Finally `body` is executed.
     ///
-    def evalTermsWithLat(ctxt: Context[r], terms: Vector[RamTerm]): Tuple \ r =
-        let (_, env, boxing) = ctxt;
+    /// Should only be used when new threads are being spawned.
+    ///
+    /// `body` is the body of the `Search` or `Query`. `writes` is a vector of writes to `SearchTuple`'s
+    /// to be performed. See `bindTuple`.
+    ///
+    def parEvalSearchOrQueryOpLattice(
+        rc: Region[r],
+        tuplePos: Int32,
+        meetWith: Int32,
+        bot: Boxed,
+        leq: Boxed -> Boxed -> Bool,
+        glb: Boxed -> Boxed -> Boxed,
+        writes: Vector[WriteTuple],
+        body: RelOp,
+        ctx: Context[r],
+        parLevel: AllowedBranches,
+        t: Tuple,
+        l: Boxed
+    ): Unit \ r =
+        evalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, copyCtx(rc, ctx), parLevel, t, l)
+
+    ///
+    /// Evaluates `terms`, where the last value of `terms` will be ignored.
+    ///
+    def evalTermsWithLat(ctx: Context[r], terms: Vector[RamTerm]): Tuple \ r =
+        let (_, env, boxing) = ctx;
         let evalT = evalTerm(env, boxing);
         let len = Vector.length(terms);
-        Vector.range(0, len - 1) |> 
+        Vector.range(0, len - 1) |>
         Vector.map(i -> evalT(Vector.get(i, terms)))
 
     ///
-    /// Evaluate `exps` under context `ctxt` and returns true iff all `BoolExp` in `exps`
-    /// are true.
+    /// Evaluate `boolExp` under context `ctx` and returns true iff `BoolExp` `exp`
+    /// is `true`.
     ///
-    def evalBoolExps(ctxt: Context[r], exps: Vector[BoolExp]): Bool \ r =
-        let (db, env, boxing) = ctxt;
+    def evalBoolExp(ctx: Context[r], boolExp: BoolExp): Bool \ r =
+        let (db, env, boxing) = ctx;
         let evalT = evalTerm(env, boxing);
         let evalBoxedT = evalBoxedTerm(env, boxing);
-        def evalBoolExp(exp) = match exp {
-            case BoolExp.Not(boolExp) => not evalBoolExp(boolExp)
+        match boolExp {
+            case BoolExp.Not(bexp) => not evalBoolExp(ctx, bexp)
             case BoolExp.IsEmpty(rel) => BPlusTree.isEmpty(Array.get(rel, db))
             case BoolExp.NotMemberOf(terms, rel, Relational) =>
                 let relIndex = lookupIndex(rel, db);
@@ -570,15 +594,15 @@ mod Fixpoint.Interpreter {
             case BoolExp.NotMemberOf(terms, rel, Latticenal(_, leq, _, _)) =>
                 let relIndex = lookupIndex(rel, db);
                 let len = Vector.length(terms);
-                let tuple = evalTermsWithLat(ctxt, terms);
+                let tuple = evalTermsWithLat(ctx, terms);
                 let latVal = evalBoxedTerm(env, boxing, Vector.get(len - 1, terms));
                 let curLatVal = BPlusTree.getWithDefault(tuple, Boxed.NoValue, relIndex);
-                if(curLatVal == Boxed.NoValue)
+                if (curLatVal == Boxed.NoValue)
                     true
                 else
                     not (latVal `leq` curLatVal)
             case BoolExp.Eq(lhs, rhs) => evalTerm(env, boxing, lhs) == evalTerm(env, boxing, rhs)
-            case BoolExp.Leq(lhs, leq, index) => 
+            case BoolExp.Leq(lhs, leq, index) =>
                 let (_, _, _, latEnv) = env;
                 let rightSide = Array.get(index, latEnv);
                 leq(lhs, rightSide)
@@ -607,18 +631,25 @@ mod Fixpoint.Interpreter {
                 let boxed4 = evalBoxedT(t4);
                 let boxed5 = evalBoxedT(t5);
                 f(boxed1)(boxed2)(boxed3)(boxed4)(boxed5)
-        };
-        exps |> Vector.forAll(evalBoolExp)
+        }
 
     ///
-    /// Returns the (Boxed) result of evaluating `term` under `env` using `boxing`
-    /// to box/unbox values as needed.
+    /// Evaluate `exps` under context `ctx` and returns true iff all `BoolExp` in `exps`
+    /// are `true`.
     ///
-    def evalBoxedTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Boxed \ r = 
+    def evalBoolExps(ctx: Context[r], exps: Vector[BoolExp]): Bool \ r =
+        exps |> Vector.forAll(evalBoolExp(ctx))
+
+    ///
+    /// Evaluate `term` under `env` using `boxing` to box/unbox values as needed.
+    ///
+    /// Returns the result as a `Boxed`.
+    ///
+    def evalBoxedTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Boxed \ r =
         let evalT = evalBoxedTerm(env, boxing);
         match term {
             case RamTerm.Lit(_, b) => b
-            case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, i) => 
+            case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, i) =>
                 let (_, _, tupleEnv, _) = env;
                 let unboxed = Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv));
                 boxWith(unboxed, i, boxing)
@@ -658,22 +689,23 @@ mod Fixpoint.Interpreter {
         }
 
     ///
-    /// Returns the (Int64) result of evaluating `term` under `env` using `boxing`
-    /// to box/unbox values as needed.
+    /// Evaluate `term` under `env` using `boxing` to box/unbox values as needed.
     ///
-    def evalTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Int64 \ r = 
+    /// Returns the result as the `Int64` representing the computed value.
+    ///
+    def evalTerm(env: SearchEnv[r], boxing: Boxing[r], term: RamTerm): Int64 \ r =
         let evalBoxedT = evalBoxedTerm(env, boxing);
         match term {
             case RamTerm.Lit(v, _) => v
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) =>
                 let (_, _, tupleEnv, _) = env;
                 Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
-            case RamTerm.LoadLatVar(index, boxingPos) => 
+            case RamTerm.LoadLatVar(index, boxingPos) =>
                 let (_, _, _, latEnv) = env;
                 unboxWith(Array.get(index, latEnv), boxingPos, boxing)
             case RamTerm.ProvMax(vec) =>
                 let (_, _, tupleEnv, _) = env;
-                1i64 + Vector.foldLeft(acc -> match (tupleIndex, indexInTuple) -> 
+                1i64 + Vector.foldLeft(acc -> match (tupleIndex, indexInTuple) ->
                     acc `Int64.max` Vector.get(indexInTuple, Array.get(tupleIndex, tupleEnv))
                 , 0i64, vec)
             case RamTerm.Meet(cap, lhs, rhs, i) =>

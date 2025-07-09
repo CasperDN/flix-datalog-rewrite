@@ -59,7 +59,8 @@ mod Fixpoint.JoinProfiler {
         let (instrumentedProgram, attributeMap, rowVarToPos) = instrumentProgram(rc, program); 
         let vec = instrumentedProgram |>
             Fixpoint.Debugging.notifyPreLowering("Join Profiler") |>
-            Solver.runJoinProfiler;
+            ???;
+            // Solver.runJoinProfiler;
         let joinToSizeDup = Map.map(i -> Vector.get(i, vec), rowVarToPos);
         let sizePerIter = joinToSizeDup |> 
             Map.foldLeftWithKey(acc -> k1 -> v1 -> {
