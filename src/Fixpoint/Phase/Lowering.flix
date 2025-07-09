@@ -19,7 +19,35 @@
 /// This phase transforms the abstract `Ram` into a low-level `ExecutableRam` in a format
 /// the Interpreter understands.
 ///
-/// Concretely it does the following
+/// Concretely it does the following:
+///
+/// Every `Boxed` value is replaced by an `Int64` which represents the `Boxed` value.
+/// with respect to the `Boxing`.
+///
+/// For relations with multiple indexes `MergeInto(newRel, otherRel)` becomes 
+/// `MergeInto(newRel, otherRelIndex1)`, `MergeInto(newRel, otherRelIndex2)` and so on.
+/// This ensures that all indexes are up to date.
+///
+/// For relations with multiple indexes `Purge(rel)` becomes `Purge(rel1)`, `Purge(rel2)`
+/// and so on.
+///
+/// For relations with multiple indexes `Swap(newRel, deltaRel)` becomes
+/// `[Purge(deltaRelIndex2), Purge(deltaRelIndex3), ...]` followed sequentially by
+/// `[MergeInto(newRel, deltaRelIndex2), MergeInto(newRel, deltaRelIndex3), ...]`.
+/// Finally `Swap(newRel, deltaRel1)` is executed.
+///
+/// So far statements have simply referred to a `RelSym`. This is replaced by a
+/// information about which index should be used. This information is currently
+/// in the form of an index/`Int32`.
+///
+/// `NotBot` is removed entirely from the AST. The interpreter handles this
+/// explicitly whenever it encounters a `Search` or `Query` with `Latticenal`.
+///
+/// Every `RowVar` is assigned a position in memory. Currently they get unique
+/// positions, though this is technically not needed.
+///
+/// Note that we here rely on the fact that `newRel` has exactly one index.
+/// This is critical for the transformation for `Swap` and `MergeInto`.
 ///
 /// 1. Replaces `Boxed` by `Int64`, except for lattice-elements
 /// 2. For relations with multiple indexes replace `MergeInto(newRel, otherRel)` with
