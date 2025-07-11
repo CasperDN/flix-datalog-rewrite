@@ -22,17 +22,18 @@ mod Fixpoint.Debugging {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.BoxingType
+    use Fixpoint.Options
 
     ///
     /// Write `s` to standard file. Overwrite if `overwrite` is true, otherwise append.
     ///
     def flush(s: String, overwrite: Bool): Unit \ IO = 
-        if (Fixpoint.Options.enableDebugToFile()) {
+        if (Options.enableDebugToFile()) {
             let res = 
                 if (overwrite) 
-                    FileWrite.runWithIO(() -> FileWrite.write(str = s, Fixpoint.Options.debugFileName()))
+                    FileWrite.runWithIO(() -> FileWrite.write(str = s, Options.debugFileName()))
                 else 
-                    FileWrite.runWithIO(() -> FileWrite.append(str = s, Fixpoint.Options.debugFileName()));
+                    FileWrite.runWithIO(() -> FileWrite.append(str = s, Options.debugFileName()));
             match res {
                 case Ok(_) => ()
                 case Err(e) => println(e)
@@ -47,7 +48,7 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPreSolve(d: Datalog): Datalog = unchecked_cast({
-        if (Fixpoint.Options.enableDebugging()) region rc {
+        if (Options.enableDebugging()) region rc {
             let strings = MutList.empty(rc);
             let psh = s -> MutList.push(s, strings);
             String.repeat(80, "*") |> psh;
@@ -70,7 +71,7 @@ mod Fixpoint.Debugging {
     ///
     @Internal
     pub def notifyPostSolve(d: Datalog): Datalog = unchecked_cast({
-        if (Fixpoint.Options.enableDebugging() and Fixpoint.Options.enableDebugPrintFacts()) region rc {
+        if (Options.enableDebugging() and Options.enableDebugPrintFacts()) region rc {
             let strings = MutList.empty(rc);
             let psh = s -> MutList.push(s, strings);
             String.repeat(80, "*") |> psh;
@@ -94,7 +95,7 @@ mod Fixpoint.Debugging {
     @Internal
     pub def notifyPreLowering(phase: String, program: Ram.RamProgram): Ram.RamProgram = match program {
         case Ram.RamProgram.Program(stmt, _, _, _) => unchecked_cast({
-            if (Fixpoint.Options.enableDebugging()) region rc {
+            if (Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
                 let psh = s -> MutList.push(s, strings);
                 String.repeat(80, "*") |> psh;
@@ -121,7 +122,7 @@ mod Fixpoint.Debugging {
         input: (ExecutableRam.RamProgram, BoxingType.Boxing[rc])
     ): (ExecutableRam.RamProgram, BoxingType.Boxing[rc]) = match fst(input) {
         case ExecutableRam.RamProgram.Program(stmt, _, _, (index, indexPos), _, _) => unchecked_cast({
-            if (Fixpoint.Options.enableDebugging()) region rc {
+            if (Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
                 let psh = s -> MutList.push(s, strings);
                 String.repeat(80, "*") |> psh;

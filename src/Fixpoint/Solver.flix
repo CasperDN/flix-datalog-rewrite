@@ -17,23 +17,31 @@
  */
 
 mod Fixpoint.Solver {
-    use Fixpoint.BoxingType.{Boxing}
-
     import dev.flix.runtime.Global
 
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadTerm}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Ram.{RelSym, Predicates, RamProgram => ARamProgram}
-    use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram}
+    use Fixpoint.Ast.Ram
+    use Fixpoint.Ast.Ram.{Predicates, RelSym, toDenotation}
+    use Fixpoint.Ast.ExecutableRam
     use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
+    use Fixpoint.BoxingType.Boxing
+    use Fixpoint.Debugging
+    use Fixpoint.Interpreter
     use Fixpoint.Interpreter.Database
+    use Fixpoint.Options
+    use Fixpoint.Phase
+    use Fixpoint.Predicate
+    use Fixpoint.PredSymsOf
+    use Fixpoint.Provenance
+    use Fixpoint.SubstitutePredSym
     use Fixpoint.Util.getOrCrash
 
     ///
@@ -41,7 +49,7 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def runSolver(d: Datalog): Datalog =
-        if(Fixpoint.Options.useProvenance()) {
+        if(Options.useProvenance()) {
             runProvSolver(d)
         } else {
             runSolverNoProv(d)
@@ -54,9 +62,9 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def runSolverNoProv(d: Datalog): Datalog = region rc {
-        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
-        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
-        Fixpoint.Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, false), fixInfo)
+        let (fixed, fixInfo) = Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
+        let strat = Phase.Stratifier.stratify(fixed);
+        Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, false), fixInfo)
     }
 
     ///
@@ -65,8 +73,8 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def runProvSolver(d: Datalog): Datalog = region rc {
-        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
-        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
+        let (fixed, fixInfo) = Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
+        let strat = Phase.Stratifier.stratify(fixed);
         let provThing = runWithStratification(fixed, strat, true);
         let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
         let goalSym = PredSym.PredSym("Path", 2i64);
@@ -75,11 +83,10 @@ mod Fixpoint.Solver {
             case _ => None
         };
         let forcedEval = provOf(goal, goalSym, d, ???);
-        // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
         if(Option.isEmpty(forcedEval)) {
-            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
+            Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
         } else {
-            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
+            Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
         }
     }
 
@@ -90,28 +97,28 @@ mod Fixpoint.Solver {
     ///
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
-        let d = Fixpoint.Debugging.notifyPreSolve(d0);
+        let d = Debugging.notifyPreSolve(d0);
         // Some of this code is duplicated in `runJoinProfiler`.
-        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
-            Fixpoint.Phase.Compiler.compile(cs, db, stf) |>
-            Fixpoint.Debugging.notifyPreLowering("Compiler") |>
-            Fixpoint.Phase.Simplifier.simplifyProgram |>
-            Fixpoint.Debugging.notifyPreLowering("Simplifier") |>
-            Fixpoint.Phase.JoinOptimizer.scheduleProgram |>
-            Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |>
-            Fixpoint.Phase.Hoisting.hoistProgram |>
-            Fixpoint.Debugging.notifyPreLowering("Hoisting") |>
-            Fixpoint.Phase.IndexSelection.indexProgram |>
-            Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
-            Fixpoint.Phase.Provenance.augmentProgram(withProv) |>
-            Fixpoint.Phase.Lowering.lowerProgram(rc, withProv)
+        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ExecutableRam.RamProgram, Boxing[rc]) \ rc = {
+            Phase.Compiler.compile(cs, db, stf) |>
+            Debugging.notifyPreLowering("Compiler") |>
+            Phase.Simplifier.simplifyProgram |>
+            Debugging.notifyPreLowering("Simplifier") |>
+            Phase.JoinOptimizer.scheduleProgram |>
+            Debugging.notifyPreLowering("Join Optimizer") |>
+            Phase.Hoisting.hoistProgram |>
+            Debugging.notifyPreLowering("Hoisting") |>
+            Phase.IndexSelection.indexProgram |>
+            Debugging.notifyPreLowering("Index Selection") |>
+            Phase.Provenance.augmentProgram(withProv) |>
+            Phase.Lowering.lowerProgram(rc, withProv)
         };
         let model = match d {
             case Datalog(_, r) =>
                 compiler(d, Map.empty()) |>  
-                Fixpoint.Debugging.notifyPreInterpret |>
-                Fixpoint.Interpreter.interpret(rc, withProv) |> 
-                toModelWithoutFull(withProv, r)
+                Debugging.notifyPreInterpret |>
+                Interpreter.interpret(rc, withProv) |> 
+                toModelOnlyFull(withProv, r)
             case Model(_) => 
                 d
             case Provenance(_, _) => 
@@ -119,13 +126,13 @@ mod Fixpoint.Solver {
             case Join(Model(m), Datalog(f, r)) => 
                 let cs = Datalog(f, r);
                 compiler(cs, m) |> 
-                Fixpoint.Debugging.notifyPreInterpret |>
-                Fixpoint.Interpreter.interpret(rc, withProv) |> 
-                toModelWithoutFull(withProv, r)
+                Debugging.notifyPreInterpret |>
+                Interpreter.interpret(rc, withProv) |> 
+                toModelOnlyFull(withProv, r)
             case Join(Provenance(_, _), cs) => ???
             case _ => bug!("Datalog Boxing bug")
         };
-        let m = Fixpoint.Debugging.notifyPostSolve(model);
+        let m = Debugging.notifyPostSolve(model);
         m
     }
 
@@ -139,7 +146,6 @@ mod Fixpoint.Solver {
         case (Datalog(edb1, idb1), Datalog(edb2, idb2)) =>
             Datalog(Vector.append(edb1, edb2), Vector.append(idb1, idb2))
         case (Model(db1), Model(db2)) =>
-            use Fixpoint.Ast.Ram.toDenotation;
             let union = ramSym -> match toDenotation(ramSym) {
                 case Relational => Map.union
                 case Latticenal(_, _, lub, _) => Map.unionWith(lub)
@@ -186,7 +192,7 @@ mod Fixpoint.Solver {
             }
         }
         case Provenance(_, _) =>
-            Fixpoint.Provenance.provQuery(p, goal, d) |>
+            Provenance.provQuery(p, goal, d) |>
             Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
         case Join(_, _) =>
             provOf(goal, p, runProvSolver(d), mapping)
@@ -222,11 +228,8 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def rename(preds: List[PredSym], d: Datalog): Datalog = {
-        use Fixpoint.PredSymsOf.predSymsOf;
-        use Fixpoint.SubstitutePredSym.substitute;
-
         // Determine all the predicate symbols in `d`.
-        let predSyms = predSymsOf(d);
+        let predSyms = PredSymsOf.predSymsOf(d);
 
         // Compute a substitition that assignes fresh names to all predicates except those in `preds`.
         def f(macc, predSym) = {
@@ -244,7 +247,7 @@ mod Fixpoint.Solver {
         let s = Set.foldLeft(f, Map.empty(), predSyms);
 
         // Apply the computed substitution to the Datalog program `d`.
-        substitute(d, s)
+        SubstitutePredSym.substitute(d, s)
     }
 
     ///
@@ -812,7 +815,6 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Model(db) => region rc {
-            use Fixpoint.Ast.Ram.toDenotation;
             let pFacts = MutList.empty(rc);
             let qquery = ramSym -> match ramSym {
                 case RelSym.Symbol(predSym, _, _) => match predSym <=> p {
@@ -855,17 +857,16 @@ mod Fixpoint.Solver {
         case _               => bug!("Unexpected non-value term.")
     }
 
-
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModelWithoutFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r =
+    def toModelOnlyFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r =
         let (db, meta) = dbMeta;
         let dbOnlyFullRels = MutMap.toMap(db) |>
-        Map.map(MutMap.toMap) |>
-        Map.filterWithKey(k -> facts -> match k {
-            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicate.isFullId(id, meta) and Map.nonEmpty(facts)
-        });
+            Map.map(MutMap.toMap) |>
+            Map.filterWithKey(k -> facts -> match k {
+                case RelSym.Symbol(PredSym(_, id), _, _) => Predicate.isFullId(id, meta) and Map.nonEmpty(facts)
+            });
         if(withProv) {
             toProvenance(rules, dbOnlyFullRels)
         } else {
