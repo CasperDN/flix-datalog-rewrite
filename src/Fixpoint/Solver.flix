@@ -98,7 +98,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ExecutableRam.RamProgram, Boxing[rc]) \ rc = {
+        def compiler(cs: Datalog, db: Ram.Facts): (ExecutableRam.RamProgram, Boxing[rc]) \ rc = {
             Phase.Compiler.compile(cs, db, stf) |>
             Debugging.notifyPreLowering("Compiler") |>
             Phase.Simplifier.simplifyProgram |>
@@ -143,11 +143,22 @@ mod Fixpoint.Solver {
         case (Datalog(edb1, idb1), Datalog(edb2, idb2)) =>
             Datalog(Vector.append(edb1, edb2), Vector.append(idb1, idb2))
         case (Model(db1), Model(db2)) =>
-            let union = ramSym -> match toDenotation(ramSym) {
-                case Relational => Map.union
-                case Latticenal(_, _, lub, _) => Map.unionWith(lub)
+            unchecked_cast((
+            let union = ramSym -> v1 -> v2 -> {
+                let newTree = BPlusTree.empty(Static);
+
+                match toDenotation(ramSym) {
+                    case Relational =>
+                        BPlusTree.merge(v1, newTree);
+                        BPlusTree.merge(v2, newTree)
+                    case Latticenal(_, _, lub, _) =>
+                        BPlusTree.merge(v1, newTree);
+                        BPlusTree.mergeWith(lub, v1, v2)
+                };
+                newTree
             };
-            Model(Map.unionWithKey(union, db1, db2))
+            // Get rid of the IO effect from `Static`.
+            Model(Map.unionWithKey(union, db1, db2)): _ \ IO) as _ \ {})
         case (Model(_), Datalog(_, _)) => Join(d1, d2)
         case (Datalog(_, _), Model(_)) => Join(d2, d1)
         case (Join(model, datalog), Datalog(_, _)) => Join(model, union(datalog, d2))
