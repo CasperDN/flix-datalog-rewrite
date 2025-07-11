@@ -24,32 +24,32 @@ mod Test.Library.Fixpoint.Stratification {
     @Test
     def testStratification01(): Bool = {
         let r = #{
-            A(1).
-            B(x) :- A(x).
-            C(x) :- B(x).
-            D(x) :- C(x).
+            A1(1).
+            B1(x) :- A1(x).
+            C1(x) :- B1(x).
+            D1(x) :- C1(x).
         };
         let solved = solve r;
-        Vector#{1} `Assert.eq` query solved select (x) from A(x) and
-            Vector#{1} `Assert.eq` query solved select (x) from B(x) and
-            Vector#{1} `Assert.eq` query solved select (x) from C(x) and
-            Vector#{1} `Assert.eq` query solved select (x) from D(x)
+        Vector#{1} `Assert.eq` query solved select (x) from A1(x) and
+            Vector#{1} `Assert.eq` query solved select (x) from B1(x) and
+            Vector#{1} `Assert.eq` query solved select (x) from C1(x) and
+            Vector#{1} `Assert.eq` query solved select (x) from D1(x)
 
     }
 
     @Test
     def testStratification02(): Bool = {
         let r = #{
-            A(1).
-            B(x) :- A(x).
-            C(x + y) :- A(x), B(y).
-            D(x + y + z) :- A(x), B(y), C(z).
+            A2(1).
+            B2(x) :- A2(x).
+            C2(x + y) :- A2(x), B2(y).
+            D2(x + y + z) :- A2(x), B2(y), C2(z).
         };
         let solved = solve r;
-        Vector#{1} `Assert.eq` query solved select (x) from A(x) and
-            Vector#{1} `Assert.eq` query solved select (x) from B(x) and
-            Vector#{1 + 1} `Assert.eq` query solved select (x) from C(x) and
-            Vector#{1 + 1 + 2} `Assert.eq` query solved select (x) from D(x)
+        Vector#{1} `Assert.eq` query solved select (x) from A2(x) and
+            Vector#{1} `Assert.eq` query solved select (x) from B2(x) and
+            Vector#{1 + 1} `Assert.eq` query solved select (x) from C2(x) and
+            Vector#{1 + 1 + 2} `Assert.eq` query solved select (x) from D2(x)
     }
 
     @Test
