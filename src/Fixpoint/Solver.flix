@@ -129,18 +129,6 @@ mod Fixpoint.Solver {
         m
     }
 
-    @Internal
-    pub def runJoinProfiler(program: ARamProgram): Vector[Vector[(Int32, Int32)]] = region rc {
-        let expectedJoinSize = 
-            program |> 
-            Fixpoint.Phase.Hoisting.hoistProgram |> 
-            Fixpoint.Phase.IndexSelection.indexProgram |> 
-            Fixpoint.Phase.Lowering.lowerProgram(rc, false) |>
-            Fixpoint.Interpreter.estimateJoinSizes(rc);
-        expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector
-    }
-
-
     ///
     /// Returns the pairwise union of `d1` and `d2`.
     /// I.e. the facts of the union is the union of the facts and likewise for rules.
