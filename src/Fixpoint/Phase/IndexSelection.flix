@@ -19,7 +19,6 @@ mod Fixpoint.Phase.IndexSelection {
     use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, Indexes, IndexInformation, RowVar, arityOf, arityOfNonLat};
     use Fixpoint.Predicate.{relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
     use Fixpoint.UniqueInts
-    
 
     /// In the following example, the set of primitive searches `S={{0, 1}, {0, 1, 2}, {0, 2}}`
     /// is produced for relation `B`:
@@ -59,11 +58,11 @@ mod Fixpoint.Phase.IndexSelection {
     /// `Vector[Int32]` where the order is left-to-right in the vector.
     ///
     /// In the example for `PrimitiveSearch` a naive algorithm would create an index for each
-    /// primitive search occuring in the program. A better solution, due to Subotić, Pavle, et al.,
-    /// is to find the minimal set of indexes needed for a relation. This is implemented in
-    /// `AutomaticIndexSelection` is. Thus, the program consisting of the 3 rules
-    /// could produce the minimal set of searches to query relation `B` as 
-    /// `{0 < 1 < 2, 0 < 2}`.
+    /// primitive search occuring in the program. A better solution, due to Subotić, Pavle, et al.
+    /// (Automatic Index Selection for Large-Scale Datalog Computation), is to find the minimal
+    /// set of indexes needed for a relation. This is implemented in `AutomaticIndexSelection` is.
+    /// Thus, the program consisting of the 3 rules could produce the minimal set of searches to
+    /// query relation `B` as `{0 < 1 < 2, 0 < 2}`.
     ///
     /// Note: for relation `A`, since it has no body atoms with bound variables, no
     /// particular search should be created for it, and the single search `0 < 1 < 2`
@@ -86,7 +85,7 @@ mod Fixpoint.Phase.IndexSelection {
                 let collectedStmt = collectSearchesStmt(indexes, rc, stmt);
                 let newIndexes =
                     indexes |>
-                    MutMap.toMap |> 
+                    MutMap.toMap |>
                     Map.map(AutomaticIndexSelection.minIndex) |>
                     Map.map(List.toVector);
                 (newIndexes, collectedStmt)
@@ -95,7 +94,7 @@ mod Fixpoint.Phase.IndexSelection {
             let indexesFull =
                 newIndexes |>
                 Map.mapWithKey(relSym -> searches ->
-                    Vector.map(search -> 
+                    Vector.map(search ->
                         Vector.range(0, arityOfNonLat(relSym)) |>
                         Vector.filter(x -> not Vector.memberOf(x, search)) |>
                         Vector.append(search),
@@ -103,13 +102,13 @@ mod Fixpoint.Phase.IndexSelection {
                     )
                 );
             // Account for relations that have no body atoms with bound variables
-            let indexesMissing = 
+            let indexesMissing =
                 relSymsOfProgram(program) |>
                 List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
                 List.foldLeft(acc -> relSym -> {
                     let deltaRelSym = relSymFromPredType(relSym, PredType.Delta, meta);
                     let search = match relSymToPredType(relSym, meta) {
-                        case PredType.New => 
+                        case PredType.New =>
                             match Map.get(deltaRelSym, indexesFull) {
                                 case Some(v) => Vector.get(0, v)
                                 case None => Vector.range(0, arityOfNonLat(deltaRelSym))
@@ -118,7 +117,7 @@ mod Fixpoint.Phase.IndexSelection {
                     };
                     Map.insert(relSym, Vector#{search}, acc)
                 }, Map#{});
-            let indexes = Map.union(indexesFull, indexesMissing); 
+            let indexes = Map.union(indexesFull, indexesMissing);
             let (indexedStmt, indexPlacement) = region rc2 {
                 let indexState = UniqueInts.empty(rc2);
                 let indexedStmt = indexStmt(newStmt, indexes, indexState);
@@ -147,7 +146,7 @@ mod Fixpoint.Phase.IndexSelection {
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
         case RamStmt.Par(xs) => RamStmt.Par(Vector.map(x -> indexStmt(x, constructedIndexes, indexState), xs))
         case RamStmt.Until(boolExps, body) => RamStmt.Until(boolExps, indexStmt(body, constructedIndexes, indexState))
-        case RamStmt.Comment(_) => stmt 
+        case RamStmt.Comment(_) => stmt
     }
 
     ///
@@ -159,9 +158,9 @@ mod Fixpoint.Phase.IndexSelection {
     /// is free to use a map or similar data structures.
     ///
     def lookupIndex(
-        relSym: RelSym, 
+        relSym: RelSym,
         search: Search,
-        constructedIndexes: Indexes    
+        constructedIndexes: Indexes
     ): Int32 = match Map.get(relSym, constructedIndexes) {
         case Some(indexes) =>
             // We want to be able to search on a `search` of length `k`.
@@ -176,7 +175,7 @@ mod Fixpoint.Phase.IndexSelection {
             });
             match indexOf {
                 case Some(v) => v
-                case None => 
+                case None =>
                     bug!("In Fixpoint.Phase.IndexSelection.indexOp: Could not find an index for search ${search} for relation ${relSym}")
             }
         case None => bug!("In Fixpoint.Phase.IndexSelection.indexOp: ${relSym} has no index!")
@@ -197,7 +196,7 @@ mod Fixpoint.Phase.IndexSelection {
                 Vector.foldLeft(acc -> exp -> match exp {
                     case BoolExp.Eq(RamTerm.RowLoad(_, i, _), _) => i :: acc
                     case BoolExp.Eq(_, RamTerm.RowLoad(_, i, _)) => i :: acc
-                    case _ => 
+                    case _ =>
                         // This is only a bug when the only index type available is `BPlusTree`
                         bug!("In Fixpoint.Phase.IndexSelection.indexOp: Found non-equality BoolExp in indexOp!")
                 }, List.empty(), boolExps) |> List.toVector;
@@ -220,19 +219,19 @@ mod Fixpoint.Phase.IndexSelection {
     /// `Eq`, but future data-structures may make use of `NotMemberOf`, `Leq`, etc.
     ///
     def collectSearchesStmt(indexes: PrimitiveSearches[r], rc: Region[r], stmt: RamStmt): RamStmt \ r = match stmt {
-        case RamStmt.Insert(op) => 
+        case RamStmt.Insert(op) =>
             RamStmt.Insert(collectSearchesOp(op, indexes, MutSet.empty(rc), rc))
         case RamStmt.MergeInto(_, _) => stmt
         case RamStmt.Swap(_, _) => stmt
         case RamStmt.Purge(_) => stmt
         case RamStmt.Seq(xs) => RamStmt.Seq(Vector.map(collectSearchesStmt(indexes, rc), xs))
         case RamStmt.Par(xs) => RamStmt.Par(Vector.map(collectSearchesStmt(indexes, rc), xs))
-        case RamStmt.Until(boolExps, body) => 
+        case RamStmt.Until(boolExps, body) =>
             RamStmt.Until(boolExps, collectSearchesStmt(indexes, rc, body))
-        case RamStmt.Comment(_) => stmt 
+        case RamStmt.Comment(_) => stmt
     }
 
-    /// 
+    ///
     /// Collects the set of searches for each `RelSym` in `op` to `indexes` given that we
     /// have seen the `RowVar`'s in `seenTuples` and lowers `BoolExp`'s in `Query` ops
     /// that are unusable by the index type into `If` ops.
@@ -248,7 +247,7 @@ mod Fixpoint.Phase.IndexSelection {
         seenTuples: MutSet[RowVar, r],
         rc: Region[r]
     ): RelOp \ r = match op {
-        case RelOp.Search(rowVar, relSym, body) => 
+        case RelOp.Search(rowVar, relSym, body) =>
             MutSet.add(rowVar, seenTuples);
             let res = RelOp.Search(rowVar, relSym, collectSearchesOp(body, indexes, seenTuples, rc));
             MutSet.remove(rowVar, seenTuples);
@@ -258,7 +257,7 @@ mod Fixpoint.Phase.IndexSelection {
             let equalExpList = MutList.empty(rc);
             let search = boolExps |>
                 Vector.foldLeft(acc -> exp -> match exp {
-                    case BoolExp.Eq(RamTerm.RowLoad(rv1, i, _), t2) if rv1 == rowVar => 
+                    case BoolExp.Eq(RamTerm.RowLoad(rv1, i, _), t2) if rv1 == rowVar =>
                         if (isTermGround(t2, seenTuples)) {
                             MutList.push(exp, equalExpList);
                             i :: acc
@@ -275,15 +274,15 @@ mod Fixpoint.Phase.IndexSelection {
             MutSet.remove(rowVar, seenTuples);
             collectSearch(relSym, search, indexes);
             let otherBoolExps = MutList.toVector(otherBoolExpList);
-            let nestedBody = 
-                if (Vector.length(otherBoolExps) == 0) newBody 
+            let nestedBody =
+                if (Vector.length(otherBoolExps) == 0) newBody
                 else RelOp.If(otherBoolExps, newBody);
             let equalExps = MutList.toVector(equalExpList);
             if (Vector.length(equalExps) == 0)
                 RelOp.Search(rowVar, relSym, nestedBody)
             else
                 RelOp.Query(rowVar, relSym, equalExps, -1, nestedBody)
-        case RelOp.Functional(rowVar, func, terms, body, arity) => 
+        case RelOp.Functional(rowVar, func, terms, body, arity) =>
             MutSet.add(rowVar, seenTuples);
             let res = RelOp.Functional(rowVar, func, terms, collectSearchesOp(body, indexes, seenTuples, rc), arity);
             MutSet.remove(rowVar, seenTuples);
@@ -295,7 +294,7 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     /// Collects the search `Search` for `relSym` to `indexes`.
     ///
-    def collectSearch(relSym: RelSym, search: Search, indexes: PrimitiveSearches[r]): Unit \ r = 
+    def collectSearch(relSym: RelSym, search: Search, indexes: PrimitiveSearches[r]): Unit \ r =
         if (not Vector.isEmpty(search)){
             let searches = MutMap.getWithDefault(relSym, List.empty(), indexes);
             if (not List.memberOf(search, searches))
@@ -338,8 +337,8 @@ mod Fixpoint.Phase.IndexSelection {
         /// is a prefix of `{0 < 1 < 2}`.
         ///
         @Internal
-        pub def minIndex(searches: List[Search]): List[Search] = 
-            minChainCover(searches) |> 
+        pub def minIndex(searches: List[Search]): List[Search] =
+            minChainCover(searches) |>
             List.map(chain -> List.zip(chain, Vector.empty() :: chain)) |>
             List.map(List.map(match (s1, s2) -> Vector.filter(x -> not Vector.memberOf(x, s2), s1))) |>
             List.map(List.fold)
@@ -372,14 +371,14 @@ mod Fixpoint.Phase.IndexSelection {
             let allPaths = MutMap.empty(rc);
             def f(u: Vertex): Unit \ rc = match MutMap.get(u, allPaths) {
                 case None => Map.rangeQueryWith(
-                    edge -> fst(edge) <=> u, 
+                    edge -> fst(edge) <=> u,
                     edge -> _ -> {
                         let (u0, v0) = edge;
                         f(v0); // Compute the longest path of v0 and store in allPaths
                         let largest = l1 -> l2 -> if (List.length(l1) <= List.length(l2)) l2 else l1;
                         MutMap.putWith(
-                            largest, u0, 
-                            edge :: Option.getWithDefault(List.empty(), MutMap.get(v0, allPaths)), 
+                            largest, u0,
+                            edge :: Option.getWithDefault(List.empty(), MutMap.get(v0, allPaths)),
                             allPaths)
                     }, matching)
                 case _ => ()
@@ -397,11 +396,11 @@ mod Fixpoint.Phase.IndexSelection {
         def graphFromSearches(searches: List[Search]): (List[Vertex], AdjacencyList) =
             // The vertices are are simply the indices of the searches in the list
             let vertices = List.range(0, List.length(searches));
-            let zipped = searches |> List.map(s -> Vector.toSet(s)) |> List.zip(vertices); 
+            let zipped = searches |> List.map(s -> Vector.toSet(s)) |> List.zip(vertices);
             let adjList = List.foldMap(match (u, s) -> {
                     List.filter(p -> Set.isProperSubsetOf(s, snd(p)), zipped) |>
                     List.map(p -> (u, fst(p)))
-                }, zipped) |> 
+                }, zipped) |>
                 List.foldLeft(a -> p -> {
                     let (u, v) = p;
                     MultiMap.insert(u, v, a)
@@ -411,7 +410,7 @@ mod Fixpoint.Phase.IndexSelection {
         ///
         /// Find the minimum chain cover of `searches`.
         ///
-        def minChainCover(searches: List[Search]): List[List[Search]] = 
+        def minChainCover(searches: List[Search]): List[List[Search]] =
             let (vertices, adjList) = graphFromSearches(searches);
             let searchesVec = List.toVector(searches);
             let matching = maximumMatching(vertices, vertices, adjList);

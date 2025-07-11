@@ -100,6 +100,7 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{arityOf, arityOfNonLat, getTermRamId, IndexInformation, RamId, RelSym, RowVar, Search, toDenotation}
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
+    use Fixpoint.Boxed
     use Fixpoint.Boxing
     use Fixpoint.BoxingType.{Boxing, RamIdToPos};
     use Fixpoint.UniqueInts
@@ -172,7 +173,7 @@ mod Fixpoint.Phase.Lowering {
                 MutMap.foldLeftWithKey(acc2 -> innerPos -> value -> (outerPos, innerPos, value) :: acc2, acc1, inner)
             , Nil) |> List.toVector;
             // Compute arities
-            let arityInformation = Fixpoint.Util.collectRowVarArity(program);
+            let arityInformation = collectRowVarArity(program);
             let numOfArities = UniqueInts.get(idToIndex);
             let arities = Array.empty(rc, numOfArities);
             arityInformation |> List.forEach(match (rv, arity) -> Array.put(arity, UniqueInts.getIndex(rv, idToIndex), arities));
@@ -582,4 +583,47 @@ mod Fixpoint.Phase.Lowering {
                     bug!("Bug in Fixpoint.Lowering: Different value for position. Should have been removed by Hoisting")
                 else v1
             , toIndex, value)
+
+    ///
+    /// Returns a list of pairs `(RowVar, RelSym)` in `program` in the order of the nesting.
+    ///
+    @Internal
+    pub def collectRowVarRelSym(program: Ram.RamProgram): List[(RowVar, RelSym)] = match program {
+        case Ram.RamProgram.Program(stmt, _, _, _) => 
+            collectRowVarRelSymStmt(stmt)
+    }
+
+    ///
+    /// Returns a list of pairs `(RowVar, RelSym)` in `stmt`.
+    ///
+    def collectRowVarRelSymStmt(stmt: Ram.RamStmt): List[(RowVar, RelSym)] \ r = match stmt {
+        case Ram.RamStmt.Insert(op) => collectRowVarRelSymOp(op)
+        case Ram.RamStmt.MergeInto(_, _) => Nil
+        case Ram.RamStmt.Swap(_, _) => Nil
+        case Ram.RamStmt.Purge(_) => Nil
+        case Ram.RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
+        case Ram.RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
+        case Ram.RamStmt.Until(_, rest) => collectRowVarRelSymStmt(rest)
+        case Ram.RamStmt.Comment(_) => Nil
+    }
+
+    ///
+    /// Returns a list of pairs `(RowVar, RelSym)` in `op` in the order of nesting.
+    ///
+    @Internal
+    pub def collectRowVarRelSymOp(op: Ram.RelOp): List[(RowVar, RelSym)] \ r = match op {
+        case Ram.RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
+        case Ram.RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
+        case Ram.RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
+        case Ram.RelOp.Project(_, _, _) => Nil
+        case Ram.RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
+    }
+
+    ///
+    /// Returns a list `(RowVar, arity)` in `program` in the order of the nesting.
+    ///
+    @Internal
+    pub def collectRowVarArity(program: Ram.RamProgram): List[(RowVar, Int32)] = 
+        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
+
 }

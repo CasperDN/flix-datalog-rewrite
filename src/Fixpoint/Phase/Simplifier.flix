@@ -89,7 +89,7 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
             Some(RamStmt.Seq(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
-        case RamStmt.Par(xs) => 
+        case RamStmt.Par(xs) =>
             Some(RamStmt.Par(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
         case RamStmt.Until(test, body) =>
             match simplifyHelper(nonEmpty, predicates, true, body) {
@@ -131,7 +131,7 @@ mod Fixpoint.Phase.Simplifier {
     ///
     /// Returns `Some(v)` otherwise, where `v` is a simplifcation of `op`.
     ///
-    def simplifyOp(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, seenPreds: Set[RelSym], op: RelOp): Option[RelOp] = 
+    def simplifyOp(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, seenPreds: Set[RelSym], op: RelOp): Option[RelOp] =
         let recurseNewRel = rel -> simplifyOp(nonEmpty, predicates, inUntil, Set.insert(rel, seenPreds));
         let recurse = simplifyOp(nonEmpty, predicates, inUntil, seenPreds);
         match op {
@@ -166,7 +166,7 @@ mod Fixpoint.Phase.Simplifier {
                 // Simplify `if () then body` to `body`.
                 match recurse(then) {
                     case None => None
-                    case Some(newThen) =>  
+                    case Some(newThen) =>
                         if (Vector.isEmpty(newTest))
                             Some(newThen)
                         else
@@ -188,5 +188,5 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Until(_, _) => false
         case RamStmt.Comment(_) => true
     }
-    
+
 }
