@@ -186,24 +186,24 @@ mod Fixpoint.Solver {
     /// Return the provenance of the fact `f` of relation `p` given Datalog program `d`.
     ///
     @Internal
-    pub def provOf(goal: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[List[t]] = match d {
+    pub def provOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[List[t]] = match d {
         case Datalog(_, _) =>
-            provOf(goal, p, runProvSolver(d), mapping)
+            provOf(f, p, runProvSolver(d), mapping)
         case Model(db) =>
         // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
         let fakeRelSym = RelSym.Symbol(p, -1, Relational);
         match Map.get(fakeRelSym, db) {
             case None => None
-            case Some(facts) => match Map.memberOf(goal, facts) {
+            case Some(facts) => match BPlusTree.memberOf(f, facts) {
                 case false => None
-                case true => Some(mapping(p, goal) :: Nil)
+                case true => Some(mapping(p, f) :: Nil)
             }
         }
         case Provenance(_, _) =>
-            Provenance.provQuery(p, goal, d) |>
+            Provenance.provQuery(p, f, d) |>
             Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
         case Join(_, _) =>
-            provOf(goal, p, runProvSolver(d), mapping)
+            provOf(f, p, runProvSolver(d), mapping)
     }
 
     ///

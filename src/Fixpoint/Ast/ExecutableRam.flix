@@ -40,7 +40,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /// The extensible database (EDB) of a program.
     ///
     @Internal
-    pub type alias Facts[r: Region] = BPlusTree[RelSym, Vector[(Vector[Int64], Boxed)], r]
+    pub type alias Facts[r: Region] = Map[RelSym, BPlusTree[Vector[Int64], Boxed, r]]
 
     ///
     /// `ConstWrites` describes constants used for queries and the position they should be

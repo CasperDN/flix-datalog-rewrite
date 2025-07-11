@@ -235,7 +235,7 @@ mod Fixpoint.Predicate {
     ///
     /// Returns a set of full `RelSym` in `db`.
     ///
-    def collectDbPredicates(db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed], Static]): Set[RelSym] =
+    def collectDbPredicates(db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): Set[RelSym] =
         Map.foldLeftWithKey(set -> relSym -> _ -> {
             Set.insert(relSym, set)
         }, Set#{}, db)
