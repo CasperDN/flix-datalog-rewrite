@@ -435,7 +435,6 @@ mod Fixpoint.Boxing {
                 unifyRamIdsStmt(predicates, set, withProv, body);
                 Vector.forEach(unifyRamIdsBool(set), bools)
             case RamStmt.Comment(_) => ()
-            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
         ///
@@ -602,7 +601,6 @@ mod Fixpoint.Boxing {
                 computeMappingStmt(disjoint, map, counter, withProv, body);
                 Vector.forEach(computeMappingBool(disjoint, map, counter), bools)
             case RamStmt.Comment(_) => ()
-            case RamStmt.EstimateJoinSize(_, _, _, _) => ()
         }
 
         ///

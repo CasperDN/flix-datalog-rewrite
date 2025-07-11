@@ -108,12 +108,6 @@ mod Fixpoint.Ast.Ram {
     /// `Until(condition, body)` checks if `condition` is false and repeadetly executes
     /// `body` until `condition` is `true`.
     ///
-    /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` estimates the size
-    /// relation `relSym` based on index `indexUsed` as described by `search` and saves
-    /// the result to `savePosition`. `EstimateJoinSize` statements only exist during the
-    /// join profiling stage during join optimization. For more details see 
-    /// `JoinOptimizer.flix`. 
-    ///
     /// `Comment(string)` is a comment for debugging.
     ///
     @Internal
@@ -125,7 +119,6 @@ mod Fixpoint.Ast.Ram {
         case Seq(Vector[RamStmt])
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
-        case EstimateJoinSize(RelSym, Int32, Int32, Search)
         case Comment(String)
     }
 
@@ -142,8 +135,6 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.EstimateJoinSize(relSym, _, _, attr) =>
-                    "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}})"
                 case RamStmt.Comment(comment) => "/* ${comment} */"
             }
     }

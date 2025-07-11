@@ -191,7 +191,6 @@ mod Fixpoint.Phase.Hoisting {
                 case None => None
                 case Some(v) => Some(RamStmt.Until(test, v))
             }
-        case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
     }
 
@@ -670,7 +669,6 @@ mod Fixpoint.Phase.Hoisting {
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()
-        case RamStmt.EstimateJoinSize(_, _, _, _) => ()
     }
 
     ///

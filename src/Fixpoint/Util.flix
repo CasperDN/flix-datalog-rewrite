@@ -51,7 +51,6 @@ mod Fixpoint.Util {
         case RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> List.append(collectRowVarRelSymStmt(x), acc), Nil, stmts)
         case RamStmt.Until(_, rest) => collectRowVarRelSymStmt(rest)
         case RamStmt.Comment(_) => Nil
-        case RamStmt.EstimateJoinSize(_, _, _, _) => Nil
     }
 
     ///
@@ -99,7 +98,6 @@ mod Fixpoint.Util {
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()
-        case RamStmt.EstimateJoinSize(_, _, _, _) => ()
     }
 
     ///

@@ -56,7 +56,6 @@
         case RamStmt.Seq(stmts) => Vector.map(augmentStmt, stmts) |> RamStmt.Seq
         case RamStmt.Par(stmts) => Vector.map(augmentStmt, stmts) |> RamStmt.Par
         case RamStmt.Until(bools, rest) => RamStmt.Until(bools, augmentStmt(rest))
-        case RamStmt.EstimateJoinSize(_, _, _, _) => stmt
         case RamStmt.Comment(_) => stmt
     }
 

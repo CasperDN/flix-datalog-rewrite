@@ -262,8 +262,6 @@ mod Fixpoint.Phase.Lowering {
                     Vector.filterMap(lowerBool(idToIndex, boxingInfo, indexInfo, (Nil, MutDisjointSets.empty(rc))));
                 let newBody = lowerStmtRec(body);
                 ExecutableRam.RamStmt.Until(newTests, newBody)
-            case Ram.RamStmt.EstimateJoinSize(_, relIndex, estWriteTo, attr) =>
-                ExecutableRam.RamStmt.EstimateJoinSize(relIndex, estWriteTo, attr)
             case Ram.RamStmt.Comment(s) => ExecutableRam.RamStmt.Comment(s)
     }
 
