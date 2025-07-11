@@ -19,29 +19,20 @@
 mod Fixpoint.Solver {
     import dev.flix.runtime.Global
 
+    use Fixpoint.{Boxed, Debugging, Interpreter, Options, Phase, Predicate, PredSymsOf, SubstitutePredSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadTerm}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{Predicates, RelSym, toDenotation}
     use Fixpoint.Ast.ExecutableRam
-    use Fixpoint.Ast.Shared.Denotation
+    use Fixpoint.Ast.Shared.{Denotation, PredSym}
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
-    use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxable.{box, unbox}
-    use Fixpoint.Boxed
     use Fixpoint.BoxingType.Boxing
-    use Fixpoint.Debugging
-    use Fixpoint.Interpreter
     use Fixpoint.Interpreter.Database
-    use Fixpoint.Options
-    use Fixpoint.Phase
-    use Fixpoint.Predicate
-    use Fixpoint.PredSymsOf
-    use Fixpoint.Provenance
-    use Fixpoint.SubstitutePredSym
     use Fixpoint.Util.getOrCrash
 
     ///
@@ -256,9 +247,9 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto1(p: PredSym, ts: f[t1]):
         Datalog \ Foldable.Aef[f] with Order[t1], Foldable[f] =
-        injectIntoX(match (v1) ->
-            box(v1) ::
-            Nil
+        injectIntoX(match (v1) -> Vector#{
+            box(v1)
+        }
         , p, ts)
 
     ///
@@ -270,10 +261,10 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto2(p: PredSym, ts: f[(t1, t2)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Foldable[f] =
-        injectIntoX(match (v1, v2) ->
-            box(v1) ::
-            box(v2) ::
-            Nil
+        injectIntoX(match (v1, v2) -> Vector#{
+            box(v1),
+            box(v2)
+        }
         , p, ts)
 
     ///
@@ -285,11 +276,11 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto3(p: PredSym, ts: f[(t1, t2, t3)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Foldable[f] =
-        injectIntoX(match (v1, v2, v3) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            Nil
+        injectIntoX(match (v1, v2, v3) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3)
+        }
         , p, ts)
 
     ///
@@ -302,12 +293,12 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto4(p: PredSym, ts: f[(t1, t2, t3, t4)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4)
+        }
         , p, ts)
 
     ///
@@ -320,13 +311,13 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto5(p: PredSym, ts: f[(t1, t2, t3, t4, t5)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5)
+        }
         , p, ts)
 
     ///
@@ -339,14 +330,14 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto6(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6)
+        }
         , p, ts)
 
     ///
@@ -359,15 +350,15 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto7(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7)
+        }
         , p, ts)
 
     ///
@@ -381,16 +372,16 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto8(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8)
+        }
         , p, ts)
 
     ///
@@ -404,17 +395,17 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto9(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9)
+        }
         , p, ts)
 
     ///
@@ -430,18 +421,18 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto10(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10)
+        }
         , p, ts)
 
     ///
@@ -457,19 +448,19 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto11(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            box(v11) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10),
+            box(v11)
+        }
         , p, ts)
 
     ///
@@ -485,20 +476,20 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto12(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            box(v11) ::
-            box(v12) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10),
+            box(v11),
+            box(v12)
+        }
         , p, ts)
 
     ///
@@ -514,21 +505,21 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto13(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            box(v11) ::
-            box(v12) ::
-            box(v13) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10),
+            box(v11),
+            box(v12),
+            box(v13)
+        }
         , p, ts)
 
     ///
@@ -544,22 +535,22 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto14(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            box(v11) ::
-            box(v12) ::
-            box(v13) ::
-            box(v14) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10),
+            box(v11),
+            box(v12),
+            box(v13),
+            box(v14)
+        }
         , p, ts)
 
     ///
@@ -575,34 +566,34 @@ mod Fixpoint.Solver {
     @Internal
     pub def injectInto15(p: PredSym, ts: f[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15)]):
         Datalog \ Foldable.Aef[f] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14], Order[t15], Foldable[f] =
-        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) ->
-            box(v1) ::
-            box(v2) ::
-            box(v3) ::
-            box(v4) ::
-            box(v5) ::
-            box(v6) ::
-            box(v7) ::
-            box(v8) ::
-            box(v9) ::
-            box(v10) ::
-            box(v11) ::
-            box(v12) ::
-            box(v13) ::
-            box(v14) ::
-            box(v15) ::
-            Nil
+        injectIntoX(match (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) -> Vector#{
+            box(v1),
+            box(v2),
+            box(v3),
+            box(v4),
+            box(v5),
+            box(v6),
+            box(v7),
+            box(v8),
+            box(v9),
+            box(v10),
+            box(v11),
+            box(v12),
+            box(v13),
+            box(v14),
+            box(v15)
+        }
         , p, ts)
 
-    def injectIntoX(f: t -> List[Boxed] \ ef, p: PredSym, ts: f[t]): Datalog \ (ef + Foldable.Aef[f]) with Foldable[f] =
+    def injectIntoX(f: t -> Vector[Boxed] \ ef, p: PredSym, ts: f[t]): Datalog \ (ef + Foldable.Aef[f]) with Foldable[f] =
         region rc {
             let db = MutMap.empty(rc);
             Foldable.foldLeft(() -> t -> {
                 let vs = f(t);
-                let arity = List.length(vs);
+                let arity = Vector.length(vs);
                 let ramSym = RelSym.Symbol(p, arity, Relational);
                 let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
-                MutMap.put(List.toVector(vs), Reflect.default(), rel)
+                MutMap.put(vs, Reflect.default(), rel)
             }, (), ts);
             toModel(db)
         }
@@ -620,23 +611,20 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts1(p: PredSym, d: Datalog): Vector[t] with Order[t] =
-        let f = terms -> match terms {
-            case hd :: _ =>
-                unbox(hd)
-            case _ => unreachable!()
-        };
-       factsOf(f, p, d)
+        let f = terms -> (
+            unbox(Vector.get(0, terms))
+        );
+        factsOf(f, p, d)
 
     ///
     /// Returns all facts in `d` associated with the predicate symbol `p`.
     ///
     @Internal
     pub def facts2(p: PredSym, d: Datalog): Vector[(t1, t2)] with Order[t1], Order[t2] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: _ =>
-                (unbox(v0), unbox(v1))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -644,11 +632,11 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts3(p: PredSym, d: Datalog): Vector[(t1, t2, t3)] with Order[t1], Order[t2], Order[t3] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -656,11 +644,12 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts4(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4)] with Order[t1], Order[t2], Order[t3], Order[t4] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -668,11 +657,13 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts5(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -680,11 +671,14 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts6(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -692,11 +686,15 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts7(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -704,11 +702,16 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts8(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -716,11 +719,17 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts9(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -728,11 +737,18 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts10(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -740,11 +756,19 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts11(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: v10 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9), unbox(v10))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms)),
+            unbox(Vector.get(10, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -752,11 +776,20 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts12(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: v10 :: v11 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9), unbox(v10), unbox(v11))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms)),
+            unbox(Vector.get(10, terms)),
+            unbox(Vector.get(11, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -764,11 +797,21 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts13(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: v10 :: v11 :: v12 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9), unbox(v10), unbox(v11), unbox(v12))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms)),
+            unbox(Vector.get(10, terms)),
+            unbox(Vector.get(11, terms)),
+            unbox(Vector.get(12, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -776,11 +819,22 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts14(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: v10 :: v11 :: v12 :: v13 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9), unbox(v10), unbox(v11), unbox(v12), unbox(v13))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms)),
+            unbox(Vector.get(10, terms)),
+            unbox(Vector.get(11, terms)),
+            unbox(Vector.get(12, terms)),
+            unbox(Vector.get(13, terms))
+        );
         factsOf(f, p, d)
 
     ///
@@ -788,24 +842,36 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def facts15(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14], Order[t15] =
-        let f = terms -> match terms {
-            case v0 :: v1 :: v2 :: v3 :: v4 :: v5 :: v6 :: v7 :: v8 :: v9 :: v10 :: v11 :: v12 :: v13 :: v14 :: _ =>
-                (unbox(v0), unbox(v1), unbox(v2), unbox(v3), unbox(v4), unbox(v5), unbox(v6), unbox(v7), unbox(v8), unbox(v9), unbox(v10), unbox(v11), unbox(v12), unbox(v13), unbox(v14))
-            case _ => unreachable!()
-        };
+        let f = terms -> (
+            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(1, terms)),
+            unbox(Vector.get(2, terms)),
+            unbox(Vector.get(3, terms)),
+            unbox(Vector.get(4, terms)),
+            unbox(Vector.get(5, terms)),
+            unbox(Vector.get(6, terms)),
+            unbox(Vector.get(7, terms)),
+            unbox(Vector.get(8, terms)),
+            unbox(Vector.get(9, terms)),
+            unbox(Vector.get(10, terms)),
+            unbox(Vector.get(11, terms)),
+            unbox(Vector.get(12, terms)),
+            unbox(Vector.get(13, terms)),
+            unbox(Vector.get(14, terms))
+        );
         factsOf(f, p, d)
 
     ///
     /// Returns an array of facts associated with the given predicate symbol `p` in the given Datalog program `d`.
     ///
-    def factsOf(f: List[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef = match d {
+    def factsOf(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef = match d {
         case Datalog(_, cs) => region rc {
             let pFacts = MutList.empty(rc);
             Vector.forEach(c -> match c {
                 case Constraint(HeadAtom(headPred, _, terms), body) =>
                     if (headPred == p and Vector.isEmpty(body))
                         let vs = Vector.map(headTermValue, terms);
-                        MutList.push(f(Vector.toList(vs)), pFacts)
+                        MutList.push(f(vs), pFacts)
                     else ()
                 case _ => ()
             }, cs);
@@ -822,17 +888,19 @@ mod Fixpoint.Solver {
             };
             Map.rangeQueryWith(qquery, ramSym -> rel -> match toDenotation(ramSym) {
                 case Relational =>
-                    Map.forEach((tuple, _) -> MutList.push(f(Vector.toList(tuple)), pFacts), rel)
-                case Latticenal(_, _, _, _) =>
+                    Map.forEach((tuple, _) -> MutList.push(f(tuple), pFacts), rel)
+                case Latticenal(bot, leq, _, _) =>
                     Map.forEach((tuple, lat) -> {
-                        let it = Iterator.range(rc, 0, Vector.length(tuple) + 1);
-                        let vs = it |> Iterator.map(i -> {
-                            if (i < Vector.length(tuple))
-                                Vector.get(i, tuple)
-                            else
-                                lat
-                        }) |> Iterator.toList;
-                        MutList.push(f(vs), pFacts)
+                        if (not leq(lat, bot)) {
+                            let arity = Vector.length(tuple);
+                            let vs = Vector.init(i -> {
+                                if (i < arity)
+                                    Vector.get(i, tuple)
+                                else 
+                                    lat
+                            }, arity + 1)
+                            MutList.push(f(vs), pFacts)
+                        } else ()
                     }, rel)
             }, db);
             pFacts |> MutList.toVector
@@ -840,7 +908,7 @@ mod Fixpoint.Solver {
         case Join(d1, d2) => Vector.append(factsOf(f, p, d1), factsOf(f, p, d2))
         case Provenance(_, db) => match Map.get(p, db) {
             case None => Vector#{}
-            case Some(facts) => facts |> Map.keysOf |> Set.toVector |> Vector.map(Vector.toList >> f)
+            case Some(facts) => facts |> Map.keysOf |> Set.toVector |> Vector.map(f)
         }
     }
 
