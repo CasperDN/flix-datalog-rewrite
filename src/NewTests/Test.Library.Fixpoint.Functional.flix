@@ -42,7 +42,7 @@ mod Test.Library.Fixpoint.Functional {
             2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 
             43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
         };
-        query p select (x) from Primes(x) |> Vector.sort == res
+        res `Assert.eq` query p select (x) from Primes(x)
     }
 
     @Test
@@ -68,7 +68,7 @@ mod Test.Library.Fixpoint.Functional {
             787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 
             859, 863, 877, 881, 883, 887
         };
-        query startinPrimes, p select (x) from PrimesUntil(x) |> Vector.sort == res
+        res `Assert.eq` query startinPrimes, p select (x) from PrimesUntil(x)
     }
 
     @Test
@@ -81,7 +81,7 @@ mod Test.Library.Fixpoint.Functional {
             Succ(p) :- Nat(x), let p = Vector#{x + 1}, End(y), if(p <= y).
         };
         let res = Vector#{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-        query p select x from Nat(x) |> Vector.sort == res
+        res `Assert.eq` query p select x from Nat(x)
     }
 
     @Test
@@ -94,7 +94,19 @@ mod Test.Library.Fixpoint.Functional {
             Pre(p) :- Nat(x), let p = Vector#{x - 1}, End(y), if(p >= y).
         };
         let res = Vector#{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-        query p select x from Nat(x) |> Vector.sort == res
+        res `Assert.eq` query p select x from Nat(x)
     }
 
+    @Test
+    def testFunctional05(): Bool = {
+        let p = #{
+            Start(0).
+            End(10).
+            Start2(10).
+            End2(20).
+            Ranges(p, q) :- Start(x), End(y), let p = Vector.range(x, y), Start2(a), End2(b), let q = Vector.range(a, b).
+        };
+        let res = Vector.range(0, 10) |> Vector.flatMap(x -> Vector.range(10, 20) |> Vector.map(y -> (x, y))) |> Vector.sort;
+        res `Assert.eq` query p select (x, y) from Ranges(x, y)
+    }
 }

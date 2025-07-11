@@ -29,7 +29,7 @@ mod Test.Library.Fixpoint.Application {
             R(x, x + 1) :- P(x).
         };
         let res = tuples |> Vector.map(x -> (x, x + 1));
-        query f, r select (x, y) from R(x, y) |> Vector.sort == res
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
     @Test
@@ -40,11 +40,11 @@ mod Test.Library.Fixpoint.Application {
             Succ(0).
             Succ(x + 1) :- Succ(x), if(x < n)
         };
-        query r select x from Succ(x) |> Vector.sort == res
+        res `Assert.eq` query r select x from Succ(x)
     }
 
     @Test
-    pub def testApplicationOne03(): Bool = {
+    def testApplicationOne03(): Bool = {
         let g = x -> {
             let fizz = if (Int32.modulo(x, 3) == 0) "Fizz" else "";
             let buzz = if (Int32.modulo(x, 5) == 0) "Buzz" else "";
@@ -63,8 +63,9 @@ mod Test.Library.Fixpoint.Application {
             "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz",
             "11", "Fizz", "13", "14", "FizzBuzz", "16", "17", "Fizz", "19", "Buzz"
         };
+        res `Assert.eq`
         query f, r select (x, y) from FizzBuzz(x, y) |> 
-            Vector.sort |> Vector.unzip |> snd == res
+            Vector.unzip |> snd
     }
     
     /////////////////////////////////////////////////////////////////////////////
@@ -80,7 +81,7 @@ mod Test.Library.Fixpoint.Application {
             R(x, x + y) :- P(x), Q(y).
         };
         let res = tuples |> Vector.map(x -> (x, x + 1));
-        query f, r select (x, y) from R(x, y) |> Vector.sort == res
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
     @Test
@@ -92,7 +93,19 @@ mod Test.Library.Fixpoint.Application {
             SuccTwo(0).
             SuccTwo(x + y) :- SuccTwo(x), Two(y), if(x < n)
         };
-        query r select x from SuccTwo(x) |> Vector.sort == res
+        res `Assert.eq` query r select x from SuccTwo(x)
+    }
+
+    @Test
+    def testApplicationTwo03(): Bool = {
+        let tuples = Vector.range(0, 50) |> Vector.map(Int32.toString);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q("1").
+            R(a, a + b) :- P(a), Q(b).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + "1")) |> Vector.sort;
+        Assert.eq(res, query f, r select (x, y) from R(x, y))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -100,7 +113,7 @@ mod Test.Library.Fixpoint.Application {
     /////////////////////////////////////////////////////////////////////////////
 
     @Test
-    pub def testApplicationThree01(): Bool = {
+    def testApplicationThree01(): Bool = {
         let tuples = Vector.range(0, 50);
         let f = inject tuples into P/1;
         let r = #{
@@ -109,8 +122,87 @@ mod Test.Library.Fixpoint.Application {
             R(x, x + y + z) :- P(x), Q(y), S(z).
         };
         let res = tuples |> Vector.map(x -> (x, x + 1 + 2));
-        query f, r select (x, y) from R(x, y) |> Vector.sort == res
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
-    
+    @Test
+    def testApplicationThree02(): Bool = {
+        let tuples = Vector.range(0, 50) |> Vector.map(Int32.toString);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q("1").
+            S("2").
+            R(a, a + b + c) :- P(a), Q(b), S(c).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + "1" + "2")) |> Vector.sort;
+        Assert.eq(res, query f, r select (x, y) from R(x, y))
+    }
+
+    /////////////////////////////////////////////////////////////////////////////
+    // Tests with application of 4 arguments                                   //
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testApplicationFour01(): Bool = {
+        let tuples = Vector.range(0, 50);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q(1).
+            S(2).
+            T(3).
+            R(a, a + b + c + d) :- P(a), Q(b), S(c), T(d).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + 1 + 2 + 3));
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
+    }
+
+    @Test
+    def testApplicationFour02(): Bool = {
+        let tuples = Vector.range(0, 50) |> Vector.map(Int32.toString);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q("1").
+            S("2").
+            T("3").
+            R(a, a + b + c + d) :- P(a), Q(b), S(c), T(d).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + "1" + "2" + "3")) |> Vector.sort;
+        Assert.eq(res, query f, r select (x, y) from R(x, y))
+    }
+
+    /////////////////////////////////////////////////////////////////////////////
+    // Tests with application of 4 arguments                                   //
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testApplicationFive01(): Bool = {
+        let tuples = Vector.range(0, 50);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q(1).
+            S(2).
+            T(3).
+            U(4).
+            R(a, a + b + c + d + e) :- P(a), Q(b), S(c), T(d), U(e).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + 1 + 2 + 3 + 4));
+        res `Assert.eq` query f, r select (x, y) from R(x, y)
+    }
+
+
+    @Test
+    def testApplicationFive02(): Bool = {
+        let tuples = Vector.range(0, 50) |> Vector.map(Int32.toString);
+        let f = inject tuples into P/1;
+        let r = #{
+            Q("1").
+            S("2").
+            T("3").
+            U("4").
+            R(a, a + b + c + d + e) :- P(a), Q(b), S(c), T(d), U(e).
+        };
+        let res = tuples |> Vector.map(x -> (x, x + "1" + "2" + "3" + "4")) |> Vector.sort;
+        Assert.eq(res, query f, r select (x, y) from R(x, y))
+    }
+
 }

@@ -72,5 +72,4 @@ mod Test.Library.Fixpoint.Phase.JoinOptimizer {
             ps1 == ps2
         )
     }
-
 }
