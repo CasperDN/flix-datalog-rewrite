@@ -114,7 +114,7 @@ mod Fixpoint.Phase.Compiler {
 
         let newFacts = MutMap.empty(rc);
 
-        let _ = facts |> Vector.forEach(constraint -> {
+        facts |> Vector.forEach(constraint -> {
             match constraint {
                 case Constraint(headAtom, _) =>
                     let HeadAtom(_, den, headTerms) = headAtom;
@@ -143,8 +143,7 @@ mod Fixpoint.Phase.Compiler {
                     // }
             }
         });
-        ???
-        // (db, newFacts)
+        (db, MutMap.toMap(newFacts))
     }
 
 

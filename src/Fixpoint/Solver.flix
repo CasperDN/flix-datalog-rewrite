@@ -21,7 +21,7 @@ mod Fixpoint.Solver {
 
     use Fixpoint.{Boxed, Debugging, Interpreter, Options, Phase, Predicate, PredSymsOf, SubstitutePredSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadTerm}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Join, Model, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Ram
@@ -89,7 +89,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: Ram.Facts): (ExecutableRam.RamProgram, Boxing[rc]) \ rc = {
+        def compiler(cs: Datalog, db: Ram.Facts): (ExecutableRam.RamProgram[rc], Boxing[rc]) \ rc = {
             Phase.Compiler.compile(cs, db, stf) |>
             Debugging.notifyPreLowering("Compiler") |>
             Phase.Simplifier.simplifyProgram |>
@@ -161,17 +161,19 @@ mod Fixpoint.Solver {
         case (_, Provenance(_, _)) =>  union(d1, provenanceToModel(d2))
     }
 
-    def provenanceToModel(d: Datalog): Datalog = match d {
+    def provenanceToModel(d: Datalog): Datalog = unchecked_cast(({ match d {
         case Provenance(_, facts) =>
-            Map.foldLeftWithKey(acc -> predSym -> factMap -> match Map.find(_ -> _ -> true, factMap) {
+            Map.foldLeftWithKey(acc -> predSym -> factMap -> match BPlusTree.minimumKey(factMap) {
                 case None => acc
                 case Some((v, _)) =>
+                    let newTree = BPlusTree.empty(Static);
                     let relSym = RelSym.Symbol(predSym, Vector.length(v), Relational);
-                    let innerMap = Map.map(_ -> Boxed.NoValue, factMap);
-                    Map.insert(relSym, innerMap, acc)
+                    BPlusTree.forEach(k -> _ -> BPlusTree.put(k, Boxed.NoValue, newTree), factMap);
+                    Map.insert(relSym, newTree, acc)
             }, Map#{}, facts) |> Model
         case _ => unreachable!()
-    }
+    }}: _ \ IO) as _ \ {})
+
 
     ///
     /// Return the provenance of the fact `f` of relation `p` given Datalog program `d`.
@@ -180,18 +182,19 @@ mod Fixpoint.Solver {
     pub def provOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[List[t]] = match d {
         case Datalog(_, _) =>
             provOf(f, p, runProvSolver(d), mapping)
-        case Model(db) =>
-        // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
-        let fakeRelSym = RelSym.Symbol(p, -1, Relational);
-        match Map.get(fakeRelSym, db) {
-            case None => None
-            case Some(facts) => match BPlusTree.memberOf(f, facts) {
-                case false => None
-                case true => Some(mapping(p, f) :: Nil)
+        case Model(db) => unchecked_cast(({
+            // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
+            let fakeRelSym = RelSym.Symbol(p, -1, Relational);
+            match Map.get(fakeRelSym, db) {
+                case None => None
+                case Some(facts) => match BPlusTree.memberOf(f, facts) {
+                    case false => None
+                    case true => Some(mapping(p, f) :: Nil)
+                }
             }
-        }
+        }: _ \ IO) as _ \ {})
         case Provenance(_, _) =>
-            Provenance.provQuery(p, f, d) |>
+            Fixpoint.Provenance.provQuery(p, f, d) |>
             Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
         case Join(_, _) =>
             provOf(f, p, runProvSolver(d), mapping)
@@ -597,17 +600,18 @@ mod Fixpoint.Solver {
         , p, ts)
 
     def injectIntoX(f: t -> Vector[Boxed] \ ef, p: PredSym, ts: f[t]): Datalog \ (ef + Foldable.Aef[f]) with Foldable[f] =
-        region rc {
+        unchecked_cast(({region rc {
             let db = MutMap.empty(rc);
             Foldable.foldLeft(() -> t -> {
                 let vs = f(t);
                 let arity = Vector.length(vs);
                 let ramSym = RelSym.Symbol(p, arity, Relational);
-                let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
-                MutMap.put(vs, Reflect.default(), rel)
+                let rel = MutMap.getOrElsePut(ramSym, BPlusTree.empty(Static), db);
+                BPlusTree.put(vs, Boxed.NoValue, rel)
             }, (), ts);
             toModel(db)
         }
+    }: _ \ ef + Foldable.Aef[f] + IO) as _ \ ef + Foldable.Aef[f])
 
     ///
     /// Returns all facts in `d` associated with the predicate symbol `p`.
@@ -875,7 +879,10 @@ mod Fixpoint.Solver {
     ///
     /// Returns an array of facts associated with the given predicate symbol `p` in the given Datalog program `d`.
     ///
-    def factsOf(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef = match d {
+    def factsOf(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef =
+        unchecked_cast((factsOfInternal(f, p, d): _ \ ef + IO) as _ \ ef)
+
+    def factsOfInternal(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef + IO = match d {
         case Datalog(_, cs) => region rc {
             let pFacts = MutList.empty(rc);
             Vector.forEach(c -> match c {
@@ -897,11 +904,11 @@ mod Fixpoint.Solver {
                 }
                 case _ => Comparison.LessThan
             };
-            Map.rangeQueryWith(qquery, ramSym -> rel -> match toDenotation(ramSym) {
+            db |> Map.rangeQueryWith(qquery, ramSym -> rel -> match toDenotation(ramSym) {
                 case Relational =>
-                    Map.forEach((tuple, _) -> MutList.push(f(tuple), pFacts), rel)
+                    BPlusTree.forEach(tuple -> _ -> MutList.push(f(tuple), pFacts), rel)
                 case Latticenal(bot, leq, _, _) =>
-                    Map.forEach((tuple, lat) -> {
+                    BPlusTree.forEach(tuple -> lat -> {
                         if (not leq(lat, bot)) {
                             let arity = Vector.length(tuple);
                             let vs = Vector.init(i -> {
@@ -909,17 +916,21 @@ mod Fixpoint.Solver {
                                     Vector.get(i, tuple)
                                 else 
                                     lat
-                            }, arity + 1)
+                            }, arity + 1);
                             MutList.push(f(vs), pFacts)
                         } else ()
                     }, rel)
-            }, db);
+            });
             pFacts |> MutList.toVector
         }
         case Join(d1, d2) => Vector.append(factsOf(f, p, d1), factsOf(f, p, d2))
         case Provenance(_, db) => match Map.get(p, db) {
             case None => Vector#{}
-            case Some(facts) => facts |> Map.keysOf |> Set.toVector |> Vector.map(f)
+            case Some(facts) => region rc {
+                let acc = MutList.empty(rc);
+                facts |> BPlusTree.forEach(k -> _ -> MutList.push(k |> f, acc));
+                unchecked_cast((MutList.toArray(rc, acc): Array[t, rc]) as Vector[t])
+            }
         }
     }
 
@@ -936,41 +947,42 @@ mod Fixpoint.Solver {
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
-    def toModelOnlyFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r =
+    def toModelOnlyFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r = unchecked_cast(({
         let (db, meta) = dbMeta;
         let dbOnlyFullRels = MutMap.toMap(db) |>
-            Map.map(MutMap.toMap) |>
             Map.filterWithKey(k -> facts -> match k {
-                case RelSym.Symbol(PredSym(_, id), _, _) => Predicate.isFullId(id, meta) and Map.nonEmpty(facts)
+                case RelSym.Symbol(PredSym(_, id), _, _) => Predicate.isFullId(id, meta) and not BPlusTree.isEmpty(facts)
             });
         if(withProv) {
             toProvenance(rules, dbOnlyFullRels)
         } else {
             Model(dbOnlyFullRels)
         }
+    }: _ \ IO + r) as _ \ r)
 
     ///
     /// Returns the given database `db` augmented with provenance as a Provenance value.
     ///
-    def toProvenance(rules: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Datalog =
+    def toProvenance(rules: Vector[Constraint], db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): Datalog = unchecked_cast(({
         let res = db |>
         Map.foldLeftWithKey(acc -> match RelSym.Symbol(predSym, _, _) -> facts -> {
-            let len = Vector.length(fst(getOrCrash(Map.find(_ -> _ -> true, facts))));
-            let compiledFacts = facts |> Map.foldLeftWithKey(innerAcc -> fact -> _ -> {
+            let len = Vector.length(fst(getOrCrash(BPlusTree.minimumKey(facts))));
+            let newTree = BPlusTree.empty(Static);
+            facts |> BPlusTree.forEach(fact -> _ -> {
                 let (rawFact, annotation) = Vector.splitAt(len - 2, fact);
-                Map.insert(rawFact, (unbox(Vector.get(0, annotation)), getOrCrash(Int64.tryToInt32(unbox(Vector.get(1, annotation))))), innerAcc)
-            }, Map#{});
-            Map.insert(predSym, compiledFacts, acc)
+                newTree |> BPlusTree.put(rawFact, (unbox(Vector.get(0, annotation)), getOrCrash(Int64.tryToInt32(unbox(Vector.get(1, annotation))))))
+            });
+            Map.insert(predSym, newTree, acc)
         }, Map#{}) |>
         Provenance(rules);
         res
+    }: _ \ IO) as _ \ {})
 
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
     def toModel(db: Database[r]): Datalog \ r =
         MutMap.toMap(db) |>
-        Map.map(MutMap.toMap) |>
         Model
 
 }
