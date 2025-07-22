@@ -21,7 +21,7 @@ mod Fixpoint.Solver {
 
     use Fixpoint.{Boxed, Debugging, Interpreter, Options, Phase, Predicate, PredSymsOf, SubstitutePredSym}
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadTerm}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Join, Model, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Ram
@@ -180,7 +180,7 @@ mod Fixpoint.Solver {
             }
         }
         case Provenance(_, _) =>
-            Provenance.provQuery(p, goal, d) |>
+            Fixpoint.Provenance.provQuery(p, goal, d) |>
             Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
         case Join(_, _) =>
             provOf(goal, p, runProvSolver(d), mapping)
@@ -898,7 +898,7 @@ mod Fixpoint.Solver {
                                     Vector.get(i, tuple)
                                 else 
                                     lat
-                            }, arity + 1)
+                            }, arity + 1);
                             MutList.push(f(vs), pFacts)
                         } else ()
                     }, rel)
