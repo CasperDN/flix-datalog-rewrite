@@ -16,19 +16,19 @@
  */
 
 ///
-/// `PrecedenceGraph` contains a graph module which is used to compute a stratification 
+/// `PrecedenceGraph` contains a graph module which is used to compute a stratification
 /// of a Datalog program. The stratification is based on a topological sort
 /// of the strongly connected components (SCC) of the precedence graph.
 ///
 /// The topological sort describes is a legal stratification of the Datalog program.
 ///
-/// A `PseudoStratum` is a group of mutually independent, consecutive strata, each 
+/// A `PseudoStratum` is a group of mutually independent, consecutive strata, each
 /// represented by a unique SCC in the topological order.
 ///
 mod Fixpoint.PrecedenceGraph {
     @Internal
     pub type alias Vertex = Int32
-    
+
     ///
     /// A `PseudoStratum` is an unordered list of strata without dependencies between them.
     ///
@@ -48,7 +48,7 @@ mod Fixpoint.PrecedenceGraph {
     /// would produce three SCCs: `{2, 3}`, `{1}`, and `{4}`. A topological sort of the
     /// condensation graph gives the ordering `[{1}, {4}, {2, 3}]`. Since the components
     /// `{1}` and `{4}` have no dependencies between them and are adjacent in the ordering,
-    /// they are merged into the same pseudostratum `[{1}, {4}]`. Thus, the list of 
+    /// they are merged into the same pseudostratum `[{1}, {4}]`. Thus, the list of
     /// pseudostrata is `[[{1}, {4}], {2, 3}]`.
     ///
     @Internal
@@ -57,7 +57,7 @@ mod Fixpoint.PrecedenceGraph {
         let pseudoStratums = MutList.empty(rc);
         def loop(s1, list) = match list {
             case s2 :: rest =>
-                let mergeable = s1 |> 
+                let mergeable = s1 |>
                     List.forAll(
                         Set.forAll(u -> s2 |> Set.forAll(v -> not MutGraph.hasEdge(u, v, g)))
                     );
@@ -107,7 +107,7 @@ mod Fixpoint.PrecedenceGraph {
         /// Returns an empty graph with no vertices or edges.
         ///
         @Internal
-        pub def empty(rc: Region[r]): MutGraph[r] \ r = 
+        pub def empty(rc: Region[r]): MutGraph[r] \ r =
             new MutGraph @ rc {
                 vertices = MutSet.empty(rc),
                 adjList = MutMap.empty(rc)
@@ -117,9 +117,9 @@ mod Fixpoint.PrecedenceGraph {
         /// Returns `true` if `g` contains the edge `(u, v)`.
         ///
         @Internal
-        pub def hasEdge(u: Vertex, v: Vertex, g: MutGraph[r]): Bool \ r = 
+        pub def hasEdge(u: Vertex, v: Vertex, g: MutGraph[r]): Bool \ r =
             g->adjList |> MutMap.getWithDefault(u, Set.empty()) |> Set.memberOf(v)
-        
+
         ///
         /// Returns the vertices of `g`.
         ///
@@ -128,8 +128,8 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// Returns a `List` of the neighbors of `u` in `g`.
         ///
-        def getNeighbors(u: Vertex, g: MutGraph[r]): Set[Vertex] \ r = 
-            MutMap.getWithDefault(u, Set.empty(), g->adjList) 
+        def getNeighbors(u: Vertex, g: MutGraph[r]): Set[Vertex] \ r =
+            MutMap.getWithDefault(u, Set.empty(), g->adjList)
 
         ///
         /// Returns the number of vertices in `g`. `MutGraph`s should start with vertex 0.
@@ -150,9 +150,9 @@ mod Fixpoint.PrecedenceGraph {
             MutSet.add(v, g->vertices);
             MutSet.add(u, g->vertices);
             let neighbors = MutMap.getWithDefault(u, Set.empty(), g->adjList);
-            if (Set.memberOf(v, neighbors)) 
+            if (Set.memberOf(v, neighbors))
                 ()
-            else 
+            else
                 MutMap.put(u, Set.insert(v, neighbors), g->adjList)
         }
 
@@ -166,15 +166,15 @@ mod Fixpoint.PrecedenceGraph {
         /// Returns a string representation of `g`.
         ///
         @Internal
-        pub def toString(g: MutGraph[r]): String \ r = 
-            let edges = g->adjList |> 
-                MutMap.joinWith(u -> vSet -> 
+        pub def toString(g: MutGraph[r]): String \ r =
+            let edges = g->adjList |>
+                MutMap.joinWith(u -> vSet ->
                     Set.joinWith(v -> "\n  ${u} -> ${v}", ",", vSet), ","
                 );
             "MutGraph(${edges})"
 
         ///
-        /// Returns the strongly connected components of `g` in a topologically sorted 
+        /// Returns the strongly connected components of `g` in a topologically sorted
         /// order where the SCC's are represented by the set of vertices in them.
         ///
         @Internal
@@ -183,16 +183,16 @@ mod Fixpoint.PrecedenceGraph {
             let condensation = empty(rc);
             let componentMap: MutMap[Vertex, Set[Vertex], rc] = MutMap.empty(rc);
             let rootMap: MutMap[Vertex, Vertex, rc] = MutMap.empty(rc);
-            components |> 
-            List.forEachWithIndex(i -> scc -> 
+            components |>
+            List.forEachWithIndex(i -> scc ->
                 foreach (partOfComp <- scc) {
                     MutMap.put(partOfComp, i, rootMap);
                     MutMap.put(partOfComp, scc, componentMap)
                 }
             );
-            g->adjList |> MutMap.forEach(u -> neighbors -> 
-                neighbors |> 
-                Set.forEach(v -> 
+            g->adjList |> MutMap.forEach(u -> neighbors ->
+                neighbors |>
+                Set.forEach(v ->
                     let uSCC = MutMap.get(u, rootMap) |> getOrCrash;
                     let vSCC = MutMap.get(v, rootMap) |> getOrCrash;
                     if (uSCC != vSCC) {
@@ -200,13 +200,13 @@ mod Fixpoint.PrecedenceGraph {
                     } else ()
                 )
             );
-            let inverseRootMap = MutMap.toMap(rootMap) |> 
-                Map.invert |> 
+            let inverseRootMap = MutMap.toMap(rootMap) |>
+                Map.invert |>
                 // We are guaranteed to have singleton sets
                 Map.map(Set.find(_ -> true) >> getOrCrash);
-            topologicalSort(condensation) |> 
-            List.map(u -> componentMap |> 
-                MutMap.get(inverseRootMap |> 
+            topologicalSort(condensation) |>
+            List.map(u -> componentMap |>
+                MutMap.get(inverseRootMap |>
                     Map.get(u) |> getOrCrash
                 ) |> getOrCrash
             )
@@ -214,11 +214,11 @@ mod Fixpoint.PrecedenceGraph {
 
         ///
         /// Return a `List` of the vertices of `g` in a topologically sorted order. A
-        /// topological sort is a linear ordering of a directed acyclic graph such that 
+        /// topological sort is a linear ordering of a directed acyclic graph such that
         /// for every edge `(u, v)`, vertex `u` comes before vertex `v` in the ordering.
         ///
         def topologicalSort(g: MutGraph[r]): List[Vertex] \ r = region rc {
-            let sorted = MutList.empty(rc);           
+            let sorted = MutList.empty(rc);
             let colors = Array.repeat(rc, numberOfVertices(g), Color.White);
             getVertices(g) |>
             MutSet.forEach(u -> {
@@ -230,19 +230,19 @@ mod Fixpoint.PrecedenceGraph {
         }
 
         ///
-        /// Pushes undiscovered vertices reachable from `u` of graph `g` in reverse 
+        /// Pushes undiscovered vertices reachable from `u` of graph `g` in reverse
         /// topological to `sorted`.
         ///
         def topologicalSortVisit(
-            g: MutGraph[r1], 
-            colors: Array[Color, r0], 
-            sorted: MutList[Vertex, r0], 
+            g: MutGraph[r1],
+            colors: Array[Color, r0],
+            sorted: MutList[Vertex, r0],
             u: Vertex
         ): Unit \ r0 + r1 = {
             Array.put(Color.Gray, u, colors);
             getNeighbors(u, g) |>
             Set.forEach(v -> {
-                if (Array.get(v, colors) == Color.White) 
+                if (Array.get(v, colors) == Color.White)
                     topologicalSortVisit(g, colors, sorted, v)
                 else if (Array.get(v, colors) == Color.Gray)
                     bug!("In Fixpoint.PrecedenceGraph.MutGraph.topologicalSortVisit: Cycle detected")
@@ -251,7 +251,7 @@ mod Fixpoint.PrecedenceGraph {
             Array.put(Color.Black, u, colors);
             MutList.push(u, sorted)
         }
-        
+
         ///
         /// Returns a `List` of the strongly conected components of `g`.
         ///
@@ -264,7 +264,7 @@ mod Fixpoint.PrecedenceGraph {
             let components = MutList.empty(rc);
 
             let time = Counter.fresh(rc);
-            getVertices(g) |> 
+            getVertices(g) |>
             MutSet.forEach(u ->
                 if (Array.get(u, disc) == -1) {
                     stronglyConnectedComponentsVisit(
@@ -280,16 +280,16 @@ mod Fixpoint.PrecedenceGraph {
         ///
         /// `g` is the graph. `u` is the current vertex under consideration. `time` is
         /// used to assign discovery times. `onStack[u]` is true iff `u` has been met but
-        /// has not yet been assigned to a component. Similarly, `stack` contains the 
+        /// has not yet been assigned to a component. Similarly, `stack` contains the
         /// vertices that have been met, but not assigned a component in order of discovery.
-        /// `disc[u]` is the time `u` was discovered, initialized to `-1`. `low[u]` is 
+        /// `disc[u]` is the time `u` was discovered, initialized to `-1`. `low[u]` is
         /// assigned the lowest discovery time reachable from `u`, for vertices that were
         /// undiscovered when met as a neighbor of `u`, or still on the stack when
         /// considered as a neighbor of `u`.
         ///
         /// The following invariant is kept: When all calls to neighbors of `u` are
         /// finished everything discovered after `u` and still on `stack` is in the same
-        /// SCC as `u`. Furthermore `low[u]` will be `disc[u]` iff `u` was the first vertex 
+        /// SCC as `u`. Furthermore `low[u]` will be `disc[u]` iff `u` was the first vertex
         /// discovered in `u`'s SCC.
         ///
         /// `stronglyConnectedComponentsVisit(..., u)` will first handle all SCC reachable
@@ -334,12 +334,12 @@ mod Fixpoint.PrecedenceGraph {
                     def loop() = {
                         let w = match MutList.pop(stack) {
                             case Some(v) => v
-                            case None => 
+                            case None =>
                                 bug!("In Fixpoint.PrecedenceGraph.MutGraph: stack cannot be empty")
                         };
                         Array.put(false, w, onStack);
                         MutSet.add(w, mutSet);
-                        if (u != w) loop() 
+                        if (u != w) loop()
                         else ()
                     };
                     loop();

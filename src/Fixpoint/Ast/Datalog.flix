@@ -37,7 +37,7 @@ mod Fixpoint.Ast.Datalog {
     /// `Datalog(facts, rules)` is a Datalog program where `facts` and `rules` are the
     /// facts and rules of the program, respectively.
     ///
-    /// `Model(factsMap)` is a 
+    /// `Model(factsMap)` is a model mapping `RelSym` the their `IDB`/facts.
     ///
     /// `Join(p1, p2)` is the combination of Datalog programs `p1` and `p2`.
     ///
@@ -85,7 +85,7 @@ mod Fixpoint.Ast.Datalog {
         pub def toString(cs: Datalog): String = match cs {
             case Datalog.Datalog(facts, rules) => region rc {
                 if(not Fixpoint.Options.enableDebugPrintFacts()) {
-                    "Printing facts disabled ${String.lineSeparator()}" + 
+                    "Printing facts disabled ${String.lineSeparator()}" +
                     Vector.iterator(rc, rules)
                         |> Iterator.join(String.lineSeparator())
                 } else {
@@ -99,7 +99,7 @@ mod Fixpoint.Ast.Datalog {
                     "Printing facts disabled."
                 } else {
                    unchecked_cast(({
-                        let builder = StringBuilder.empty(rc);                        
+                        let builder = StringBuilder.empty(rc);
                         db |> Map.forEach(relSym -> innerMap ->
                             innerMap |> BPlusTree.forEach(tuple -> lat -> {
                                 let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
@@ -134,7 +134,7 @@ mod Fixpoint.Ast.Datalog {
             }
         }
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // Constraint                                                              //
     /////////////////////////////////////////////////////////////////////////////

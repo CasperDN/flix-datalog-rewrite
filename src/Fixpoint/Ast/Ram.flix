@@ -29,7 +29,7 @@ mod Fixpoint.Ast.Ram {
 
     ///
     /// A `RamProgram` represents a compiled Datalog program.
-    /// 
+    ///
     @Internal
     pub enum RamProgram {
         case Program(RamStmt, FactTuple, Predicates, IndexInformation)
@@ -61,7 +61,7 @@ mod Fixpoint.Ast.Ram {
     /// for efficient retrieval in range queries.
     ///
     /// For example, the Datalog rule
-    /// 
+    ///
     /// A(x) :- B(x), C(_, _, x).
     ///
     /// produces the search `Vector#{2, 0, 1}` for relation `C`. This means the tuples in
@@ -149,7 +149,7 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
-    
+
     ///
     /// `Search(rv, relSym, body)` iterates through the facts in relation `relSym`, saving
     /// them as RowVar `rv` and executes `body`.
@@ -213,7 +213,7 @@ mod Fixpoint.Ast.Ram {
     /// `term` must be a Meet or RowLoad of a lattice var.
     ///
     /// `Leq(const, rv, relSym)`: True if `const` is less than the lattice element of `rv`.
-    /// 
+    ///
     /// `Eq(term1, term2)`: True if `term1 == term2`.
     ///
     /// `Guard1(f, term1)`: True if `f(term1) == true`.
@@ -325,7 +325,7 @@ mod Fixpoint.Ast.Ram {
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
             case RamTerm.Lit(v, _) => "%{v}"
-            case RamTerm.ProvMax(loads) => 
+            case RamTerm.ProvMax(loads) =>
                 let loadsStr = Vector.joinWith(match (rv, i) -> "${rv}[${i}]", ", ", loads);
                 "max(${loadsStr})"
             case RamTerm.RowLoad(var, index, _) => "${var}[${index}]"
@@ -449,7 +449,7 @@ mod Fixpoint.Ast.Ram {
             case (RowVar.Named(i1), RowVar.Named(i2)) => i1 <=> i2
         }
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // RamId                                                                   //
     /////////////////////////////////////////////////////////////////////////////
@@ -485,7 +485,7 @@ mod Fixpoint.Ast.Ram {
             case (RamId.RelPos(i0, i1)) => "RelPos[${i0}, ${i1}]"
         }
     }
-    
+
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {
             case (RamId.Id(i1), RamId.Id(i2)) => i1 == i2

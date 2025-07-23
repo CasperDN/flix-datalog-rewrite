@@ -103,19 +103,19 @@ mod Fixpoint.Solver {
         };
         let model = match d {
             case Datalog(_, r) =>
-                compiler(d, Map.empty()) |>  
+                compiler(d, Map.empty()) |>
                 Debugging.notifyPreInterpret |>
-                Interpreter.interpret(rc, withProv) |> 
+                Interpreter.interpret(rc, withProv) |>
                 toModelOnlyFull(withProv, r)
-            case Model(_) => 
+            case Model(_) =>
                 d
-            case Provenance(_, _) => 
+            case Provenance(_, _) =>
                 d
-            case Join(Model(m), Datalog(f, r)) => 
+            case Join(Model(m), Datalog(f, r)) =>
                 let cs = Datalog(f, r);
-                compiler(cs, m) |> 
+                compiler(cs, m) |>
                 Debugging.notifyPreInterpret |>
-                Interpreter.interpret(rc, withProv) |> 
+                Interpreter.interpret(rc, withProv) |>
                 toModelOnlyFull(withProv, r)
             case Join(Provenance(_, _), cs) => ???
             case _ => bug!("Datalog Boxing bug")
@@ -637,7 +637,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts2(p: PredSym, d: Datalog): Vector[(t1, t2)] with Order[t1], Order[t2] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms))
         );
         factsOf(f, p, d)
@@ -648,7 +648,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts3(p: PredSym, d: Datalog): Vector[(t1, t2, t3)] with Order[t1], Order[t2], Order[t3] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms))
         );
@@ -660,7 +660,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts4(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4)] with Order[t1], Order[t2], Order[t3], Order[t4] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms))
@@ -673,7 +673,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts5(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -687,7 +687,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts6(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -702,7 +702,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts7(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -718,7 +718,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts8(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -735,7 +735,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts9(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -753,7 +753,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts10(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -772,7 +772,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts11(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -792,7 +792,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts12(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -813,7 +813,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts13(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -835,7 +835,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts14(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -858,7 +858,7 @@ mod Fixpoint.Solver {
     @Internal
     pub def facts15(p: PredSym, d: Datalog): Vector[(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15)] with Order[t1], Order[t2], Order[t3], Order[t4], Order[t5], Order[t6], Order[t7], Order[t8], Order[t9], Order[t10], Order[t11], Order[t12], Order[t13], Order[t14], Order[t15] =
         let f = terms -> (
-            unbox(Vector.get(0, terms)), 
+            unbox(Vector.get(0, terms)),
             unbox(Vector.get(1, terms)),
             unbox(Vector.get(2, terms)),
             unbox(Vector.get(3, terms)),
@@ -914,7 +914,7 @@ mod Fixpoint.Solver {
                             let vs = Vector.init(i -> {
                                 if (i < arity)
                                     Vector.get(i, tuple)
-                                else 
+                                else
                                     lat
                             }, arity + 1);
                             MutList.push(f(vs), pFacts)

@@ -99,21 +99,7 @@ mod Fixpoint.Phase.Compiler {
     /// Insert all facts in `facts` in `db` and return the result.
     ///
     def compileFacts(facts: Vector[Constraint], db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]], predicates: Predicates): (Facts, Facts) \ IO = region rc {
-        // let startingPoint = db |>
-        //     Map.mapWithKey(match RelSym.Symbol(_, _, den) -> values -> match den {
-        //     case Relational => (Nil, values) ||> Map.foldWithKey(acc -> k -> _ -> k :: acc)
-        //     case Latticenal(bot, leq, _, _) => (Nil, values) ||> Map.foldWithKey(acc -> k -> v ->
-        //         // Remove p(;bot) from the facts
-        //         if(v `leq` bot) {
-        //             acc
-        //         } else {
-        //             Vector.append(k, Vector#{v}) :: acc
-        //         }
-        //     )
-        // });
-
         let newFacts = MutMap.empty(rc);
-
         facts |> Vector.forEach(constraint -> {
             match constraint {
                 case Constraint(headAtom, _) =>
@@ -124,7 +110,7 @@ mod Fixpoint.Phase.Compiler {
                             let sym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
                             let newFactsTree = MutMap.getOrElsePut(sym, BPlusTree.empty(Static), newFacts);
                             BPlusTree.put(x, Boxed.NoValue, newFactsTree)
-                        case Latticenal(bot, leq, lub, _) => 
+                        case Latticenal(bot, leq, lub, _) =>
                             // Remove p(;bot) from the facts
                             let latVal = Vector.get(Vector.length(x) - 1, x);
                             if(latVal `leq` bot) {
@@ -135,17 +121,10 @@ mod Fixpoint.Phase.Compiler {
                                 BPlusTree.putWith(lub, Vector.dropRight(1, x), latVal, newFactsTree)
                             }
                     }
-                    // if(isBot) {
-                    //     acc
-                    // } else {
-                    //     let sym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
-                    //     Map.insertWith(List.append, sym, x :: Nil, acc)
-                    // }
             }
         });
         (db, MutMap.toMap(newFacts))
     }
-
 
     ///
     /// Compile all rules to be evaluated in `stratum` to RAM
@@ -178,7 +157,7 @@ mod Fixpoint.Phase.Compiler {
         // Construct the inserts for step 1.
         let inserts = MutList.empty(rc);
         List.forEach(match (x, i) -> compileRule(inserts, x, i, predicates, counter), List.zip(stratum, ruleNums));
-        let optPar = 
+        let optPar =
             if(MutList.size(inserts) > 1) {
                 Some(RamStmt.Par(MutList.toVector(inserts)))
             } else {
@@ -196,7 +175,7 @@ mod Fixpoint.Phase.Compiler {
 
                 let loopInserts = MutList.empty(rc);
                 List.forEach(match (x, i) -> compileRuleIncr(loopInserts, x, i, idbIds, predicates, counter), List.zip(stratum, ruleNums));
-                let loopParOpt = 
+                let loopParOpt =
                     if (MutList.size(loopInserts) > 1) {
                         Some(RamStmt.Par(MutList.toVector(loopInserts)))
                     } else {
@@ -204,7 +183,7 @@ mod Fixpoint.Phase.Compiler {
                     };
                 match loopParOpt {
                     case None => ()
-                    case Some(loopPar) => 
+                    case Some(loopPar) =>
                         MutList.push(loopPar, loopBody);
                         MutList.push(constructMerges(idb, predicates), loopBody);
                         let loopTest =
@@ -282,7 +261,7 @@ mod Fixpoint.Phase.Compiler {
             let projection = RelOp.Project(ramTerms, Predicate.headAtomToRelSym(headAtom, New, predicates), ruleNum);
             match compileBody(env, augBody, predicates, counter) {
                 case None => ()
-                case Some(join) => 
+                case Some(join) =>
                     let loopBody = RelOp.If(join, projection);
                     let insert = (loopBody, augBody) ||>
                         Vector.foldRight(match (atom, rowVar) -> acc -> match atom {
@@ -345,10 +324,10 @@ mod Fixpoint.Phase.Compiler {
                 let projection = RelOp.Project(ramTerms, Predicate.headAtomToRelSym(headAtom, New, predicates), ruleNum);
                 match compileBody(env, augBody, predicates, counter) {
                     case None => ()
-                    case Some(join) => 
+                    case Some(join) =>
                         let relSym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
                         let loopBody = RelOp.If(
-                            Vector.append(Vector#{BoolExp.NotMemberOf(ramTerms, relSym)}, join), 
+                            Vector.append(Vector#{BoolExp.NotMemberOf(ramTerms, relSym)}, join),
                             projection
                         );
                         let insert = (loopBody, augBody) ||>
@@ -379,7 +358,7 @@ mod Fixpoint.Phase.Compiler {
                         -1
                     }
                 case _ => -1
-            }) |> 
+            }) |>
             Vector.filter(i -> i != -1);
 
             if (Fixpoint.Options.enableDebugging()) {
@@ -448,7 +427,7 @@ mod Fixpoint.Phase.Compiler {
     def unifyVars(predicates: Predicates, counter: Counter[r], body: Vector[(BodyPredicate, RowVar)]): Map[VarSym, RamTerm] \ r =
         let toFullSym = bodyAtom -> (Predicate.bodyAtomToRelSym(bodyAtom, Full, predicates));
         let innerFunc = {
-            acc -> atomVar -> 
+            acc -> atomVar ->
             let (atom, rowVar) = atomVar;
             match atom {
             case BodyAtom(_, denotation, Polarity.Positive, _, terms) =>
@@ -542,7 +521,7 @@ mod Fixpoint.Phase.Compiler {
                     Vector.mapWithIndex(compileBodyTerm, terms) |>
                     Vector.zip(Vector.range(0, Vector.length(terms))) |>
                     Vector.map(match (i, t) -> match denotation {
-                        case Relational => 
+                        case Relational =>
                             BoolExp.Eq(RamTerm.RowLoad(rowVar, i, toFullSym(atom)), t)
                         case Latticenal(bot, leq, _, _) =>
                             if (i < Vector.length(terms) - 1)
@@ -599,5 +578,5 @@ mod Fixpoint.Phase.Compiler {
             case HeadTerm.Lit(v) => v
             case _ => bug!("Facts should only consist of literals")
         }
-    
+
 }

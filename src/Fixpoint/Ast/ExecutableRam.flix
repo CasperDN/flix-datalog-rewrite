@@ -32,7 +32,7 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// A `RamProgram` represents a further compiled Datalog program ready to be run
     /// by the interpreter.
-    /// 
+    ///
     pub enum RamProgram[r: Region] {
         case Program(RamStmt, Facts[r], Predicates, IndexInformation, (Arities, ConstWrites), RamIdToPos)
     }
@@ -59,8 +59,8 @@ mod Fixpoint.Ast.ExecutableRam {
     /// the context-specified `RowVar`, `rv`, write `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
     ///
     /// They come from rules with variables like `Head(x):- Body1(x), Body2(y, x)`, since `x` is used
-    /// twice. We would here have a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}` for `Body1`. 
-    /// This should be read as: The first value of `Body1` should be saved as `idOfBody2`'s 
+    /// twice. We would here have a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}` for `Body1`.
+    /// This should be read as: The first value of `Body1` should be saved as `idOfBody2`'s
     /// (the position of `Body2`) second value.
     ///
     @Internal
@@ -134,7 +134,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /////////////////////////////////////////////////////////////////////////////
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
-    
+
     ///
     /// `Search(rvPos, indexPos, meet, den, writeTuple, body)` iterates the facts in the
     /// index at `indexPos` saving them at `rvPos` and using the facts as context for
@@ -178,7 +178,7 @@ mod Fixpoint.Ast.ExecutableRam {
                 case RelOp.Query(var, ramSym, _, _, writes, body) =>
                     let writeString = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
                     "query {x${var} ∈ indexes[${ramSym}] | ${writeString}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(id, _, terms, _, body, _) => 
+                case RelOp.Functional(id, _, terms, _, body, _) =>
                     "loop(x${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
@@ -253,7 +253,7 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Lit(rep, val)` represents the literal `val` and its unboxed version, `rep`.
     ///
-    /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents 
+    /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents
     /// `max(memory[memPos1][i1], memory[memPos2][i2], ...)`
     ///
     /// `LoadFromTuple(memPos, i, unboxingInfo)` represents an index from the tuple stored at postion
@@ -310,5 +310,5 @@ mod Fixpoint.Ast.ExecutableRam {
             case RamTerm.App5(_, v1, v2, v3, v4, v5, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
         }
     }
-    
+
 }
