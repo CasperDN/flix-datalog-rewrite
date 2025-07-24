@@ -110,6 +110,7 @@ mod Fixpoint.Ast.Datalog {
                             })
                         );
                         StringBuilder.toString(builder)
+                    // Remove the `IO` effect from dealing with `Static`.
                     }: String \ rc + IO) as String \ rc)
                 }
             }
@@ -130,6 +131,7 @@ mod Fixpoint.Ast.Datalog {
                         let factsString = String.sliceLeft(end = String.length(rawFactString)- textOverflow, rawFactString);
                         "${predSym}:${String.lineSeparator()}${factsString}"
                     }, "${String.lineSeparator()}", db)
+                // Remove the `IO` effect from dealing with `Static`.
                 }: String \ rc + IO) as String \ rc)
             }
         }

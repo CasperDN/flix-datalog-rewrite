@@ -148,7 +148,7 @@ mod Fixpoint.Solver {
                 };
                 newTree
             };
-            // Get rid of the IO effect from `Static`.
+            // Remove the `IO` effect from dealing with `Static`.
             Model(Map.unionWithKey(union, db1, db2)): _ \ IO) as _ \ {})
         case (Model(_), Datalog(_, _)) => Join(d1, d2)
         case (Datalog(_, _), Model(_)) => Join(d2, d1)
@@ -172,7 +172,7 @@ mod Fixpoint.Solver {
                     Map.insert(relSym, newTree, acc)
             }, Map#{}, facts) |> Model
         case _ => unreachable!()
-    }}: _ \ IO) as _ \ {})
+    }}: _ \ IO) as _ \ {}) // Remove the `IO` effect from dealing with `Static`.
 
 
     ///
@@ -192,6 +192,7 @@ mod Fixpoint.Solver {
                     case true => Some(mapping(p, f) :: Nil)
                 }
             }
+        // Remove the `IO` effect from dealing with `Static`.
         }: _ \ IO) as _ \ {})
         case Provenance(_, _) =>
             Fixpoint.Provenance.provQuery(p, f, d) |>
@@ -611,6 +612,7 @@ mod Fixpoint.Solver {
             }, (), ts);
             toModel(db)
         }
+    // Remove the `IO` effect from dealing with `Static`.
     }: _ \ ef + Foldable.Aef[f] + IO) as _ \ ef + Foldable.Aef[f])
 
     ///
@@ -880,6 +882,7 @@ mod Fixpoint.Solver {
     /// Returns an array of facts associated with the given predicate symbol `p` in the given Datalog program `d`.
     ///
     def factsOf(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef =
+        // Remove the `IO` effect from dealing with `Static`.
         unchecked_cast((factsOfInternal(f, p, d): _ \ ef + IO) as _ \ ef)
 
     def factsOfInternal(f: Vector[Boxed] -> t \ ef, p: PredSym, d: Datalog): Vector[t] \ ef + IO = match d {
@@ -958,6 +961,7 @@ mod Fixpoint.Solver {
         } else {
             Model(dbOnlyFullRels)
         }
+    // Remove the `IO` effect from dealing with `Static`.
     }: _ \ IO + r) as _ \ r)
 
     ///
@@ -976,6 +980,7 @@ mod Fixpoint.Solver {
         }, Map#{}) |>
         Provenance(rules);
         res
+    // Remove the `IO` effect from dealing with `Static`.
     }: _ \ IO) as _ \ {})
 
     ///

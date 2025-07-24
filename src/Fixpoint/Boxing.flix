@@ -67,6 +67,7 @@ mod Fixpoint.Boxing {
     pub def initialize(rc: Region[r], withProv: Bool, program: RamProgram): (Boxing[r], EFacts[r], RamIdToPos) \ r =
         let mapping = Equality.computeMapping(program, withProv);
         let boxingInfo = initializeInternal(rc, program, mapping, withProv);
+        // Remove the `IO` effect from dealing with `Static`.
         let facts = unchecked_cast(((initializeFacts(rc, program, boxingInfo, mapping, withProv)): EFacts[r] \ IO + r) as _ \ r);
         (boxingInfo, facts, mapping)
 
@@ -110,6 +111,7 @@ mod Fixpoint.Boxing {
             Vector.append(nonExtendedPositions, Vector#{getOrCrash(Map.get(RamId.Id(-1), mapping)), getOrCrash(Map.get(RamId.Id(-1), mapping))})
         };
         facts |> BPlusTree.parForEach(tuple -> lat -> {
+            // `facts` and `newTree` must have same the same region. Cast to achieve this.
             unchecked_cast(({
                 let savedVec = tuple |>
                     Vector.mapWithIndex(index -> boxedVal ->
@@ -118,6 +120,7 @@ mod Fixpoint.Boxing {
                     );
                 BPlusTree.put(savedVec, lat, newTree)
         }: _ \ r) as _ \ IO)})
+    // This is to signal that we indeed modify the region `r`.
     } as _ \ IO + r)
 
     ///
