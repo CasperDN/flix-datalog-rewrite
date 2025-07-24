@@ -49,7 +49,6 @@ mod Fixpoint.Boxing {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{arityOf, BoolExp, RamId, RamProgram, RamStmt, RelSym, RamTerm, RelOp, toDenotation}
     use Fixpoint.Ast.Shared.{PredSym, isRelational, Denotation}
-    use Fixpoint.AtomicCounter
     use Fixpoint.Boxable
     use Fixpoint.Boxed
     use Fixpoint.Boxed.{BoxedBool, BoxedChar, BoxedFloat32, BoxedFloat64, BoxedInt8, BoxedInt16, BoxedInt32, BoxedInt64, BoxedObject}
