@@ -158,7 +158,7 @@ mod Fixpoint.Solver {
         case (Model(_), Join(model, datalog)) => Join(union(model, d1), datalog)
         case (Join(x, y), Join(z, w)) => Join(union(x, z), union(y, w))
         case (Provenance(_, _), _) => union(provenanceToModel(d1), d2)
-        case (_, Provenance(_, _)) =>  union(d1, provenanceToModel(d2))
+        case (_, Provenance(_, _)) => union(d1, provenanceToModel(d2))
     }
 
     def provenanceToModel(d: Datalog): Datalog = unchecked_cast(({ match d {

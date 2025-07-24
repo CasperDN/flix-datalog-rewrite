@@ -367,7 +367,7 @@ mod Fixpoint.Phase.Hoisting {
         termMap: MutMap[(RowVar, Int32), RamTerm, r],
         equalitySets: MutDisjointSets[(RowVar, Int32), r],
         relSym: RelSym
-    ): Unit \ r =  {
+    ): Unit \ r = {
         // Register all values `rowVar[i]`, for `0 <= i < arity`, as known when hoisting `body`.
         Vector.range(0, arityOf(relSym)) |>
         Vector.forEach(i -> {
@@ -388,7 +388,7 @@ mod Fixpoint.Phase.Hoisting {
         termMap: MutMap[(RowVar, Int32), RamTerm, r],
         equalitySets: MutDisjointSets[(RowVar, Int32), r],
         relSym: RelSym
-    ): Unit \ r =  {
+    ): Unit \ r = {
         // Unregister all values `rowVar[i]`, for `0 <= i < arity`, as known when hoisting `body`.
         Vector.range(0, arityOf(relSym)) |>
         Vector.forEach(i -> {

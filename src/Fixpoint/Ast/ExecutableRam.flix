@@ -222,10 +222,10 @@ mod Fixpoint.Ast.ExecutableRam {
         case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
         case Eq(RamTerm, RamTerm)
         case Guard1(Boxed -> Bool, RamTerm)
-        case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
-        case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
-        case Guard4(Boxed -> Boxed  -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
-        case Guard5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard2(Boxed -> Boxed -> Bool, RamTerm, RamTerm)
+        case Guard3(Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
+        case Guard4(Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
     }
 
     instance ToString[BoolExp] {
@@ -286,12 +286,12 @@ mod Fixpoint.Ast.ExecutableRam {
         case ProvMax(Vector[(Int32, Int32)])
         case LoadFromTuple(Int32, Int32, UnifiedTypePos)
         case LoadLatVar(Int32, UnifiedTypePos)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case Meet(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
         case App1(Boxed -> Boxed, RamTerm, UnifiedTypePos)
-        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
-        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
-        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
-        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
     }
 
     instance ToString[RamTerm] {

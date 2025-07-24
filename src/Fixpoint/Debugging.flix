@@ -103,7 +103,7 @@ mod Fixpoint.Debugging {
                 String.repeat(80, "*") |> psh;
                 "" |> psh;
                 String.indent(4, "${stmt}") |> psh;
-                ""  |> psh;
+                "" |> psh;
                 flush(MutList.join("\n", strings), false);
                 program
             } else {

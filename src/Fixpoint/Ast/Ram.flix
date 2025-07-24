@@ -37,7 +37,7 @@ mod Fixpoint.Ast.Ram {
 
     ///
     /// Contains a set of `RelSym` representing the names of the relations in the program
-    ///  and 1 + the maximal identifier of the `RelSym`s.
+    /// and 1 + the maximal identifier of the `RelSym`s.
     ///
     @Internal
     pub type alias Predicates = (Int64, Set[RelSym])
@@ -509,7 +509,7 @@ mod Fixpoint.Ast.Ram {
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
-            case (_,  RamId.TuplePos(_, _)) => Comparison.GreaterThan
+            case (_, RamId.TuplePos(_, _)) => Comparison.GreaterThan
             case (RamId.RelPos(_, _), _) => Comparison.LessThan
             case (_, RamId.RelPos(_, _)) => Comparison.GreaterThan
             case (RamId.Id(_), _) => Comparison.LessThan

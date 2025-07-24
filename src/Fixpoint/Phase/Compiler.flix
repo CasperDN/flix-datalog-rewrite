@@ -243,7 +243,7 @@ mod Fixpoint.Phase.Compiler {
     /// Each positive body atom in `rule` becomes part of the nested loop.
     /// The head atom in `rule` is compiled to an insertion into the corresponding relation.
     /// Negative atoms are compiled into if-statements.
-    /// The rule `R(x) :- not A(x), B(x),  C(x).` compiles to:
+    /// The rule `R(x) :- not A(x), B(x), C(x).` compiles to:
     ///     search B$1 ∈ B do
     ///         search C$2 ∈ C do
     ///             if (B$1[0] == C$2[0] ∧ (B$1[0]) ∉ A) then
@@ -290,7 +290,7 @@ mod Fixpoint.Phase.Compiler {
     /// Incremental means there is a join loop for every positive atom.
     /// Each join loop "focuses" on a particular atom.
     /// Negative atoms are compiled into if-statements.
-    /// The rule `R(x) :- not A(x), B(x),  C(x).` compiles to:
+    /// The rule `R(x) :- not A(x), B(x), C(x).` compiles to:
     ///     search B$1 ∈ ΔB do
     ///         search C$2 ∈ C do
     ///             if (B$1[0] == C$2[0] ∧ (B$1[0]) ∉ A ∧ (B$1[0]) ∉ R) then
@@ -419,7 +419,7 @@ mod Fixpoint.Phase.Compiler {
     /// Unifies each relational variable that occurs in a rule body with an attribute
     /// corresponding to a positive atom where the variable is a term.
     /// Latticenal variables are unified with a "meet" term.
-    /// For example, a body like `not A(x), B(x; s),  C(x; s).` returns the substitution:
+    /// For example, a body like `not A(x), B(x; s), C(x; s).` returns the substitution:
     ///     `Map#{x -> B$1[0], s -> B$1[1] ⊓ C$2[1]}`
     /// `x` is mapped to B$1[0] because `x` occurs positively in the second atom.
     /// `s` is mapped to the glb of all its positive occurences because it is latticenal.
