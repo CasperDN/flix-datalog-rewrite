@@ -16,9 +16,10 @@
  */
 
 mod Fixpoint.Phase.IndexSelection {
-    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, Indexes, IndexInformation, RowVar, arityOf, arityOfNonLat};
-    use Fixpoint.Predicate.{relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
+    use Fixpoint.Ast.Ram.{RamStmt, RamProgram, RelOp, BoolExp, RelSym, RamTerm, Search, Indexes, IndexInformation, RowVar, arityOf, arityOfNonLat, toInt32Id};
+    use Fixpoint.Predicate.{allRelSyms, getIdAsType, getIdCount, idToPredType, relSymFromPredType, relSymToPredType, PredType, relSymsOfProgram}
     use Fixpoint.UniqueInts
+    use Fixpoint.Util.getOrCrash
 
     /// In the following example, the set of primitive searches `S={{0, 1}, {0, 1, 2}, {0, 2}}`
     /// is produced for relation `B`:
@@ -44,7 +45,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// In the example for `PrimitiveSearch` we would have 
     /// `[B => (0 :: 1 :: Nil) :: (0 :: 1 :: 2 :: Nil) :: (0 :: 2 :: Nil) :: Nil]`.
     ///
-    type alias PrimitiveSearches[r: Eff] = MutMap[RelSym, List[PrimitiveSearch], r]
+    type alias PrimitiveSearches[r: Region] = Array[List[PrimitiveSearch], r]
 
     ///
     /// Creates indexes for each `RelSym` in `program`, places them in memory and
@@ -78,10 +79,12 @@ mod Fixpoint.Phase.IndexSelection {
     ///
     @Internal
     pub def indexProgram(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, meta, _) => 
+        case RamProgram.Program(stmt, facts, meta, _) => region rc {
             // This type annotation is apparently needed?
-            let (newIndexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = region rc {
-                let indexes = MutMap.empty(rc);
+            let idCount = getIdCount(meta);
+            let indexes: Array[List[Search], rc] = Array.repeat(rc, Nil, idCount);
+            let (newIndexes, newStmt): (Map[RelSym, Vector[Search]], RamStmt) = {
+                // let indexes = MutMap.empty(rc);
                 let collectedStmt = collectSearchesStmt(indexes, rc, stmt);
                 let newIndexes =
                     indexes |>
@@ -90,34 +93,63 @@ mod Fixpoint.Phase.IndexSelection {
                     Map.map(List.toVector);
                 (newIndexes, collectedStmt)
             };
-            // Expand the searches to full arity
-            let indexesFull =
-                newIndexes |>
-                Map.mapWithKey(relSym -> searches ->
-                    Vector.map(search ->
-                        Vector.range(0, arityOfNonLat(relSym)) |>
-                        Vector.filter(x -> not Vector.memberOf(x, search)) |>
-                        Vector.append(search),
-                        searches
-                    )
-                );
-            // Account for relations that have no body atoms with bound variables
-            let indexesMissing =
-                relSymsOfProgram(program) |>
-                List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
-                List.foldLeft(acc -> relSym -> {
-                    let deltaRelSym = relSymFromPredType(relSym, PredType.Delta, meta);
-                    let search = match relSymToPredType(relSym, meta) {
+            allRelSyms(meta) |> List.forEach(relSym -> {
+                let id = toInt32Id(relSym);
+                let arity = arityOfNonLat(relSym);
+                match Array.get(id, indexes) {
+                    case Nil => 
+                        // No index has been built. Create `[1..n]` for all relations except `New` which gets `Delta`'s first index.
+                        let idAsInt64 = idToPredType(Int32.toInt64(id), meta);
+                        match idAsInt64 {
                         case PredType.New =>
-                            match Map.get(deltaRelSym, indexesFull) {
-                                case Some(v) => Vector.get(0, v)
-                                case None => Vector.range(0, arityOfNonLat(deltaRelSym))
+                            let deltaId = getIdAsType(relSym, PredType.Delta, meta) |> Int64.tryToInt32 |> getOrCrash;
+                            match Array.get(deltaId, indexes) {
+                                case Nil => Array.put(Vector.range(arity), id, indexes)
+                                case head :: _ => Array.put(head, id, indexes)
                             }
-                        case _ => Vector.range(0, arityOfNonLat(relSym))
-                    };
-                    Map.insert(relSym, Vector#{search}, acc)
-                }, Map#{});
-            let indexes = Map.union(indexesFull, indexesMissing);
+                        case _ => Array.put(Vector.range(arity), id, indexes)
+                    }
+                    // Expand indexes to cover the entire range of the predicate
+                    case searches =>
+                        let range = Vector.range(0, arity);
+                        let expandedIndexes = searches |> 
+                        List.map(search -> {
+                            let uncoveredIndexes = 
+                            range |>
+                            Vector.filter(x -> not Vector.memberOf(x, search));
+                            Vector.append(search, uncoveredIndexes)
+                        });
+                        Array.put(expandedIndexes, id, indexes)
+                }
+            });
+            // Expand the searches to full arity
+            // let indexesFull =
+            //     newIndexes |>
+            //     Array.map(relSym -> searches ->
+            //         Vector.map(search ->
+            //             Vector.range(0, arityOfNonLat(relSym)) |>
+            //             Vector.filter(x -> not Vector.memberOf(x, search)) |>
+            //             Vector.append(search),
+            //             searches
+            //         )
+            //     );
+            // // Account for relations that have no body atoms with bound variables
+            // let indexesMissing =
+            //     relSymsOfProgram(program) |>
+            //     List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
+            //     List.foldLeft(acc -> relSym -> {
+            //         let deltaRelSym = relSymFromPredType(relSym, PredType.Delta, meta);
+            //         let search = match relSymToPredType(relSym, meta) {
+            //             case PredType.New =>
+            //                 match Map.get(deltaRelSym, indexesFull) {
+            //                     case Some(v) => Vector.get(0, v)
+            //                     case None => Vector.range(0, arityOfNonLat(deltaRelSym))
+            //                 }
+            //             case _ => Vector.range(0, arityOfNonLat(relSym))
+            //         };
+            //         Map.insert(relSym, Vector#{search}, acc)
+            //     }, Map#{});
+            // let indexes = Map.union(indexesFull, indexesMissing);
             let (indexedStmt, indexPlacement) = region rc2 {
                 let indexState = UniqueInts.empty(rc2);
                 let indexedStmt = indexStmt(newStmt, indexes, indexState);
@@ -129,6 +161,7 @@ mod Fixpoint.Phase.IndexSelection {
                 (indexedStmt, finalState)
             };
             RamProgram.Program(indexedStmt, facts, meta, (indexes, indexPlacement))
+        }
     }
 
     ///
@@ -295,10 +328,11 @@ mod Fixpoint.Phase.IndexSelection {
     /// Collects the search `Search` for `relSym` to `indexes`.
     ///
     def collectSearch(relSym: RelSym, search: Search, indexes: PrimitiveSearches[r]): Unit \ r =
-        if (not Vector.isEmpty(search)){
-            let searches = MutMap.getWithDefault(relSym, List.empty(), indexes);
+        if (not Vector.isEmpty(search)) {
+            let id = toInt32Id(relSym);
+            let searches = Array.get(id, indexes);
             if (not List.memberOf(search, searches))
-                MutMap.put(relSym, search :: searches, indexes)
+                Array.put(search :: searches, id, indexes)
             else ()
         } else ()
 

@@ -22,6 +22,7 @@ mod Fixpoint.Ast.Ram {
     use Fixpoint.Boxed
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
+    use Fixpoint.Util.getOrCrash
 
     /////////////////////////////////////////////////////////////////////////////
     // RamProgram                                                              //
@@ -72,7 +73,7 @@ mod Fixpoint.Ast.Ram {
     /// the indexes that will be created for `RelSym` during program evaluation.
     ///
     @Internal
-    pub type alias Indexes = Map[RelSym, Vector[Search]]
+    pub type alias Indexes = Vector[Vector[Search]]
 
     ///
     /// Maps a `RelSym` and its place in `Indexes[RelSym]` to its final position in memory.
@@ -409,6 +410,14 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub def toId(relSym: RelSym): Int64 = match relSym {
         case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => id
+    }
+
+    ///
+    /// Returns the identifier of `relSym` as an `Int32`.
+    ///
+    @Internal
+    pub def toInt32Id(relSym: RelSym): Int32 = match relSym {
+        case RelSym.Symbol(PredSym.PredSym(_, id), _, _) => getOrCrash(Int64.tryToInt32(id)) // Indexes are at this point 0 .. |Indexes|.
     }
 
     /////////////////////////////////////////////////////////////////////////////

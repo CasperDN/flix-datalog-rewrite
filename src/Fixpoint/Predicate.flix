@@ -124,6 +124,12 @@ mod Fixpoint.Predicate {
         fullIdtoPredType(fullId, wantedType, predInfo)
 
     ///
+    /// Returns the number of identifiers in `predInfo`, including `delta` and `delta'` relations.
+    ///
+    @Internal
+    pub def getIdCount(predInfo: Predicates): Int64 = Int64.max(0i64, 3 * fst(predInfo))
+
+    ///
     /// Returns the `PredSym` of type `wantedType` from `predSym` according to `predInfo`.
     ///
     @Internal
