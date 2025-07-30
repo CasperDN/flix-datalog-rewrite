@@ -87,7 +87,6 @@ mod Fixpoint.Phase.Hoisting {
     use Fixpoint.Boxed
     use Fixpoint.Phase.Compiler.functionalRelSym
     use Fixpoint.Util.getOrCrash
-    use MutDisjointSets.MutDisjointSets
 
     ///
     /// Hoists `program` as described above.
