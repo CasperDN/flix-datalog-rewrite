@@ -144,6 +144,16 @@ mod Test.Library.Fixpoint.If {
         res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
+    @Test
+    def testIfGuardTwo05(): Bool = {
+        let f = inject Vector#{("Alice", "Carol"), ("Bob", "Carol")} into Friend/2;
+        let r = #{
+            FriendInCommon(x, y) :- Friend(x, a), Friend(y, a), if (x != y).
+        };
+        let res = query f, r select (x, y) from FriendInCommon(x, y);
+        res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
+    }
+
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 3 parameters                                         //
     /////////////////////////////////////////////////////////////////////////////
@@ -263,6 +273,22 @@ mod Test.Library.Fixpoint.If {
         };
         let res = tuples |> Vector.filter(match (x, y, z, w, a) -> String.length(x + y + z + w + a) > 5) |> Vector.sort;
         res `Assert.eq` query f, r select (x, y, z, w, a) from R(x, y, z, w, a)
+    }
+
+    /////////////////////////////////////////////////////////////////////////////
+    // Test if-guard with lattice elements                                     //
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testIfGuardOneLattice01(): Bool = {
+        let tuples = Vector#{(0, 1), (1, 2), (2, 0)};
+        let f = inject tuples into Edge/2;
+        let r = #{
+            Path(x, y; Down.Down(1)) :- Edge(x, y).
+            Path(x, z; l + Down.Down(1)) :- Path(x, y; l), Edge(y, z), if (l == Down.Down(0))
+        };
+        let res = query f, r select (x, y) from Path(x, y; l);
+        res `Assert.eq` tuples
     }
 
 }

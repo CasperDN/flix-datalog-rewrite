@@ -171,7 +171,7 @@ mod Test.Library.Fixpoint.Application {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Tests with application of 4 arguments                                   //
+    // Tests with application of 5 arguments                                   //
     /////////////////////////////////////////////////////////////////////////////
 
     @Test

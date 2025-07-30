@@ -18,12 +18,14 @@
 mod Test.Library.Fixpoint.LargeScale {
     
     @Test
-    pub def testLargeScale01(): Bool = {
-        let tuples = Vector.range(0, 1000000) |> Vector.map(x -> (x, x + 1));
-        let f = inject tuples into Road/2;
+    def testLargeScale01(): Bool = {
+        // This program produces 1 million Path facts
+        let tuples = Vector.range(0, 1000) |> Vector.map(x -> (x, x + 1));
+        let f = inject tuples into Edge/2;
         let r = #{
-            Path(x, y) :- Road(x, y).
-            Path(x, z) :- Path(x, y), Road(y, z).
+            Edge(1000, 0).
+            Path(x, y) :- Edge(x, y).
+            Path(x, z) :- Path(x, y), Edge(y, z).
         };
         let q = query f, r select (x, y) from Path(x, y) where y == x + 1;
         q == tuples
