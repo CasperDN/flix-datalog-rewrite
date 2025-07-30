@@ -180,3 +180,29 @@ pub def dumb(): Unit \ IO =
 def forceEval(): Unit \ IO = {
     println("Hej")
 }
+
+
+def testFunctionalF1X2_01(): Bool =
+let ff = _x -> Vector#{};
+    let pr = #{
+        A(1).
+        R(a, b) :- A(x), let (a, b) = ff(x).
+    };
+    let actual = query pr select (x, y) from R(x, y);
+    Assert.eq((Vector#{}: Vector[(Int32, Int32)]), actual)
+
+def runForever(): Unit \ IO = {
+    if(testFunctionalF1X2_01()) runForever() else runForever()
+}
+
+
+def runN(n: Int32): Unit \ IO = {
+    if(testFunctionalF1X2_01() and n > 0) runN(n - 1) else ()
+}
+
+def main1000(): Unit \ IO = {
+    let now = Clock.runWithIO(Clock.now);
+    runN(80000);
+    println((Clock.runWithIO(Clock.now) - now) / 1000i64);
+    ()
+}
