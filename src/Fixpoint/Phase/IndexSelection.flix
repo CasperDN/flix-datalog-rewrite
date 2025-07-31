@@ -81,9 +81,8 @@ mod Fixpoint.Phase.IndexSelection {
     @Internal
     pub def indexProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, meta, _) => region rc {
-            // This type annotation is apparently needed?
             let idCount = getIdCount(meta);
-            let indexes: Array[List[Search], rc] = Array.repeat(rc, idCount, Nil);
+            let indexes = Array.repeat(rc, idCount, Nil);
             let newStmt = collectSearchesStmt(indexes, rc, stmt);
             indexes |> Array.transform(AutomaticIndexSelection.minIndex);
             allRelSyms(meta) |> List.forEach(relSym -> {
@@ -116,48 +115,11 @@ mod Fixpoint.Phase.IndexSelection {
                         Array.put(expandedIndexes, id, indexes)
                 }
             });
-            // Expand the searches to full arity
-            // let indexesFull =
-            //     newIndexes |>
-            //     Array.map(relSym -> searches ->
-            //         Vector.map(search ->
-            //             Vector.range(0, arityOfNonLat(relSym)) |>
-            //             Vector.filter(x -> not Vector.memberOf(x, search)) |>
-            //             Vector.append(search),
-            //             searches
-            //         )
-            //     );
-            // // Account for relations that have no body atoms with bound variables
-            // let indexesMissing =
-            //     relSymsOfProgram(program) |>
-            //     List.filter(relSym -> not Map.memberOf(relSym, indexesFull)) |>
-            //     List.foldLeft(acc -> relSym -> {
-            //         let deltaRelSym = relSymFromPredType(relSym, PredType.Delta, meta);
-            //         let search = match relSymToPredType(relSym, meta) {
-            //             case PredType.New =>
-            //                 match Map.get(deltaRelSym, indexesFull) {
-            //                     case Some(v) => Vector.get(0, v)
-            //                     case None => Vector.range(0, arityOfNonLat(deltaRelSym))
-            //                 }
-            //             case _ => Vector.range(0, arityOfNonLat(relSym))
-            //         };
-            //         Map.insert(relSym, Vector#{search}, acc)
-            //     }, Map#{});
-            // let indexes = Map.union(indexesFull, indexesMissing);
             let finalIndexes = indexes |> Array.map(rc, List.toVector) |> Array.toVector;
             let c = Counter.fresh(rc);
             let indexPlacement = finalIndexes |> Vector.map(Vector.map(_ -> Counter.getAndIncrement(c)));
 
-            let indexedStmt =
-                // let indexState = UniqueInts.empty(rc2);
-                indexStmt(newStmt, finalIndexes, indexPlacement);
-                // Map.forEach(relSym -> _ -> {
-                //     UniqueInts.getIndex((relSym, 0), indexState);
-                //     ()
-                // }, finalIndexes);
-                // let finalState = UniqueInts.toMap(indexState);
-                // indexedStmt
-            // ;
+            let indexedStmt = indexStmt(newStmt, finalIndexes, indexPlacement);
             RamProgram.Program(indexedStmt, facts, meta, (finalIndexes, indexPlacement))
         }
     }

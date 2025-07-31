@@ -154,14 +154,6 @@ mod Fixpoint.Interpreter {
                 storeIndex(mkIndex(rc, relSym, search, tuples), pos, indexes)
             })
         });
-        // indexMap |>
-        // Map.forEach(relSym -> searches -> {
-        //     let tuples = Map.getWithDefault(relSym, Vector#{}, facts);
-        //     searches |> Vector.forEachWithIndex(num -> search -> {
-        //         let pos = Vector.get(num, Vector.get(toInt32Id(relSym), posMap));
-        //         storeIndex(mkIndex(rc, relSym, search, tuples), pos, indexes)
-        //     })
-        // });
         interpretWithDatabase(rc, indexes, boxing, withProv, program)
 
     ///

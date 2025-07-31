@@ -590,10 +590,15 @@ mod Fixpoint.Phase.Lowering {
             , toIndex, value)
 
     ///
+    /// Returns a list `(RowVar, arity)` in `program` in the order of the nesting.
+    ///
+    def collectRowVarArity(program: Ram.RamProgram): List[(RowVar, Int32)] = 
+        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
+
+    ///
     /// Returns a list of pairs `(RowVar, RelSym)` in `program` in the order of the nesting.
     ///
-    @Internal
-    pub def collectRowVarRelSym(program: Ram.RamProgram): List[(RowVar, RelSym)] = match program {
+    def collectRowVarRelSym(program: Ram.RamProgram): List[(RowVar, RelSym)] = match program {
         case Ram.RamProgram.Program(stmt, _, _, _) => 
             collectRowVarRelSymStmt(stmt)
     }
@@ -615,20 +620,12 @@ mod Fixpoint.Phase.Lowering {
     ///
     /// Returns a list of pairs `(RowVar, RelSym)` in `op` in the order of nesting.
     ///
-    @Internal
-    pub def collectRowVarRelSymOp(op: Ram.RelOp): List[(RowVar, RelSym)] \ r = match op {
+    def collectRowVarRelSymOp(op: Ram.RelOp): List[(RowVar, RelSym)] \ r = match op {
         case Ram.RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case Ram.RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case Ram.RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
         case Ram.RelOp.Project(_, _, _) => Nil
         case Ram.RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
     }
-
-    ///
-    /// Returns a list `(RowVar, arity)` in `program` in the order of the nesting.
-    ///
-    @Internal
-    pub def collectRowVarArity(program: Ram.RamProgram): List[(RowVar, Int32)] = 
-        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
 
 }
