@@ -18,7 +18,7 @@
 mod Test.Exp.Fixpoint.Permutations {
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Int32                                                 //
+    // Test permuting body atom order with Int32                               //
     /////////////////////////////////////////////////////////////////////////////
     
     // May not be bigger than 12.
@@ -101,7 +101,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Float32                                               //
+    // Test permuting body atom order with Float32                             //
     /////////////////////////////////////////////////////////////////////////////
     
     def resultForFirstFloat32(n: Int32): Vector[(Float32, Float32, Float32, Float32)] = {
@@ -181,7 +181,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Float64                                               //
+    // Test permuting body atom order with Float64                             //
     /////////////////////////////////////////////////////////////////////////////
     
     def resultForFirstFloat64(n: Int32): Vector[(Float64, Float64, Float64, Float64)] = {
@@ -261,7 +261,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Char                                                  //
+    // Test permuting body atom order with Char                                //
     /////////////////////////////////////////////////////////////////////////////
     
     def forceToChar(v: Int32): Char = match Char.forDigit(radix=16, v) {
@@ -347,7 +347,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Int64                                                 //
+    // Test permuting body atom order with Int64                               //
     /////////////////////////////////////////////////////////////////////////////
     
     def resultForFirstInt64(n: Int32): Vector[(Int64, Int64, Int64, Int64)] = {
@@ -427,7 +427,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Int8                                                  //
+    // Test permuting body atom order with Int8                                //
     /////////////////////////////////////////////////////////////////////////////
 
     def forceToInt8(v: Int32): Int8 = match Int32.tryToInt8(v) {
@@ -512,7 +512,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with Int16                                                  //
+    // Test permuting body atom order with Int16                               //
     /////////////////////////////////////////////////////////////////////////////
 
     def forceToInt16(v: Int32): Int16 = match Int32.tryToInt16(v) {
@@ -597,7 +597,7 @@ mod Test.Exp.Fixpoint.Permutations {
     }
 
     /////////////////////////////////////////////////////////////////////////////
-    // Simple tests with String                                                //
+    // Test permuting body atom order with String                              //
     /////////////////////////////////////////////////////////////////////////////
     
     def resultForFirstString(n: Int32): Vector[(String, String, String, String)] = {
@@ -679,9 +679,8 @@ mod Test.Exp.Fixpoint.Permutations {
 
 
     /////////////////////////////////////////////////////////////////////////////
-    // Tests with negation                                                     //
+    // Test permuting body atom order with negation                            //
     /////////////////////////////////////////////////////////////////////////////
-
 
     def assertPathExample(n: Int32, solved: #{ ConstPath(Int32, Int32), D(Int32, Int32, Int32, Int32), Edge(Int32, Int32), NoPath(Int32, Int32), Node(Int32), OnlyPathsTo(Int32), Path(Int32, Int32), PathFrom(Int32), ReachLonelyNode(Int32) | t }): Bool = {
         let keepsEdges = Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) `Assert.eq` query solved select (x, y) from Edge(x, y);
