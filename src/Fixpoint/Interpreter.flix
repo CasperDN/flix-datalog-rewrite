@@ -18,7 +18,7 @@
 
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.ExecutableRam.{BoolExp, RamProgram, RamStmt, RamTerm, RelOp, WriteTuple}
-    use Fixpoint.Ast.Ram.{arityOfNonLat, Predicates, RamId, RelSym, Search, toDenotation, toId}
+    use Fixpoint.Ast.Ram.{arityOfNonLat, IndexPositions, Predicates, RamId, RelSym, Search, toDenotation, toId, toInt32Id}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
@@ -26,7 +26,7 @@ mod Fixpoint.Interpreter {
     use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
     use Fixpoint.Options.{usedArity, parLevel}
-    use Fixpoint.Predicate.allFullRelSyms
+    use Fixpoint.Predicate.{allFullRelSyms, allRelSyms}
     use Fixpoint.Util.getOrCrash
 
     ///
@@ -140,23 +140,28 @@ mod Fixpoint.Interpreter {
     pub def interpret(rc: Region[r], withProv: Bool, input: (RamProgram, Boxing[r])): (Database[r], Predicates) \ r =
         let (program, boxing) = input;
         // Create `Indexes` from `program`.
-        let RamProgram.Program(_, facts, _, (indexMap, posMap), _, _) = program;
-        let indexNum = match Map.maximumValue(posMap) {
+        let RamProgram.Program(_, facts, predicates, (indexMap, posMap), _, _) = program;
+        let indexNum = match posMap |> Vector.flatten |> Vector.maximum {
             case None => 0
-            case Some((_, v)) => v + 1
+            case Some(v) => v + 1
         };
         let indexes = Array.empty(rc, indexNum);
-        indexMap |>
-        Map.forEach(relSym -> searches -> {
+        allRelSyms(predicates) |> List.forEach(relSym -> {
+            let searches = Vector.get(toInt32Id(relSym), indexMap);
             let tuples = Map.getWithDefault(relSym, Vector#{}, facts);
             searches |> Vector.forEachWithIndex(num -> search -> {
-                let pos = match Map.get((relSym, num), posMap) {
-                    case Some(v) => v
-                    case None => bug!("In Fixpoint.Interpreter.interpretWithInput: ${relSym} has no index!")
-                };
+                let pos = Vector.get(num, Vector.get(toInt32Id(relSym), posMap));
                 storeIndex(mkIndex(rc, relSym, search, tuples), pos, indexes)
             })
         });
+        // indexMap |>
+        // Map.forEach(relSym -> searches -> {
+        //     let tuples = Map.getWithDefault(relSym, Vector#{}, facts);
+        //     searches |> Vector.forEachWithIndex(num -> search -> {
+        //         let pos = Vector.get(num, Vector.get(toInt32Id(relSym), posMap));
+        //         storeIndex(mkIndex(rc, relSym, search, tuples), pos, indexes)
+        //     })
+        // });
         interpretWithDatabase(rc, indexes, boxing, withProv, program)
 
     ///
@@ -191,7 +196,7 @@ mod Fixpoint.Interpreter {
     /// For all `RelSym`, some `Index` for relation is selected and all values are boxed
     /// and copied to a `MutMap`.
     ///
-    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: Map[(RelSym, Int32), Int32], predTrack: Predicates, boxingIndexes: RamIdToPos, withProv: Bool): Database[r] \ r =
+    def marshallDb(rc: Region[r], db: Indexes[r], boxing: Boxing[r], indexPos: IndexPositions, predTrack: Predicates, boxingIndexes: RamIdToPos, withProv: Bool): Database[r] \ r =
         let res = MutMap.empty(rc);
         allFullRelSyms(predTrack) |>
         List.forEach(relSym -> {
@@ -205,7 +210,7 @@ mod Fixpoint.Interpreter {
                 Vector.map(i ->
                     getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
                 );
-            Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
+            Array.get(Vector.get(0, Vector.get(toInt32Id(relSym), indexPos)), db) |>
             BPlusTree.forEach(vec -> latticeElem -> {
                 let boxedVec = vec |> Vector.mapWithIndex(i -> val -> boxWith(val, Vector.get(i, curBoxingInfo), boxing));
                 MutMap.put(boxedVec, latticeElem, innerMap)

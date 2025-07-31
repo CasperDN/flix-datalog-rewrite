@@ -79,7 +79,7 @@ mod Fixpoint.Ast.Ram {
     /// Maps a `RelSym` and its place in `Indexes[RelSym]` to its final position in memory.
     ///
     @Internal
-    pub type alias IndexPositions = Map[(RelSym, Int32), Int32]
+    pub type alias IndexPositions = Vector[Vector[Int32]]
 
     ///
     /// The indexes to be created during program evaluation and their positions in memory.

@@ -20,9 +20,11 @@ mod Fixpoint.Debugging {
     use Fixpoint.Ast.Datalog.Datalog
     use Fixpoint.Ast.ExecutableRam
     use Fixpoint.Ast.Ram
+    use Fixpoint.Ast.Ram.toInt32Id
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.BoxingType
     use Fixpoint.Options
+    use Fixpoint.Predicate.allRelSyms
 
     ///
     /// Write `s` to standard file. Overwrite if `overwrite` is true, otherwise append.
@@ -121,7 +123,7 @@ mod Fixpoint.Debugging {
     pub def notifyPreInterpret(
         input: (ExecutableRam.RamProgram, BoxingType.Boxing[rc])
     ): (ExecutableRam.RamProgram, BoxingType.Boxing[rc]) = match fst(input) {
-        case ExecutableRam.RamProgram.Program(stmt, _, _, (index, indexPos), _, _) => unchecked_cast({
+        case ExecutableRam.RamProgram.Program(stmt, _, predicates, (index, indexPos), _, _) => unchecked_cast({
             if (Options.enableDebugging()) region rc {
                 let strings = MutList.empty(rc);
                 let psh = s -> MutList.push(s, strings);
@@ -135,13 +137,15 @@ mod Fixpoint.Debugging {
                 "** Index Information" |> psh;
                 String.repeat(80, "*") |> psh;
                 "" |> psh;
-                String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", index)) |> psh;
+                let relAndIndex = allRelSyms(predicates) |> List.map(x -> Vector.mapWithIndex(i -> index_ -> ((x, i), index_), Vector.get(toInt32Id(x), index))) |> List.map(Vector.toList) |> List.flatten;
+                String.indent(4, List.joinWith(match (k, v) -> "${k}: ${v}", "\n", relAndIndex)) |> psh;
                 "" |> psh;
                 String.repeat(80, "*") |> psh;
                 "** Index Position in Database" |> psh;
                 String.repeat(80, "*") |> psh;
                 "" |> psh;
-                String.indent(4, Map.joinWith(k -> v -> "${k}: ${v}", "\n", indexPos)) |> psh;
+                let relAndIndexPos = allRelSyms(predicates) |> List.map(x -> Vector.mapWithIndex(i -> index_ -> ((x, i), index_), Vector.get(toInt32Id(x), indexPos))) |> List.map(Vector.toList) |> List.flatten;
+                String.indent(4, List.joinWith(match (k, v) -> "${k}: ${v}", "\n", relAndIndexPos)) |> psh;
                 "" |> psh;
                 flush(MutList.join("\n", strings), false);
                 input

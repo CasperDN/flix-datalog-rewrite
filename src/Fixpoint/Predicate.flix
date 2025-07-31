@@ -49,6 +49,7 @@ mod Fixpoint.Predicate {
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
     use Fixpoint.Ast.Ram.{BoolExp, Facts, Predicates, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar, toId}
     use Fixpoint.Boxed
+    use Fixpoint.Util.getOrCrash
 
     ///
     /// `PredType` describes the three types of predicates that exists in a RAM program.
@@ -127,7 +128,7 @@ mod Fixpoint.Predicate {
     /// Returns the number of identifiers in `predInfo`, including `delta` and `delta'` relations.
     ///
     @Internal
-    pub def getIdCount(predInfo: Predicates): Int64 = Int64.max(0i64, 3 * fst(predInfo))
+    pub def getIdCount(predInfo: Predicates): Int32 = Int64.max(0i64, 3i64 * fst(predInfo)) |> Int64.tryToInt32 |> getOrCrash
 
     ///
     /// Returns the `PredSym` of type `wantedType` from `predSym` according to `predInfo`.
