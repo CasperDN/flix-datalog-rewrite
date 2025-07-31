@@ -80,12 +80,14 @@ mod Fixpoint.Predicate {
     ///
     /// Returns a list of all `RelSym` in `predInfo`.
     ///
+    /// The returned list satisfies the requirement `RelSym`s are ordered like `Full->Delta->New` 
+    ///
     @Internal
     pub def allRelSyms(predInfo: Predicates): List[RelSym] =
         let full = allFullRelSyms(predInfo);
-        full |>
-        List.append(List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), full)) |>
-        List.append(List.map(x -> fullRelSymToType(x, PredType.New, predInfo), full))
+        let delta = List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), full);
+        let new_ = List.map(x -> fullRelSymToType(x, PredType.New, predInfo), full);
+        full `List.append` delta `List.append` new_
 
     ///
     /// Returns the full `RelSym` associated with the `PredSym` in `body` according to `predInfo`.
