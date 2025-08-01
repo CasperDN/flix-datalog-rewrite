@@ -87,9 +87,9 @@
 /// ```
 /// Whenever we bind `a` we update the query-value of `B`.
 ///
-/// An alternative approach would be to have `query` of the form 
+/// An alternative approach would be to have `query` of the form
 /// `query {b ∈ B | searchTerms }`. Then `searchTerms` would be evaluated to generate the
-/// restriction for the query. This would create a new object every time the `query` is 
+/// restriction for the query. This would create a new object every time the `query` is
 /// met. Furthermore it would have to be evaluated every time `query {b ∈ B | lookupArrForB }`
 /// is met. If the query is deeply nested with some values bound higher up in the nesting,
 /// we do not need to evaluate these every time.
@@ -107,13 +107,13 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Util.getOrCrash
 
     ///
-    /// Maps `RowVar`s to their memory position (position in an array the interpreter 
+    /// Maps `RowVar`s to their memory position (position in an array the interpreter
     /// will use).
     ///
     type alias IdToIndex[r: Region] = UniqueInts[RowVar, r]
 
     ///
-    /// Maps `RowVar`s to a list of writes that should be performed whenever the `RowVar` is 
+    /// Maps `RowVar`s to a list of writes that should be performed whenever the `RowVar` is
     /// rebound.
     ///
     type alias WriteTos[r: Region] = MutMap[RowVar, List[WriteTuple], r]
@@ -140,8 +140,8 @@ mod Fixpoint.Phase.Lowering {
     /// end
     /// ```
     /// Initially, `MeetWithMap` is `(Nil, {})`. When the `RelOp` `search y ∈ B do` is
-    /// lowered, `x` is registered, and `MeetWithMap` becomes `(x :: Nil, {})`. When the 
-    /// `project` is lowered, it `(y :: x :: Nil, {})`. Finally, `Meet(x, y)` is lowered, 
+    /// lowered, `x` is registered, and `MeetWithMap` becomes `(x :: Nil, {})`. When the
+    /// `project` is lowered, it `(y :: x :: Nil, {})`. Finally, `Meet(x, y)` is lowered,
     /// which updates `disjoint` to `{y = x}`.
     ///
     /// The above code snippet is lowered to:
@@ -162,7 +162,7 @@ mod Fixpoint.Phase.Lowering {
     /// Returns the result along with the `Boxing` used for the program
     ///
     @Internal
-    pub def lowerProgram(rc: Region[r], withProv: Bool, program: Ram.RamProgram): (ExecutableRam.RamProgram, Boxing[r]) \ r = match program { 
+    pub def lowerProgram(rc: Region[r], withProv: Bool, program: Ram.RamProgram): (ExecutableRam.RamProgram[r], Boxing[r]) \ r = match program {
         case Ram.RamProgram.Program(stmt, _, meta, indexInfo) =>
             let idToIndex = UniqueInts.empty(rc);
             let (boxing, newFacts, idToBoxing) = Boxing.initialize(rc, withProv, program);
@@ -474,7 +474,7 @@ mod Fixpoint.Phase.Lowering {
     /// Add `rv` to `meetWithMap`.
     ///
     /// Concretely, for `meetWithMap = (seenRV, equalitySet)`, return
-    /// `(rv:: seen, equalitySet')` where `equalitySet` is simply updated with `rv` as a 
+    /// `(rv:: seen, equalitySet')` where `equalitySet` is simply updated with `rv` as a
     /// possible value.
     ///
     def addRowVarToMeetWithMap(rv: RowVar, meetWithMap: MeetWithMap[r]): MeetWithMap[r] \ r =
@@ -520,7 +520,7 @@ mod Fixpoint.Phase.Lowering {
     }
 
     ///
-    /// Returns the memory position of the first value equivalent to `rv`, w.r.t. 
+    /// Returns the memory position of the first value equivalent to `rv`, w.r.t.
     /// `meetWithMap`. If no such value exists, returns the memory position of `rv`.
     ///
     /// See `computeMeetWithPos`.
@@ -585,11 +585,16 @@ mod Fixpoint.Phase.Lowering {
             , toIndex, value)
 
     ///
+    /// Returns a list `(RowVar, arity)` in `program` in the order of the nesting.
+    ///
+    def collectRowVarArity(program: Ram.RamProgram): List[(RowVar, Int32)] =
+        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
+
+    ///
     /// Returns a list of pairs `(RowVar, RelSym)` in `program` in the order of the nesting.
     ///
-    @Internal
-    pub def collectRowVarRelSym(program: Ram.RamProgram): List[(RowVar, RelSym)] = match program {
-        case Ram.RamProgram.Program(stmt, _, _, _) => 
+    def collectRowVarRelSym(program: Ram.RamProgram): List[(RowVar, RelSym)] = match program {
+        case Ram.RamProgram.Program(stmt, _, _, _) =>
             collectRowVarRelSymStmt(stmt)
     }
 
@@ -610,20 +615,12 @@ mod Fixpoint.Phase.Lowering {
     ///
     /// Returns a list of pairs `(RowVar, RelSym)` in `op` in the order of nesting.
     ///
-    @Internal
-    pub def collectRowVarRelSymOp(op: Ram.RelOp): List[(RowVar, RelSym)] \ r = match op {
+    def collectRowVarRelSymOp(op: Ram.RelOp): List[(RowVar, RelSym)] \ r = match op {
         case Ram.RelOp.Search(rv, relSym, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case Ram.RelOp.Query(rv, relSym, _, _, rest) => (rv, relSym) :: collectRowVarRelSymOp(rest)
         case Ram.RelOp.Functional(_, _, _, rest, _) => collectRowVarRelSymOp(rest)
         case Ram.RelOp.Project(_, _, _) => Nil
         case Ram.RelOp.If(_, rest) => collectRowVarRelSymOp(rest)
     }
-
-    ///
-    /// Returns a list `(RowVar, arity)` in `program` in the order of the nesting.
-    ///
-    @Internal
-    pub def collectRowVarArity(program: Ram.RamProgram): List[(RowVar, Int32)] = 
-        collectRowVarRelSym(program) |> List.map(match (rv, RelSym.Symbol(_, arity, _)) -> (rv, arity))
 
 }

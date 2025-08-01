@@ -29,6 +29,7 @@
  mod Fixpoint.Phase.Provenance {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, RamId, BoolExp}
+    use Fixpoint.Boxed
     use Fixpoint.Boxed.BoxedInt64
     use Fixpoint.Counter
 
@@ -48,12 +49,24 @@
     /// Further extend facts to contain a depth and rule.
     ///
     def augmentProgramInternal(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, predicates, indexInfo) =>
-            let augmentedFacts = facts |>
-                Map.map(Vector.map(tuple -> Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)})));
+        case RamProgram.Program(stmt, facts, predicates, indexInfo) => unsafely IO run {
+            let (f1, f2) = facts;
+            let augmentedF1 = f1 |> Map.map(augmentFacts);
+            let augmentedF2 = f2 |> Map.map(augmentFacts);
+            let augmentedFacts = (augmentedF1, augmentedF2);
             let augmentedStmt = augmentStmt(stmt);
             RamProgram.Program(augmentedStmt, augmentedFacts, predicates, indexInfo) |>
             Fixpoint.Debugging.notifyPreLowering("Provenance")
+        }
+    }
+
+    def augmentFacts(oldTree: BPlusTree[Vector[Boxed], Boxed, Static]): BPlusTree[Vector[Boxed], Boxed, Static] \ IO = {
+        let newTree = BPlusTree.empty(Static);
+        BPlusTree.forEach(tuple -> v ->
+            let annotatedVector = Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)});
+            BPlusTree.put(annotatedVector, v, newTree)
+        , oldTree);
+        newTree
     }
 
     ///
