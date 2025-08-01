@@ -37,7 +37,7 @@ mod Fixpoint.Ast.Datalog {
     /// `Datalog(facts, rules)` is a Datalog program where `facts` and `rules` are the
     /// facts and rules of the program, respectively.
     ///
-    /// `Model(factsMap)` is a 
+    /// `Model(factsMap)` is a model mapping `RelSym` the their `IDB`/facts.
     ///
     /// `Join(p1, p2)` is the combination of Datalog programs `p1` and `p2`.
     ///
@@ -47,9 +47,9 @@ mod Fixpoint.Ast.Datalog {
     @Internal
     pub enum Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
-        case Model(Map[RelSym, Map[Vector[Boxed], Boxed]])
+        case Model(Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]])
         case Join(Datalog, Datalog)
-        case Provenance(Vector[Constraint], Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]])
+        case Provenance(Vector[Constraint], Map[PredSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]])
     }
 
     instance PredSymsOf[Datalog] {
@@ -85,7 +85,7 @@ mod Fixpoint.Ast.Datalog {
         pub def toString(cs: Datalog): String = match cs {
             case Datalog.Datalog(facts, rules) => region rc {
                 if(not Fixpoint.Options.enableDebugPrintFacts()) {
-                    "Printing facts disabled ${String.lineSeparator()}" + 
+                    "Printing facts disabled ${String.lineSeparator()}" +
                     Vector.iterator(rc, rules)
                         |> Iterator.join(String.lineSeparator())
                 } else {
@@ -98,35 +98,43 @@ mod Fixpoint.Ast.Datalog {
                 if(not Fixpoint.Options.enableDebugPrintFacts()) {
                     "Printing facts disabled."
                 } else {
-                    Map.iterator(rc, db)
-                        |> Iterator.flatMap(match (ramSym, rel) -> {
-                            Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
+                   unsafely IO run {
+                        let builder = StringBuilder.empty(rc);
+                        db |> Map.forEach(relSym -> innerMap ->
+                            innerMap |> BPlusTree.forEach(tuple -> lat -> {
                                 let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
-                                match toDenotation(ramSym) {
-                                    case Relational => "${ramSym}(${tupleString})."
-                                    case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
+                                match toDenotation(relSym) {
+                                    case Relational => StringBuilder.append("${relSym}(${tupleString}).${String.lineSeparator()}", builder)
+                                    case Latticenal(_, _, _, _) => StringBuilder.append("${relSym}(${tupleString}; %{lat}).${String.lineSeparator()}", builder)
                                 }
                             })
-                        })
-                        |> Iterator.join(String.lineSeparator())
-                        + String.lineSeparator()
+                        );
+                        StringBuilder.toString(builder)
+                    }
                 }
             }
             case Datalog.Join(d1, d2) => {
                 let lineSep = String.lineSeparator();
                 "${d1}${lineSep}${d2}${lineSep}"
             }
-            case Datalog.Provenance(_, db) =>
-                let indent = String.repeat(4, " ");
-                Map.joinWith(predSym -> facts -> {
-                    let factsString = Map.joinWith(fact -> annotation -> {
-                        "${indent}${fact} @ ${annotation}"
-                    }, "$,{String.lineSeparator()}${indent}", facts);
-                    "${predSym}:${String.lineSeparator()}${factsString}"
-                }, "${String.lineSeparator()}", db)
+            case Datalog.Provenance(_, db) => region rc {
+                unsafely IO run {
+                    let indent = String.repeat(4, " ");
+                    Map.joinWith(predSym -> facts -> {
+                        let builder = StringBuilder.empty(rc);
+                        facts |> BPlusTree.forEach(fact -> annotation -> {
+                            StringBuilder.append("${indent}${fact} @ ${annotation},{String.lineSeparator()}${indent}", builder)
+                        });
+                        let textOverflow = String.length("$,{String.lineSeparator()}${indent}");
+                        let rawFactString = StringBuilder.toString(builder);
+                        let factsString = String.sliceLeft(end = String.length(rawFactString)- textOverflow, rawFactString);
+                        "${predSym}:${String.lineSeparator()}${factsString}"
+                    }, "${String.lineSeparator()}", db)
+                }
+            }
         }
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // Constraint                                                              //
     /////////////////////////////////////////////////////////////////////////////
