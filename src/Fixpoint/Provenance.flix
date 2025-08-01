@@ -31,7 +31,8 @@
 mod Fixpoint.Provenance {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, VarSym, BodyPredicate, HeadPredicate, HeadTerm, BodyTerm, Polarity}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
-    use Fixpoint.Ast.Shared.{PredSym}
+    use Fixpoint.Ast.Ram.{makeFakeRelSym, RelSym}
+    use Fixpoint.Ast.Shared.{PredSym, Denotation}
     use Fixpoint.Boxed
     use Fixpoint.Counter
     use Fixpoint.Util.getOrCrash
@@ -40,7 +41,7 @@ mod Fixpoint.Provenance {
     /// A `ProvIDB` maps from `PredSym` to a map from the facts of the `PredSym`
     /// to `(depth, ruleUsed)`.
     ///
-    type alias ProvIDB = Map[PredSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]]
+    type alias ProvIDB = Map[RelSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]]
 
     ///
     /// A `BPLookoup` is a over the facts for a specific `PredSym`.
@@ -73,7 +74,7 @@ mod Fixpoint.Provenance {
     /// `missingFactPart` refers to the value-part in the `BPLookup`.
     ///
     def lookup(rc: Region[r], idb: ProvIDB, searchAndVals: Vector[(Int32, Boxed)], arrSize: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r + IO =
-        match Map.get(pred, idb) {
+        match Map.get(makeFakeRelSym(pred), idb) {
             case None => None
             case Some(fullTree) => 
                 let (search, vals) = Vector.unzip(searchAndVals);
@@ -172,7 +173,7 @@ mod Fixpoint.Provenance {
     pub def provQueryInternal(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] \ IO = match d {
         case Provenance(rules, provIdb) => region rc {
             let reorderedRules = Vector.map(identity, rules);
-            let annotation = match Map.get(predSym, provIdb) {
+            let annotation = match Map.get(RelSym.Symbol(predSym, -1, Denotation.Relational), provIdb) {
                 case None => None
                 case Some(v) => match BPlusTree.get(fact, v) {
                     case None => None
@@ -332,7 +333,7 @@ mod Fixpoint.Provenance {
                             case BodyTerm.Lit(val) => val
                             case BodyTerm.Wild => unreachable!()
                         });
-                        let isNonMatch = match Map.get(pred, provIdb) {
+                        let isNonMatch = match Map.get(makeFakeRelSym(pred), provIdb) {
                             case None => true
                             case Some(facts) => not BPlusTree.memberOf(tuple, facts)
                         };

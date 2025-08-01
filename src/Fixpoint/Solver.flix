@@ -89,7 +89,7 @@ mod Fixpoint.Solver {
     @Internal
     def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog, db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): (ExecutableRam.RamProgram, Boxing[rc]) \ rc = {
+        def compiler(cs: Datalog, db: Ram.Facts): (ExecutableRam.RamProgram[rc], Boxing[rc]) \ rc = {
             Phase.Compiler.compile(cs, db, stf) |>
             Debugging.notifyPreLowering("Compiler") |>
             Phase.Simplifier.simplifyProgram |>
@@ -117,7 +117,14 @@ mod Fixpoint.Solver {
                 Debugging.notifyPreInterpret |>
                 Interpreter.interpret(rc, withProv) |>
                 toModelOnlyFull(withProv, r)
-            case Join(Provenance(_, _), cs) => ???
+            case Join(Provenance(_, model), Datalog(f, r)) =>
+                let cs = Datalog(f, r);
+                // Provenance is destroyed upon joining. Becomes a model.
+                let m = provenanceModeltoModel(model);
+                compiler(cs, m) |>
+                Debugging.notifyPreInterpret |>
+                Interpreter.interpret(rc, withProv) |>
+                toModelOnlyFull(withProv, r)
             case _ => bug!("Datalog Boxing bug")
         };
         let m = Debugging.notifyPostSolve(model);
@@ -160,17 +167,22 @@ mod Fixpoint.Solver {
         case (_, Provenance(_, _)) => union(d1, provenanceToModel(d2))
     }
 
-    def provenanceToModel(d: Datalog): Datalog = unsafely IO run match d {
+    def provenanceToModel(d: Datalog): Datalog = match d {
         case Provenance(_, facts) =>
-            Map.foldLeftWithKey(acc -> predSym -> factMap -> match BPlusTree.minimumKey(factMap) {
-                case None => acc
-                case Some((v, _)) =>
-                    let newTree = BPlusTree.empty(Static);
-                    let relSym = RelSym.Symbol(predSym, Vector.length(v), Relational);
-                    BPlusTree.forEach(k -> _ -> BPlusTree.put(k, Boxed.NoValue, newTree), factMap);
-                    Map.insert(relSym, newTree, acc)
-            }, Map#{}, facts) |> Model
+            provenanceModeltoModel(facts) |> Model
         case _ => unreachable!()
+    }
+
+    ///
+    /// Returns the given provenance model `model` as a Datalog value.
+    ///
+    def provenanceModeltoModel(model: Map[RelSym, BPlusTree[Vector[Boxed], (Int64, Int32), IO]]): Map[RelSym, BPlusTree[Vector[Boxed], Boxed, IO]] = unsafely IO run {
+        model |> 
+        Map.map(old -> {
+            let newTree = BPlusTree.empty(Static);
+            old |> BPlusTree.forEach(k -> _ -> BPlusTree.put(k, Boxed.NoValue, newTree));
+            newTree
+        })
     }
 
 
@@ -183,7 +195,7 @@ mod Fixpoint.Solver {
             provOf(f, p, runProvSolver(d), mapping)
         case Model(db) => unsafely IO run {
             // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
-            let fakeRelSym = RelSym.Symbol(p, -1, Relational);
+            let fakeRelSym = Ram.makeFakeRelSym(p);
             match Map.get(fakeRelSym, db) {
                 case None => None
                 case Some(facts) => match BPlusTree.memberOf(f, facts) {
@@ -198,6 +210,12 @@ mod Fixpoint.Solver {
         case Join(_, _) =>
             provOf(f, p, runProvSolver(d), mapping)
     }
+
+    ///
+    /// Returns the provenance of fact `f` of relation `p` given Datalog program `d`.
+    ///
+    @Internal
+    pub def provenanceOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Vector[t] = ???
 
     ///
     /// Project all facts in the given Datalog program `d` that has `p` in its head.
@@ -217,10 +235,12 @@ mod Fixpoint.Solver {
             }, db) |>
             List.toMap |>
             Model
-        case Provenance(rules, db) => match Map.get(p, db) {
-            case None => Provenance(rules, Map#{})
-            case Some(v) => Provenance(rules, Map#{p => v})
-        }
+        case Provenance(rules, db) =>
+            let fakeRelSym = Ram.makeFakeRelSym(p);
+            match Map.get(fakeRelSym, db) {
+                case None => Provenance(rules, Map#{})
+                case Some(v) => Provenance(rules, Map#{fakeRelSym => v})
+            }
         case Join(d1, d2) => union(projectSym(p, d1), projectSym(p, d2))
     }
 
@@ -926,7 +946,7 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Join(d1, d2) => Vector.append(factsOf(f, p, d1), factsOf(f, p, d2))
-        case Provenance(_, db) => match Map.get(p, db) {
+        case Provenance(_, db) => match Map.get(Ram.makeFakeRelSym(p), db) {
             case None => Vector#{}
             case Some(facts) => region rc {
                 let acc = MutList.empty(rc);
@@ -967,14 +987,14 @@ mod Fixpoint.Solver {
     ///
     def toProvenance(rules: Vector[Constraint], db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): Datalog = unsafely IO run {
         let res = db |>
-        Map.foldLeftWithKey(acc -> match RelSym.Symbol(predSym, _, _) -> facts -> {
+        Map.foldLeftWithKey(acc -> relSym -> facts -> {
             let len = Vector.length(fst(getOrCrash(BPlusTree.minimumKey(facts))));
             let newTree = BPlusTree.empty(Static);
             facts |> BPlusTree.forEach(fact -> _ -> {
                 let (rawFact, annotation) = Vector.splitAt(len - 2, fact);
                 newTree |> BPlusTree.put(rawFact, (unbox(Vector.get(0, annotation)), getOrCrash(Int64.tryToInt32(unbox(Vector.get(1, annotation))))))
             });
-            Map.insert(predSym, newTree, acc)
+            Map.insert(relSym, newTree, acc)
         }, Map#{}) |>
         Provenance(rules);
         res

@@ -41,15 +41,16 @@ mod Fixpoint.Ast.Datalog {
     ///
     /// `Join(p1, p2)` is the combination of Datalog programs `p1` and `p2`.
     ///
-    /// `Provenance(facts, model)` is a Datalog model where `model` is a map from
-    /// computed facts to annotations of the form `(depth, ruleUsed)`.
+    /// `Provenance(rules, model)` is a Datalog model where `model` is a map from
+    /// computed facts to annotations of the form `(depth, ruleUsed)` and `rules`
+    /// are the rules used during the computation of `model`.
     ///
     @Internal
     pub enum Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
         case Model(Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]])
         case Join(Datalog, Datalog)
-        case Provenance(Vector[Constraint], Map[PredSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]])
+        case Provenance(Vector[Constraint], Map[RelSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]])
     }
 
     instance PredSymsOf[Datalog] {
@@ -60,7 +61,10 @@ mod Fixpoint.Ast.Datalog {
                 factSyms ++ ruleSyms
             case Datalog.Model(m)              => Map.keysOf(m) |> Set.toList |> List.map(predSymsOf) |> Monoid.fold
             case Datalog.Join(v1, v2)          => predSymsOf(v1) ++ predSymsOf(v2)
-            case Datalog.Provenance(_, _)      => ???
+            case Datalog.Provenance(rules, model)      =>
+                let ruleSyms = rules |> Vector.map(predSymsOf) |> Monoid.fold;
+                let modelSyms = Map.keysOf(model) |> Set.map(predSymsOf) |> Monoid.fold;
+                ruleSyms ++ modelSyms
         }
     }
 
@@ -77,7 +81,13 @@ mod Fixpoint.Ast.Datalog {
                 };
                 Datalog.Model(Map.foldLeftWithKey(f, Map.empty(), m))
             case Datalog.Join(v1, v2) => Datalog.Join(substitute(v1, s), substitute(v2, s))
-            case Datalog.Provenance(_, _) => ???
+            case Datalog.Provenance(rules, model) =>
+                let newRules = Vector.map(c -> substitute(c, s), rules);
+                let newModel = (Map#{}, model) ||> Map.foldLeftWithKey(acc -> pred -> facts -> 
+                    Map.insert(substitute(pred, s), facts, acc)
+                );
+                Datalog.Provenance(newRules, newModel)
+                
         }
     }
 
