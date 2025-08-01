@@ -194,7 +194,7 @@ mod Fixpoint.Interpreter {
         rc: Region[r],
         db: Indexes[r],
         boxing: Boxing[r],
-        indexPos: Vector[Vector[Int32]],
+        indexPos: IndexPositions,
         predTrack: Predicates,
         boxingIndexes: RamIdToPos,
         withProv: Bool
