@@ -55,13 +55,13 @@ mod Fixpoint.Ast.Datalog {
 
     instance PredSymsOf[Datalog] {
         pub def predSymsOf(x: Datalog): Set[PredSym] = match x {
-            case Datalog.Datalog(facts, rules) =>
+            case Datalog.Datalog(facts, rules)    =>
                 let factSyms = facts |> Vector.map(predSymsOf) |> Monoid.fold;
                 let ruleSyms = rules |> Vector.map(predSymsOf) |> Monoid.fold;
                 factSyms ++ ruleSyms
-            case Datalog.Model(m)              => Map.keysOf(m) |> Set.toList |> List.map(predSymsOf) |> Monoid.fold
-            case Datalog.Join(v1, v2)          => predSymsOf(v1) ++ predSymsOf(v2)
-            case Datalog.Provenance(rules, model)      =>
+            case Datalog.Model(m)                 => Map.keysOf(m) |> Set.toList |> List.map(predSymsOf) |> Monoid.fold
+            case Datalog.Join(v1, v2)             => predSymsOf(v1) ++ predSymsOf(v2)
+            case Datalog.Provenance(rules, model) =>
                 let ruleSyms = rules |> Vector.map(predSymsOf) |> Monoid.fold;
                 let modelSyms = Map.keysOf(model) |> Set.map(predSymsOf) |> Monoid.fold;
                 ruleSyms ++ modelSyms
@@ -87,7 +87,6 @@ mod Fixpoint.Ast.Datalog {
                     Map.insert(substitute(pred, s), facts, acc)
                 );
                 Datalog.Provenance(newRules, newModel)
-                
         }
     }
 
