@@ -31,73 +31,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutation01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutation02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutation03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutation04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutation05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutation06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (x, x + 1)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstInt32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -111,73 +111,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationFloat32_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat32_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat32_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat32_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat32_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat32_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat32) |> Vector.map(x -> (x, x + 1f32)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstFloat32(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat32(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -191,73 +191,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationFloat64_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat64_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat64_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat64_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat64_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationFloat64_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toFloat64) |> Vector.map(x -> (x, x + 1f64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstFloat64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstFloat64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -277,73 +277,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationChar_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationChar_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationChar_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationChar_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationChar_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationChar_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (forceToChar(x), forceToChar(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstChar(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstChar(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -357,73 +357,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationInt64_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt64_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt64_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt64_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt64_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt64_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(Int32.toInt64) |> Vector.map(x -> (x, x + 1i64)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstInt64(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt64(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -442,73 +442,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationInt8_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt8_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt8_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt8_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt8_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt8_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt8) |> Vector.map(x -> (x, x + 1i8)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstInt8(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt8(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -527,73 +527,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationInt16_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt16_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt16_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt16_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt16_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationInt16_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(forceToInt16) |> Vector.map(x -> (x, x + 1i16)) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstInt16(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstInt16(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -608,73 +608,73 @@ mod Test.Exp.Fixpoint.Permutations {
     @Test
     def testPermutationString_01(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), B(b, c), C(c, d).
+            D(x, y, z, w) :- A(x, y), B(y, z), C(z, w).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationString_02(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- A(a, b), C(c, d), B(b, c).
+            D(x, y, z, w) :- A(x, y), C(z, w), B(y, z).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationString_03(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), A(a, b), C(c, d).
+            D(x, y, z, w) :- B(y, z), A(x, y), C(z, w).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationString_04(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- B(b, c), C(c, d), A(a, b).
+            D(x, y, z, w) :- B(y, z), C(z, w), A(x, y).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationString_05(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), A(a, b), B(b, c).
+            D(x, y, z, w) :- C(z, w), A(x, y), B(y, z).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
     @Test
     def testPermutationString_06(): Bool = {
         let n = smallN();
-        let a_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
-        let b_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
-        let c_ = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
+        let f1 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into A/2;
+        let f2 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into B/2;
+        let f3 = inject Vector.range(0, n) |> Vector.map(x -> (Int32.toString(x), Int32.toString(x + 1))) into C/2;
         let p = #{
-            D(a, b, c, d) :- C(c, d), B(b, c), A(a, b).
+            D(x, y, z, w) :- C(z, w), B(y, z), A(x, y).
         };
-        resultForFirstString(n) `Assert.eq` (query a_, b_, c_, p select (a, b, c, d) from D(a, b, c, d))
+        resultForFirstString(n) `Assert.eq` (query f1, f2, f3, p select (x, y, z, w) from D(x, y, z, w))
     }
 
 
