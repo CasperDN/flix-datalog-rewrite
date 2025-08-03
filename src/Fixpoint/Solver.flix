@@ -167,6 +167,11 @@ mod Fixpoint.Solver {
         case (_, Provenance(_, _)) => union(d1, provenanceToModel(d2))
     }
 
+    ///
+    /// Returns the `Provenance` program `d` as a `Model`.
+    ///
+    /// Crashes if `d` is not a `Provenance`.
+    ///
     def provenanceToModel(d: Datalog): Datalog = match d {
         case Provenance(_, facts) =>
             provenanceModeltoModel(facts) |> Model
@@ -177,7 +182,7 @@ mod Fixpoint.Solver {
     /// Returns the given provenance model `model` as a Datalog value.
     ///
     def provenanceModeltoModel(model: Map[RelSym, BPlusTree[Vector[Boxed], (Int64, Int32), IO]]): Map[RelSym, BPlusTree[Vector[Boxed], Boxed, IO]] = unsafely IO run {
-        model |> 
+        model |>
         Map.map(old -> {
             let newTree = BPlusTree.empty(Static);
             old |> BPlusTree.forEach(k -> _ -> BPlusTree.put(k, Boxed.NoValue, newTree));

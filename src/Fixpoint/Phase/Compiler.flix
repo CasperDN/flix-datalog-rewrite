@@ -60,8 +60,8 @@ mod Fixpoint.Phase.Compiler {
             pseudoStratums |> MutMap.forEach(_ -> pseudStrat -> {
                 let runInParallel = (Nil, pseudStrat) ||> MutMap.foldLeft(acc -> enumeratedRules -> {
                     let stmtsForPseudo = MutList.empty(rc);
-                    let (nums, s) = List.unzip(enumeratedRules);
-                    compileStratum(stmtsForPseudo, s, nums, predicates, counter);
+                    let (strataRuleNums, strataRules) = List.unzip(enumeratedRules);
+                    compileStratum(stmtsForPseudo, strataRules, strataRuleNums, predicates, counter);
                     (MutList.toVector(stmtsForPseudo) |> RamStmt.Seq) :: acc
                 });
                 if(List.size(runInParallel) > 1) {
@@ -156,7 +156,7 @@ mod Fixpoint.Phase.Compiler {
 
         // Construct the inserts for step 1.
         let inserts = MutList.empty(rc);
-        List.forEach(match (x, i) -> compileRule(inserts, x, i, predicates, counter), List.zip(stratum, ruleNums));
+        List.forEach(match (rule, ruleNum) -> compileRule(inserts, rule, ruleNum, predicates, counter), List.zip(stratum, ruleNums));
         let optPar =
             if(MutList.size(inserts) > 1) {
                 Some(RamStmt.Par(MutList.toVector(inserts)))
@@ -174,7 +174,7 @@ mod Fixpoint.Phase.Compiler {
                 let loopBody = MutList.empty(rc);
 
                 let loopInserts = MutList.empty(rc);
-                List.forEach(match (x, i) -> compileRuleIncr(loopInserts, x, i, idbIds, predicates, counter), List.zip(stratum, ruleNums));
+                List.forEach(match (rule, ruleNum) -> compileRuleIncr(loopInserts, rule, ruleNum, idbIds, predicates, counter), List.zip(stratum, ruleNums));
                 let loopParOpt =
                     if (MutList.size(loopInserts) > 1) {
                         Some(RamStmt.Par(MutList.toVector(loopInserts)))

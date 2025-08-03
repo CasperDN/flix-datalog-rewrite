@@ -17,9 +17,9 @@
 
 
 ///
-/// The purpose of this phase is to hoist `If` ops as much as possible and merge them 
-/// with `Search` into `Query` when possible/relevant. Additionally, guards are added 
-/// at the top of `Insert` statements that only perform the operations if none of the 
+/// The purpose of this phase is to hoist `If` ops as much as possible and merge them
+/// with `Search` into `Query` when possible/relevant. Additionally, guards are added
+/// at the top of `Insert` statements that only perform the operations if none of the
 /// involved relations are empty. For example, the following
 /// ```
 /// search a ∈ A do
@@ -45,7 +45,7 @@
 /// end
 /// ```
 ///
-/// One hard dependency of the current implementation is that for `BoolExp.Eq(x, y)`, `x` 
+/// One hard dependency of the current implementation is that for `BoolExp.Eq(x, y)`, `x`
 /// and `y` must either be `Lit` or `RowLoad(_ ,_, _)`.
 ///
 /// The hoisting in general happens with a `MutDisjointSets`, called `equalitySets`,
@@ -297,7 +297,7 @@ mod Fixpoint.Phase.Hoisting {
             case RelOp.If(boolExps, body) =>
                 // Just note all `boolExps`. They will be placed as high as possible in the AST by other cases.
                 // If `boolExps` contains no variables, push it all the way to the top, otherwise register it for
-                // all variables occuring in `boolExp`.
+                // all variables occurring in `boolExp`.
                 boolExps |>
                 Vector.forEach(b -> match b {
                     // Don't collect Eq's: they are handled separately to ensure we refer to the earliest evaluated expression.
@@ -404,7 +404,7 @@ mod Fixpoint.Phase.Hoisting {
         equalitySets: MutDisjointSets[(RowVar, Int32), r],
         idToBool: MutMap[RowVar, MutList[BoolExp, r], r]
     ): List[BoolExp] \ r = {
-        keepGroundBools(rv, termMapCopy, equalitySets, idToBool) |> 
+        keepGroundBools(rv, termMapCopy, equalitySets, idToBool) |>
             List.filter(x -> not isBoolGround(termMap, equalitySets, x)) |>
             List.map(replaceByRepBoolExp(termMapCopy, equalitySets))
     }
@@ -418,7 +418,7 @@ mod Fixpoint.Phase.Hoisting {
     /// As an example, `Guard2(x[0], y[3])` will return `{x}` if `termMap` is e.g. `[y[3] => 8]`.
     /// If `termMap` contained `y[3]=> z[3]`, then `{x, z}` will be returned.
     ///
-    /// The purpose is to return the `RowVar`'s in the AST whose `RelOp`'s are possible 
+    /// The purpose is to return the `RowVar`'s in the AST whose `RelOp`'s are possible
     /// places `bool` can be hoisted to.
     ///
     def collectBoolVariables(
@@ -619,7 +619,7 @@ mod Fixpoint.Phase.Hoisting {
     /// and `Lit` are added to `constEqualities`.
     ///
     /// In `equalitySets`, we unify `(rv1, i1)` with `(rv2, i2)` if they occur together
-    /// in an equaltiy statement.
+    /// in an equality statement.
     ///
     /// In `constEqualities`, we save a list of which literals a `(rv, i)` were equal to.
     ///
