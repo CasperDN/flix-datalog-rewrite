@@ -266,7 +266,7 @@ mod Fixpoint.Phase.Hoisting {
                             // Expressions are hoisted to this point if they are ground with `rowVar` bound,
                             // but not without `rowVar`.
                             let hoistedToHere = getBoolsHoistedToHere(rowVar, termMap, termMapWithCur, equalitySets, idToBool);
-                            let combined = List.toVector(knownEqualities ::: intraEqualities ::: hoistedToHere);
+                            let combined = List.toVector(knownEqualities ++ intraEqualities ++ hoistedToHere);
                             let newOp =
                                 if (Vector.length(combined) != 0)
                                     RelOp.Query(rowVar, relSym, combined, -1, hoistedBody)
