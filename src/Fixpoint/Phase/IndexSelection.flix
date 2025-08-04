@@ -396,7 +396,7 @@ mod Fixpoint.Phase.IndexSelection {
             // The vertices are are simply the indices of the searches in the list
             let vertices = List.range(0, List.length(searches));
             let zipped = searches |> List.map(s -> Vector.toSet(s)) |> List.zip(vertices);
-            let adjList = 
+            let adjList =
                 List.foldMap(match (u, s) -> {
                     List.filter(p -> Set.isProperSubsetOf(s, snd(p)), zipped) |>
                         List.map(p -> (u, fst(p)))

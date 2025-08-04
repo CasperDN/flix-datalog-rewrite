@@ -310,7 +310,7 @@ mod Fixpoint.Phase.Hoisting {
                             if (Set.size(vars) == 0)
                                 MutList.push(b, independentBool)
                             else
-                                vars |> 
+                                vars |>
                                     Set.forEach(v -> {
                                         let boolList = MutMap.getOrElsePut(v, MutList.empty(rc), idToBool);
                                         MutList.push(b, boolList)

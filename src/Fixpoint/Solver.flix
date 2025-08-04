@@ -1010,6 +1010,5 @@ mod Fixpoint.Solver {
     ///
     def toModel(db: Database[r]): Datalog \ r =
         Model(MutMap.toMap(db))
-        
 
 }
