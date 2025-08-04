@@ -88,12 +88,12 @@ mod Fixpoint.Provenance {
                         let nonSearch = Vector.range(0, arrSize) |> Vector.filter(v -> not Vector.memberOf(v, search));
                         let extractNonSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, nonSearch), k), Vector.length(nonSearch));
                         fullTree |>
-                        BPlusTree.forEach(k -> match (depth, rule) -> {
-                            let searchPart = extractSearchPart(k);
-                            let nonSearchPart = extractNonSearchPart(k);
-                            let newVal = ((nonSearchPart), depth, rule);
-                            BPlusTree.putWith(_ -> old -> newVal :: old, searchPart, newVal :: Nil, tree)
-                        });
+                            BPlusTree.forEach(k -> match (depth, rule) -> {
+                                let searchPart = extractSearchPart(k);
+                                let nonSearchPart = extractNonSearchPart(k);
+                                let newVal = ((nonSearchPart), depth, rule);
+                                BPlusTree.putWith(_ -> old -> newVal :: old, searchPart, newVal :: Nil, tree)
+                            });
                         MutMap.put(search, tree, innerMap);
                         BPlusTree.get(vals, tree)
                 }
@@ -162,7 +162,7 @@ mod Fixpoint.Provenance {
                 recurse(furtherWork)
         }};
         recurse(p :: Nil);
-        res |> MutList.toList
+        MutList.toList(res)
     }
 
     @Internal
@@ -201,15 +201,17 @@ mod Fixpoint.Provenance {
             let rule = Vector.get(ruleUsed, rules);
             let bodyAtoms = getMatchingBody(fact, depth, rc, provIdb, lookupStruct, rule);
             let Constraint.Constraint(_, bodyPreds) = rule;
-            let relevantPreds = bodyPreds |> Vector.filter(bodyAtom -> match bodyAtom {
-                case BodyPredicate.BodyAtom(_, _, _, _, _) => true
-                case _ => false
-            });
-            let childProofs = Vector.zip(relevantPreds, bodyAtoms) |> Vector.map(match (bodyP, (bodyFact, bodyDepth, bodyRule)) -> match bodyP {
-                case BodyPredicate.BodyAtom(p, _, _, _, _) =>
-                    buildProof(p, bodyFact, bodyDepth, bodyRule, rules, provIdb, lookupStruct, rc)
-                case _      => unreachable!()
-            });
+            let relevantPreds = bodyPreds |>
+                Vector.filter(bodyAtom -> match bodyAtom {
+                    case BodyPredicate.BodyAtom(_, _, _, _, _) => true
+                    case _ => false
+                });
+            let childProofs = Vector.zip(relevantPreds, bodyAtoms) |>
+                Vector.map(match (bodyP, (bodyFact, bodyDepth, bodyRule)) -> match bodyP {
+                    case BodyPredicate.BodyAtom(p, _, _, _, _) =>
+                        buildProof(p, bodyFact, bodyDepth, bodyRule, rules, provIdb, lookupStruct, rc)
+                    case _      => unreachable!()
+                });
             ProofTree.IDB(predSym, fact, childProofs)
         }
     }
@@ -226,15 +228,15 @@ mod Fixpoint.Provenance {
         let bodyValues = Array.init(rc, _ -> None, Vector.length(bodyPreds));
         let getValOfVar = MutMap.empty(rc);
         let headApps = Vector.zip(headTerms, fact) |>
-        Vector.filter(match (h, _) -> match h {
-            case (HeadTerm.App0(_)) => false // Must be true.
-            case (HeadTerm.App1(_, _)) => true
-            case (HeadTerm.App2(_, _, _)) => true
-            case (HeadTerm.App3(_, _, _, _)) => true
-            case (HeadTerm.App4(_, _, _, _, _)) => true
-            case (HeadTerm.App5(_, _, _, _, _, _)) => true
-            case _ => false
-        });
+            Vector.filter(match (h, _) -> match h {
+                case (HeadTerm.App0(_)) => false // Must be true.
+                case (HeadTerm.App1(_, _)) => true
+                case (HeadTerm.App2(_, _, _)) => true
+                case (HeadTerm.App3(_, _, _, _)) => true
+                case (HeadTerm.App4(_, _, _, _, _)) => true
+                case (HeadTerm.App5(_, _, _, _, _, _)) => true
+                case _ => false
+            });
         ///
         /// Returns the current value of `varName`.
         ///
@@ -245,21 +247,24 @@ mod Fixpoint.Provenance {
         ///
         /// Concretely, we update the `getValOfVar` to contain `varNames[i] => matchedFacts[i]`.
         ///
-        def putVals(varNames, matchedFact) = varNames |> Vector.forEachWithIndex(i -> v ->
-            MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
-        );
+        def putVals(varNames, matchedFact) =
+            varNames |>
+                Vector.forEachWithIndex(i -> v ->
+                    MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
+                );
         ///
         /// Returns true if all guards are satisfied by the current variable assignment.
         ///
         def areGuardsTrue(): Bool = {
-            headApps |> Vector.forAll(match (app, val) -> match app {
-                case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
-                case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
-                case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
-                case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
-                case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
-                case _ => unreachable!()
-            })
+            headApps |>
+                Vector.forAll(match (app, val) -> match app {
+                    case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
+                    case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
+                    case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
+                    case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
+                    case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
+                    case _ => unreachable!()
+                })
         };
         
         ///
@@ -283,56 +288,60 @@ mod Fixpoint.Provenance {
                         // Collect the bound variables in a list as needed by `lookup`.
                         // `(2, val)` being in the list means that attribute 2 of the tuple
                         // must have value `val`. View a a `zipWithIndex |> filterWithIndex`.
-                        let filterAsList = ((Nil, 0), expected) ||> Vector.foldLeft(match (acc, i) -> t -> match t {
-                            case BodyTerm.Wild => (acc, i + 1)
-                            case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
-                                case None => (acc, i + 1)
-                                case Some(val) => ((i, val) :: acc, i + 1)
-                            }
-                            case BodyTerm.Lit(val) => ((i, val) :: acc, i + 1)
-                        }) |> fst |> List.toVector |> Vector.reverse;
+                        let filterAsList = ((Nil, 0), expected)
+                            ||> Vector.foldLeft(match (acc, i) -> t -> match t {
+                                case BodyTerm.Wild => (acc, i + 1)
+                                case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
+                                    case None => (acc, i + 1)
+                                    case Some(val) => ((i, val) :: acc, i + 1)
+                                }
+                                case BodyTerm.Lit(val) => ((i, val) :: acc, i + 1)
+                            }) |> fst |> List.toVector |> Vector.reverse;
                         // List of `VarSym` of variables that become bound when the atom is
                         // satisfied.
-                        let nowBoundVars = expected |> Vector.filterMap(t -> match t {
-                            case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
-                                case None => Some(v)
-                                case Some(_) => None
-                            }
-                            case _ => None
-                        });
+                        let nowBoundVars = expected |>
+                            Vector.filterMap(t -> match t {
+                                case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
+                                    case None => Some(v)
+                                    case Some(_) => None
+                                }
+                                case _ => None
+                            });
                         let matches = lookup(rc, provIdb, filterAsList, Vector.length(expected), lookupStruct, pred);
                         match matches {
                             case None => false
                             case Some(facts) => {
                                 // Try to find any fact that matches the current assignment of variables.
-                                facts |> List.exists(match (bodyFact, bodyDepth, bodyRule) -> {
-                                    if(bodyDepth >= depth) {
-                                        false
-                                    } else {
-                                        let c1 = Counter.fresh(rc);
-                                        let c2 = Counter.fresh(rc);
-                                        let completeFact = Vector.range(0, Vector.length(expected)) |>
-                                        Vector.map(i -> {
-                                            if(Counter.get(c1) < Vector.length(filterAsList) and i == fst(Vector.get(Counter.get(c1), filterAsList))) {
-                                                snd(Vector.get(Counter.getAndIncrement(c1), filterAsList))
-                                            } else {
-                                                Vector.get(Counter.getAndIncrement(c2), bodyFact)
-                                            }
-                                        });
-                                        Array.put(Some((completeFact, bodyDepth, bodyRule)), index, bodyValues);
-                                        putVals(nowBoundVars, bodyFact);
-                                        loop(index + 1)
-                                    }
-                                })
+                                facts |>
+                                    List.exists(match (bodyFact, bodyDepth, bodyRule) -> {
+                                        if(bodyDepth >= depth) {
+                                            false
+                                        } else {
+                                            let c1 = Counter.fresh(rc);
+                                            let c2 = Counter.fresh(rc);
+                                            let completeFact = Vector.range(0, Vector.length(expected)) |>
+                                                Vector.map(i -> {
+                                                    if(Counter.get(c1) < Vector.length(filterAsList) and i == fst(Vector.get(Counter.get(c1), filterAsList))) {
+                                                        snd(Vector.get(Counter.getAndIncrement(c1), filterAsList))
+                                                    } else {
+                                                        Vector.get(Counter.getAndIncrement(c2), bodyFact)
+                                                    }
+                                                });
+                                            Array.put(Some((completeFact, bodyDepth, bodyRule)), index, bodyValues);
+                                            putVals(nowBoundVars, bodyFact);
+                                            loop(index + 1)
+                                        }
+                                    })
                             }
                         }
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Negative, _, expected) =>
                         // `not pred(tuple)` is true if `pred(tuple)` is not in the model. 
-                        let tuple = expected |> Vector.map(t -> match t {
-                            case BodyTerm.Var(v) => getVal(v)
-                            case BodyTerm.Lit(val) => val
-                            case BodyTerm.Wild => unreachable!()
-                        });
+                        let tuple = expected |> 
+                            Vector.map(t -> match t {
+                                case BodyTerm.Var(v) => getVal(v)
+                                case BodyTerm.Lit(val) => val
+                                case BodyTerm.Wild => unreachable!()
+                            });
                         let isNonMatch = match Map.get(makeFakeRelSym(pred), provIdb) {
                             case None => true
                             case Some(facts) => not BPlusTree.memberOf(tuple, facts)
@@ -372,10 +381,11 @@ mod Fixpoint.Provenance {
                     case BodyPredicate.Functional(_, _, _) => unreachable!()
                 }
             }};
-        headTerms |> Vector.mapWithIndex(i -> h -> match h {
-            case HeadTerm.Var(v) => MutMap.put(v, Vector.get(i, fact), getValOfVar)
-            case _ => ()
-        });
+        headTerms |>
+            Vector.mapWithIndex(i -> h -> match h {
+                case HeadTerm.Var(v) => MutMap.put(v, Vector.get(i, fact), getValOfVar)
+                case _ => ()
+            });
         loop(0);
         bodyValues |> Array.filterMap(rc, identity) |> Array.toVector
     }
