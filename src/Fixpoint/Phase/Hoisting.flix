@@ -363,7 +363,7 @@ mod Fixpoint.Phase.Hoisting {
         termMap: Map[(RowVar, Int32), RamTerm],
         equalitySets: MutDisjointSets[(RowVar, Int32), r],
         relSym: RelSym
-    ): Map[(RowVar, Int32), RamTerm] \ r =  {
+    ): Map[(RowVar, Int32), RamTerm] \ r = {
         // Register all values `rowVar[i]`, for `0 <= i < arity`, as known when hoisting `body`.
         (termMap, Vector.range(0, arityOf(relSym))) ||>
         Vector.foldLeft(acc -> i -> {

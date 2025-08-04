@@ -169,7 +169,7 @@ mod Fixpoint.PrecedenceGraph {
         pub def toString(g: MutGraph[r]): String \ r =
             let edges = g->adjList |>
                 MutMap.joinWith(u -> vSet ->
-                    Set.joinWith(v -> "\n  ${u} -> ${v}", ",", vSet), ","
+                    Set.joinWith(v -> "\n ${u} -> ${v}", ",", vSet), ","
                 );
             "MutGraph(${edges})"
 
