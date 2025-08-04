@@ -606,8 +606,8 @@ mod Fixpoint.Phase.Lowering {
         case Ram.RamStmt.MergeInto(_, _) => Nil
         case Ram.RamStmt.Swap(_, _) => Nil
         case Ram.RamStmt.Purge(_) => Nil
-        case Ram.RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> collectRowVarRelSymStmt(x) ++ acc, Nil, stmts)
-        case Ram.RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> collectRowVarRelSymStmt(x) ++ acc, Nil, stmts)
+        case Ram.RamStmt.Seq(stmts) => Vector.foldLeft(acc -> x -> collectRowVarRelSymStmt(x) ::: acc, Nil, stmts)
+        case Ram.RamStmt.Par(stmts) => Vector.foldLeft(acc -> x -> collectRowVarRelSymStmt(x) ::: acc, Nil, stmts)
         case Ram.RamStmt.Until(_, rest) => collectRowVarRelSymStmt(rest)
         case Ram.RamStmt.Comment(_) => Nil
     }

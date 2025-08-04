@@ -83,8 +83,8 @@ mod Fixpoint.Predicate {
     pub def allRelSyms(predInfo: Predicates): List[RelSym] =
         let full = allFullRelSyms(predInfo);
         full
-            ++ List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), full)
-            ++ List.map(x -> fullRelSymToType(x, PredType.New, predInfo), full)
+            ::: List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), full)
+            ::: List.map(x -> fullRelSymToType(x, PredType.New, predInfo), full)
 
     ///
     /// Returns the full `RelSym` associated with the `PredSym` in `body` according to `predInfo`.
