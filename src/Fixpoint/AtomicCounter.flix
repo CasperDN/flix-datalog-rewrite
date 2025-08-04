@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-/// 
+///
 /// A thread-safe counter producing `Int64`.
-/// 
+///
 mod Fixpoint {
     import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
 

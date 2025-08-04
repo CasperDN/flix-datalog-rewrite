@@ -1,4 +1,4 @@
-def latticeTest(): Unit \ IO = 
+def latticeTest(): Unit \ IO =
     println("Starting");
     let func = () -> {
         let start = Clock.currentTime(TimeUnit.Seconds);
@@ -10,7 +10,7 @@ def latticeTest(): Unit \ IO =
         };
         let r = query path select (x, y, set) from Path(x,y; set);
         let x = Vector.head(r);
-        if(Option.isEmpty(x)) {
+        if (Option.isEmpty(x)) {
             let end = Clock.currentTime(TimeUnit.Seconds);
             println("Took: ${end - start} s")
         } else {
@@ -33,7 +33,7 @@ def main(): Unit \ IO =
         };
         let r = query path select (x, y) from Path(x,y);
         let x = Vector.head(r);
-        if(Option.isEmpty(x)) {
+        if (Option.isEmpty(x)) {
             let end = Clock.currentTime(TimeUnit.Seconds);
             println("Took: ${end - start} s")
         } else {
@@ -45,7 +45,7 @@ def main(): Unit \ IO =
     ()
 
 def repeatN(f: Unit -> Unit \ ef, num: Int32): Unit \ef =
-    if(num <= 0) {
+    if (num <= 0) {
         ()
     } else {
         f();
@@ -54,15 +54,15 @@ def repeatN(f: Unit -> Unit \ ef, num: Int32): Unit \ef =
 
 def ++++++(x: Int32, y: Int32): Int32 = Int32.modulo(x, y)
 
-def isPrime(x: Int32): Bool = 
+def isPrime(x: Int32): Bool =
     def loop(i) =
-        if (i > x / 2) true 
-        else if (x ++++++ i == 0) false 
+        if (i > x / 2) true
+        else if (x ++++++ i == 0) false
         else loop(i+1);
-    if(x < 2) false
+    if (x < 2) false
     else loop(2)
 
-def primesInRange(b: Int32, e: Int32): Vector[Int32] = 
+def primesInRange(b: Int32, e: Int32): Vector[Int32] =
     Vector.range(b, e) |> Vector.filter(isPrime)
 
 def inc(x: Int32): Int32 = x + 1
@@ -75,7 +75,7 @@ def main3(): Unit \ IO =
     };
     println(query r select (p, q) from R(p, q))
 
-pub def main111(): Unit \ IO = 
+pub def main111(): Unit \ IO =
     let rules = #{
         Foo("a", 1).
         Foo("b", 2).
@@ -125,7 +125,7 @@ def sum3(x: Int32, y: Int32, z: Int32): Int32 = x + y + z
 def sum4(x: Int32, y: Int32, z: Int32, w: Int32): Int32 = x + y + z + w
 def sum5(x: Int32, y: Int32, z: Int32, w: Int32, v: Int32): Int32 = x + y + z + w + v
 
-pub def mainApp(): Unit \ IO = 
+pub def mainApp(): Unit \ IO =
     let rules = #{
         Foo1(1).
         Foo2(2).
@@ -135,16 +135,16 @@ pub def mainApp(): Unit \ IO =
 
         Bar(a,
             sum1(a),
-            sum2(a, b), 
-            sum3(a, b, c), 
-            sum4(a, b, c, d), 
+            sum2(a, b),
+            sum3(a, b, c),
+            sum4(a, b, c, d),
             sum5(a, b, c, d, e)
         ) :- Foo1(a), Foo2(b), Foo3(c), Foo4(d), Foo5(e).
     };
     query rules select (a, b, c, d, e, f) from Bar(a, b, c, d, e, f) |> println;
     ()
 
-pub def pathh(): Unit \ IO = 
+pub def pathh(): Unit \ IO =
     let edges = List.range(0,1000) |> List.map(i -> (i, i+1));
     let f = inject edges into Edge/2;
     let r = #{
@@ -155,14 +155,14 @@ pub def pathh(): Unit \ IO =
     };
     query f, r select (x, y) from Path(x, y) |> Vector.head |> println
 
-pub def dumb3333(): Unit \ IO = 
+pub def dumb3333(): Unit \ IO =
     let r = #{
         A(1).
     };
     query r select x from A(x) |> Vector.head |> println;
     ()
 
-pub def dumb(): Unit \ IO = 
+pub def dumb(): Unit \ IO =
     let aFacts = List.range(0,101);
     let bFacts = List.range(0,10);
     let f1 = inject aFacts into A/1;
@@ -192,12 +192,12 @@ let ff = _x -> Vector#{};
     Assert.eq((Vector#{}: Vector[(Int32, Int32)]), actual)
 
 def runForever(): Unit \ IO = {
-    if(testFunctionalF1X2_01()) runForever() else runForever()
+    if (testFunctionalF1X2_01()) runForever() else runForever()
 }
 
 
 def runN(n: Int32): Unit \ IO = {
-    if(testFunctionalF1X2_01() and n > 0) runN(n - 1) else ()
+    if (testFunctionalF1X2_01() and n > 0) runN(n - 1) else ()
 }
 
 def main1000(): Unit \ IO = {

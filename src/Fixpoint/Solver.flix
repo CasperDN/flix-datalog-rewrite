@@ -40,7 +40,7 @@ mod Fixpoint.Solver {
     ///
     @Internal
     pub def runSolver(d: Datalog): Datalog =
-        if(Options.useProvenance()) {
+        if (Options.useProvenance()) {
             runProvSolver(d)
         } else {
             runSolverNoProv(d)
@@ -74,7 +74,7 @@ mod Fixpoint.Solver {
             case _ => None
         };
         let forcedEval = provOf(goal, goalSym, d, ???);
-        if(Option.isEmpty(forcedEval)) {
+        if (Option.isEmpty(forcedEval)) {
             Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
         } else {
             Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
@@ -980,7 +980,7 @@ mod Fixpoint.Solver {
             Map.filterWithKey(k -> facts -> match k {
                 case RelSym.Symbol(PredSym(_, id), _, _) => Predicate.isFullId(id, meta) and not (unsafely IO run BPlusTree.isEmpty(facts))
             });
-        if(withProv) {
+        if (withProv) {
             toProvenance(rules, dbOnlyFullRels)
         } else {
             Model(dbOnlyFullRels)

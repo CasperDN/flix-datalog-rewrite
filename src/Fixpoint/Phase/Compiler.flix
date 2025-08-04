@@ -64,7 +64,7 @@ mod Fixpoint.Phase.Compiler {
                     compileStratum(stmtsForPseudo, strataRules, stratarulesWithId, predicates, counter);
                     (MutList.toVector(stmtsForPseudo) |> RamStmt.Seq) :: acc
                 });
-                if(List.size(runInParallel) > 1) {
+                if (List.size(runInParallel) > 1) {
                     let codeBlock = List.toVector(runInParallel) |> RamStmt.Par;
                     MutList.push(codeBlock, stmts)
                 } else match List.head(runInParallel) {
@@ -113,7 +113,7 @@ mod Fixpoint.Phase.Compiler {
                         case Latticenal(bot, leq, lub, _) =>
                             // Remove p(;bot) from the facts
                             let latVal = Vector.get(Vector.length(x) - 1, x);
-                            if(latVal `leq` bot) {
+                            if (latVal `leq` bot) {
                                 ()
                             } else {
                                 let sym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
@@ -158,7 +158,7 @@ mod Fixpoint.Phase.Compiler {
         let inserts = MutList.empty(rc);
         List.forEach(match (rule, ruleNum) -> compileRule(inserts, rule, ruleNum, predicates, counter), List.zip(stratum, rulesWithId));
         let optPar =
-            if(MutList.size(inserts) > 1) {
+            if (MutList.size(inserts) > 1) {
                 Some(RamStmt.Par(MutList.toVector(inserts)))
             } else {
                 MutList.head(inserts)
@@ -215,21 +215,21 @@ mod Fixpoint.Phase.Compiler {
             MutList.push(swapDelta, swaps);
             MutList.push(purgeNew, purges)
         }, idb);
-        let swapsAsRam = if(MutList.length(swaps) > 1) {
+        let swapsAsRam = if (MutList.length(swaps) > 1) {
             RamStmt.Seq(MutList.toVector(swaps))
-        } else if(MutList.size(swaps) == 1) {
+        } else if (MutList.size(swaps) == 1) {
             getOrCrash(MutList.head(swaps))
         } else {
             bug!("Bug in Fixpoint.Compiler: Stratum error. Stratum had no PredSyms")
         };
-        let purgesAsRam = if(MutList.length(purges) > 1) {
+        let purgesAsRam = if (MutList.length(purges) > 1) {
             RamStmt.Seq(MutList.toVector(purges))
-        } else if(MutList.size(purges) == 1) {
+        } else if (MutList.size(purges) == 1) {
             getOrCrash(MutList.head(purges))
         } else {
             bug!("Bug in Fixpoint.Compiler: Stratum error. Stratum had no PredSyms")
         };
-        let mergesAsRam = if(MutList.size(merges) > 1)
+        let mergesAsRam = if (MutList.size(merges) > 1)
             RamStmt.Par(MutList.toVector(merges))
         else if (MutList.size(merges) == 1)
             getOrCrash(MutList.head(merges))
@@ -352,7 +352,7 @@ mod Fixpoint.Phase.Compiler {
             let positiveIDBAtoms = body |>
             Vector.mapWithIndex(i -> atom -> match atom {
                 case BodyAtom(PredSym(_, id), _, Polarity.Positive, Fixity.Loose, _) =>
-                    if(Set.memberOf(id, idbSet)) {
+                    if (Set.memberOf(id, idbSet)) {
                         i
                     } else {
                         -1
@@ -481,7 +481,7 @@ mod Fixpoint.Phase.Compiler {
     /// (3) is a function call that computes the expression `x > 0`.
     ///
     def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predicates: Predicates, counter: Counter[r]): Option[Vector[BoolExp]] \ r =
-        if(isImpossible(body)) None
+        if (isImpossible(body)) None
         else Some(compileBodyWithoutGuard0(env, body, predicates, counter))
 
     ///

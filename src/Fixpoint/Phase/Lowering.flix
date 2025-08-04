@@ -236,7 +236,7 @@ mod Fixpoint.Phase.Lowering {
                         Vector.map(index -> lowerToMerge(getOrCrash(Map.get((deltaRel, index), placements))));
                     let purges = Vector.range(1, deltaRels) |>
                         Vector.map(index -> lowerToPurge(getOrCrash(Map.get((deltaRel, index), placements))));
-                    if(Vector.length(merges) == 1) {
+                    if (Vector.length(merges) == 1) {
                         ExecutableRam.RamStmt.Seq(Vector#{Vector.get(0, merges), swapPart})
                     } else {
                         ExecutableRam.RamStmt.Seq(Vector#{
@@ -314,7 +314,7 @@ mod Fixpoint.Phase.Lowering {
                         None
                     case _ => Some(x)
                 }, tests);
-                if(Vector.length(otherBools) != 0)
+                if (Vector.length(otherBools) != 0)
                     unchecked_cast(bug!("Bug in Fixpoint.Lowering: Bools except equality in query") as _ \ r)
                 else ();
                 ExecutableRam.RelOp.Query(lowerRowVar(rv, idToIndex), index, oldPos, den, thisWriteTo, loweredBody)
@@ -373,7 +373,7 @@ mod Fixpoint.Phase.Lowering {
                 match den {
                     case Denotation.Relational => ExecutableRam.RamTerm.LoadFromTuple(UniqueInts.getIndex(rv, idToIndex), index, termToBoxing(term))
                     case Denotation.Latticenal(_, _, _, _) =>
-                        if(index < arity - 1) {
+                        if (index < arity - 1) {
                             ExecutableRam.RamTerm.LoadFromTuple(UniqueInts.getIndex(rv, idToIndex), index, termToBoxing(term))
                         } else {
                             ExecutableRam.RamTerm.LoadLatVar(UniqueInts.getIndex(rv, idToIndex), termToBoxing(term))

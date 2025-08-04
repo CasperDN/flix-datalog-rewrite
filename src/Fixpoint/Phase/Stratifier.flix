@@ -32,7 +32,7 @@ mod Fixpoint.Phase.Stratifier {
     type alias PredIdToName[r: Region] = Array[String, r]
 
     ///
-    /// Computes the stratification of `d`. 
+    /// Computes the stratification of `d`.
     ///
     /// Returns a map from `PredSym` to their position within their pseudostrata:
     /// `predSym -> (pseudoStratumIndex, stratumIndexInPseudoStratum)`
@@ -58,7 +58,7 @@ mod Fixpoint.Phase.Stratifier {
         addPredSymsFrom(predSyms, d);
         let result = MutMap.empty(rc);
         pseudoStrata |> List.forEachWithIndex(pseudoStratum -> list ->
-            list |> List.forEachWithIndex(stratum -> set -> 
+            list |> List.forEachWithIndex(stratum -> set ->
                 foreach (x <- set) {
                     let predSym = PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x));
                     MutMap.put(predSym, (pseudoStratum, stratum), result)
@@ -68,14 +68,14 @@ mod Fixpoint.Phase.Stratifier {
         MutMap.toMap(result)
 
     ///
-    /// Insert edges into `graph` for the dependencies in the Datalog program `d`. 
+    /// Insert edges into `graph` for the dependencies in the Datalog program `d`.
     /// `A(x) :- B(x), A(x), -C(x).` inserts the edges `B -> A` and `C -> A` in `graph`.
     ///
     def addDepEdges(graph: MutGraph[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(precedenceHelper(graph), rules)
         case Model(_) => ()
-        case Join(d1, d2) => 
-            addDepEdges(graph, d1); 
+        case Join(d1, d2) =>
+            addDepEdges(graph, d1);
             addDepEdges(graph, d2)
         case Provenance(_, _) => ()
     }
@@ -97,7 +97,7 @@ mod Fixpoint.Phase.Stratifier {
     ///
     def addDepEdge(graph: MutGraph[r], dst: HeadPredicate, src: BodyPredicate): Unit \ r = match (dst, src) {
         case (HeadAtom(PredSym.PredSym(_, dstId), _, _), BodyAtom(PredSym.PredSym(_, srcId), _, _, _, _)) => {
-            if(dstId != srcId) {
+            if (dstId != srcId) {
                 MutGraph.addEdge(toInt32(srcId), toInt32(dstId), graph)
             } else (
                 // We still register the vertex, as it is needed later.
@@ -120,7 +120,7 @@ mod Fixpoint.Phase.Stratifier {
 
     ///
     /// Collects the names of the `PredSym`s of `cnst`.
-    /// 
+    ///
     /// See `addPredSymsFrom`.
     ///
     def predSymHelper(predMap: PredIdToName[r], cnst: Constraint): Unit \ r = match cnst {
@@ -131,7 +131,7 @@ mod Fixpoint.Phase.Stratifier {
 
     ///
     /// Collects the names of the `PredSym`s of `body`.
-    /// 
+    ///
     /// See `addPredSymsFrom`.
     ///
     def collectEdge(predMap: PredIdToName[r], body: BodyPredicate): Unit \ r = match body {
