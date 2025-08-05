@@ -194,7 +194,7 @@ mod Fixpoint.Solver {
     /// Return the provenance of the fact `f` of relation `p` given Datalog program `d`.
     ///
     @Internal
-    pub def provOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[List[t]] = match d {
+    pub def provOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[Vector[t]] = match d {
         case Datalog(_, _) =>
             provOf(f, p, runProvSolver(d), mapping)
         case Model(db) => unsafely IO run {
@@ -204,13 +204,13 @@ mod Fixpoint.Solver {
                 case None => None
                 case Some(facts) => match BPlusTree.memberOf(f, facts) {
                     case false => None
-                    case true => Some(mapping(p, f) :: Nil)
+                    case true => Some(Vector#{mapping(p, f)})
                 }
             }
         }
         case Provenance(_, _) =>
             Fixpoint.Provenance.provQuery(p, f, d) |>
-                Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
+                Option.map(Vector.map(match (pred, fact) -> mapping(pred, fact)))
         case Join(_, _) =>
             provOf(f, p, runProvSolver(d), mapping)
     }
