@@ -80,19 +80,17 @@ mod Fixpoint.Boxing {
         let RamProgram.Program(_, facts, _, (indexes, _)) = program;
         let (f1, f2) = facts;
         let newFacts = MutMap.empty(rc1);
-        f1 |>
-            Map.forEach(relSym -> relFacts -> {
-                // Get some search. This means that we have to create one less index in the interpreter.
-                let search = getOrCrash(Map.get(relSym, indexes)) |> Vector.get(0);
-                let newTree = BPlusTree.emptyWithArityAndSearch(rc1, usedArity(), search);
-                mapAllFacts(relSym, relFacts, boxingInfo, mapping, withProv, newTree);
-                MutMap.put(relSym, newTree, newFacts)
-            });
-        f2 |>
-            Map.forEach(relSym -> relFacts -> {
-                let newTree = MutMap.getOrElsePut(relSym, BPlusTree.empty(rc1), newFacts);
-                mapAllFacts(relSym, relFacts, boxingInfo, mapping, withProv, newTree)
-            });
+        foreach((relSym, relFacts) <- f1) {
+            // Get some search. This means that we have to create one less index in the interpreter.
+            let search = getOrCrash(Map.get(relSym, indexes)) |> Vector.get(0);
+            let newTree = BPlusTree.emptyWithArityAndSearch(rc1, usedArity(), search);
+            mapAllFacts(relSym, relFacts, boxingInfo, mapping, withProv, newTree);
+            MutMap.put(relSym, newTree, newFacts)
+        };
+        foreach((relSym, relFacts) <- f2) {
+            let newTree = MutMap.getOrElsePut(relSym, BPlusTree.empty(rc1), newFacts);
+            mapAllFacts(relSym, relFacts, boxingInfo, mapping, withProv, newTree)
+        };
         newFacts |> MutMap.toMap
 
     def mapAllFacts(
@@ -143,12 +141,13 @@ mod Fixpoint.Boxing {
             ()
         };
         // Add bot first to make sure it corresponds to 0.
-        List.filter(match RelSym.Symbol(_, _, den) -> not isRelational(den), relSyms) |>
-            List.forEach(x -> match x {
+        foreach(x <- relSyms) {
+            match x {
                 case RelSym.Symbol(PredSym.PredSym(_, index), arity, Denotation.Latticenal(bot, _, _, _)) =>
                     unboxWith(bot, getOrCrash(Map.get(RamId.RelPos(index, arity - 1), map)), info); ()
-                case _ => bug!("Should have been filtered out")
-        });
+                case _ => ()
+            }
+        };
         info
 
     ///
@@ -280,11 +279,11 @@ mod Fixpoint.Boxing {
             let relSyms = relSymsOfProgram(program);
             let mutMap = MutMap.empty(rc);
             let counter = Counter.fresh(rc);
-            List.forEach(match RelSym.Symbol(PredSym.PredSym(_, id), arity, _) -> {
-                Vector.forEach(i -> {
+            foreach(RelSym.Symbol(PredSym.PredSym(_, id), arity, _) <- relSyms) {
+                foreach(i <- Vector.range(0, getProvSafeIdArity(arity, withProv))) {
                     registerRamId(disjointSet, mutMap, counter, RamId.RelPos(id, i))
-                }, Vector.range(0, getProvSafeIdArity(arity, withProv)))
-            }, relSyms);
+                }
+            };
             // Given the equivalence relation just computed assign unique positions for each
             // equivalence relation.
             computeMappingStmt(disjointSet, mutMap, counter, withProv, stmt);
