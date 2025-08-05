@@ -1,7 +1,7 @@
 mod PageLink {
     use Common.{loadTuplesFromFile, getCwd, unwrap, exit}
 
-    pub def getFacts(): #{ PageLink(Int32, Int32), PageId(Int32, String) | r } \ IO + Sys = 
+    pub def getFacts(): #{ PageLink(Int32, Int32), PageId(Int32, String) | r } \ IO + Sys =
         let pagelinks = "${getCwd()}/data/wikipedia/pagelinks-100000.csv";
         let pageids = "${getCwd()}/data/wikipedia/page-ids.csv";
         let pagelinksTuples = loadTuplesFromFile(pagelinks, ",");
@@ -20,7 +20,7 @@ mod PageLink {
         println("Created facts");
         f1 <+> f2
 
-    pub def runSingle(): Unit \ IO + Sys = 
+    pub def runSingle(): Unit \ IO + Sys =
         let f = getFacts();
         let r = #{
             ReachableId(x, y) :- PageLink(x, y).
@@ -29,7 +29,7 @@ mod PageLink {
         };
         query f, r select (x, y) from Reachable(x, y) |> Vector.length |> println
 
-    pub def runWithFacts(f: #{ PageLink(Int32, Int32), PageId(Int32, String) }): Int64 \ IO + Clock = 
+    pub def runWithFacts(f: #{ PageLink(Int32, Int32), PageId(Int32, String) }): Int64 \ IO + Clock =
         let r = #{
             Reachable(x, y) :- PageLink(x, y).
             Reachable(x, z) :- Reachable(x, y), Reachable(y, z).

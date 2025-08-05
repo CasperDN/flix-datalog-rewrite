@@ -1,7 +1,7 @@
 mod Path {
     use Common.{loadTuplesFromFile, getCwd, unwrap, exit}
 
-    pub def getFacts(): #{ Edge(Int32, Int32) | s } \ IO + Sys = 
+    pub def getFacts(): #{ Edge(Int32, Int32) | s } \ IO + Sys =
         let filename = "${getCwd()}/src/Test/edge.csv";
         let tuples = loadTuplesFromFile(filename, ",");
         let map = Int32.fromString >> unwrap;
@@ -12,7 +12,7 @@ mod Path {
         println("Created facts");
         inject edges into Edge/2
 
-    pub def runWithFacts(f: #{ Edge(Int32, Int32) }): Int64 \ IO + Clock = 
+    pub def runWithFacts(f: #{ Edge(Int32, Int32) }): Int64 \ IO + Clock =
         let r = #{
             Path(x, y) :- Edge(x, y).
             Path(x, z) :- Path(x, y), Path(y, z)

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 ///
 /// The purpose of this file is to record the transformation from Boxed values to Int64.
 ///
@@ -44,13 +44,12 @@
 ///    Vector#{Lock1, Lock2},
 /// )
 /// ```
-/// We then store the fact that the type information about `A[0]` and `B[0]` are stored 
+/// We then store the fact that the type-information about `A[0]` and `B[0]` are stored
 /// at `UnifiedTypePos` `0` and `A[1]` and `B[1]` are stored at position 1. We only need
-/// to keep the `MutList` and `BPlusTree` for objects, as transforming the simple types 
+/// to keep the `MutList` and `BPlusTree` for objects, as transforming the simple types
 /// requires less information.
 ///
 mod Fixpoint.BoxingType {
-    use Fixpoint.AtomicCounter
     use Fixpoint.ReadWriteLock
     use Fixpoint.Boxed
     use Fixpoint.Ast.Ram.RamId
@@ -92,11 +91,11 @@ mod Fixpoint.BoxingType {
     }
 
     ///
-    /// Describes the placement of type information of a group of values that share the
+    /// Describes the placement of type-information of a group of values that share the
     /// same type.
     ///
     @Internal
-    pub type alias UnifiedTypePos = Int32    
+    pub type alias UnifiedTypePos = Int32
 
     ///
     /// Maps `RamId`'s to the `UnifiedTypePos`. It facilitates getting the type
@@ -105,10 +104,10 @@ mod Fixpoint.BoxingType {
     @Internal
     pub type alias RamIdToPos = Map[RamId, UnifiedTypePos]
 
-    /// 
+    ///
     /// Describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`
     /// the type of a specific value can be found.
-    /// 
+    ///
     type alias TypeInfo[r: Region] = Array[Types, r]
 
     ///
@@ -122,29 +121,29 @@ mod Fixpoint.BoxingType {
     /// Return the type of value saved at `index` in `typeInfo`.
     ///
     @Internal
-    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r = 
+    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r =
         Array.get(index, typeInfo)
 
     ///
     /// `Boxing=(values, valueToRep, typeInfo, locks)` contains the information needed to
-    /// convert between Boxed objects and their Int64 representation
+    /// convert between `Boxed` objects and their `Int64` representation
     ///
     /// The `i`'th value of each Vector belongs to a specific `UnifiedTypePos`. The
     /// description of the values will be for some `i`.
-    /// 
+    ///
     /// `valueToRep` maps `Boxed` objects to their `Int64` representation.
     ///
     /// `values` contains the `Boxed` objects being stored.
     ///
     /// The following invariant is kept: `values(valueToRep[boxedValue]) == boxedValue`.
-    /// This design limits us to 2^32 objects of a given type.
+    /// This design limits us to `2^32` objects of a given type.
     ///
     /// Furthermore, for lattice `Bot` should be represented by `0`.
     ///
     /// `typeInfo[i]` records which type of values are associated with the information stored at `i`.
     /// If we have yet to meet any values associated with position `i`, `typeInfo[i]` will be `Unknown`.
     ///
-    /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with. 
+    /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with.
     ///
     @Internal
     pub type alias Boxing[r: Region] = (
@@ -153,5 +152,5 @@ mod Fixpoint.BoxingType {
         TypeInfo[r],
         Vector[ReadWriteLock[r]]
     )
-    
+
 }

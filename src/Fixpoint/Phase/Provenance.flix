@@ -29,6 +29,7 @@
  mod Fixpoint.Phase.Provenance {
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, RamId, BoolExp}
+    use Fixpoint.Boxed
     use Fixpoint.Boxed.BoxedInt64
     use Fixpoint.Counter
 
@@ -48,12 +49,33 @@
     /// Further extend facts to contain a depth and rule.
     ///
     def augmentProgramInternal(program: RamProgram): RamProgram = match program {
-        case RamProgram.Program(stmt, facts, predicates, indexInfo) =>
-            let augmentedFacts = facts |>
-                Map.map(Vector.map(tuple -> Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)})));
+        case RamProgram.Program(stmt, facts, predicates, indexInfo) => unsafely IO run {
+            let (f1, f2) = facts;
+            let augmentedF1 = f1 |> Map.map(augmentFacts);
+            let augmentedF2 = f2 |> Map.map(augmentFacts);
+            let augmentedFacts = (augmentedF1, augmentedF2);
             let augmentedStmt = augmentStmt(stmt);
             RamProgram.Program(augmentedStmt, augmentedFacts, predicates, indexInfo) |>
-            Fixpoint.Debugging.notifyPreLowering("Provenance")
+                Fixpoint.Debugging.notifyPreLowering("Provenance")
+        }
+    }
+
+    ///
+    /// All facts in `oldTree` are expanded/annotated to include a depth and rule number.
+    ///
+    /// By convention the order of augmentation is depth then rule. Facts have depth 0
+    /// and by convention rule -1.
+    ///
+    /// A fact of the form `[42i64, "someString", Nil]` will be augmented to
+    /// `[42i64, "someString", Nil, 0, -1]`.
+    ///
+    def augmentFacts(oldTree: BPlusTree[Vector[Boxed], Boxed, Static]): BPlusTree[Vector[Boxed], Boxed, Static] \ IO = {
+        let newTree = BPlusTree.empty(Static);
+        BPlusTree.forEach(tuple -> v ->
+            let annotatedVector = Vector.append(tuple, Vector#{BoxedInt64(0i64), BoxedInt64(-1i64)});
+            BPlusTree.put(annotatedVector, v, newTree)
+        , oldTree);
+        newTree
     }
 
     ///
@@ -76,10 +98,10 @@
     def augmentOp(rowVarsArity: List[(RowVar, Int32)], op: RelOp): RelOp \ r = match op {
         case RelOp.Search(rowVar, relSym, body) =>
             augmentOp((rowVar, arityOf(relSym)) :: rowVarsArity, body) |>
-            RelOp.Search(rowVar, relSym)
+                RelOp.Search(rowVar, relSym)
         case RelOp.Query(rowVar, relSym, bools, index, body) =>
             augmentOp((rowVar, arityOf(relSym)) :: rowVarsArity, body) |>
-            RelOp.Query(rowVar, relSym, bools, index)
+                RelOp.Query(rowVar, relSym, bools, index)
         case RelOp.Functional(_, _, _, _, _) =>
             bug!("In Fixpoint.Phase.Provenance.augmentOp: Cannot do provenance with functional")
         case RelOp.Project(terms, relSym, ruleNum) =>

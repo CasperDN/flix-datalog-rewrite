@@ -24,26 +24,31 @@
 ///
 /// The current implementation assumes that all negative atoms are placed after positive atoms.
 /// More precicely it assumes that all variables in the negative atoms have
-/// been bound when it encounters them.
+/// been bound if a rule is evaluated left to right.
+///
+/// The current implementation assumes that guards satisfy the same property as the negative atoms,
+/// namely that all their variables are bound when they are encountered when evaluating a rule
+/// left to right.
 ///
 /// The current implementation does not output the negative atoms. They can be derived from the positive.
 ///
 mod Fixpoint.Provenance {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, VarSym, BodyPredicate, HeadPredicate, HeadTerm, BodyTerm, Polarity}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
-    use Fixpoint.Ast.Shared.{PredSym}
+    use Fixpoint.Ast.Ram.{makeFakeRelSym, RelSym}
+    use Fixpoint.Ast.Shared.{PredSym, Denotation}
     use Fixpoint.Boxed
     use Fixpoint.Counter
     use Fixpoint.Util.getOrCrash
 
     ///
-    /// A `ProvIDB` maps from `PredSym` to a map from the facts of the `PredSym`
+    /// A `ProvIDB` maps from `RelSym` to a map from the facts of the `RelSym`
     /// to `(depth, ruleUsed)`.
     ///
-    type alias ProvIDB = Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]]
+    type alias ProvIDB = Map[RelSym, BPlusTree[Vector[Boxed], (Int64, Int32), Static]]
 
     ///
-    /// A `BPLookoup` is a over the facts for a specific `PredSym`.
+    /// A `BPLookup` is a over the facts for a specific `RelSym`.
     ///
     /// For a fact set of `(1, 2, 3), (4, 5, 6), (7, 8, 9)`, we might want
     /// to index based on the second attribute. The `BPLookup` would be
@@ -58,7 +63,7 @@ mod Fixpoint.Provenance {
     /// Using the previous example with predicate `P` we would have
     /// `{P => {[1] => [2] => [1, 3], [5] => [4, 6], [8] => [7, 9]}}`
     ///
-    type alias ProvLookupStruct[r: Region] = MutMap[PredSym, MutMap[Vector[Int32], BPLookup[r], r], r]
+    type alias ProvLookupStruct[r: Region] = BPlusTree[PredSym, BPlusTree[Vector[Int32], BPLookup[r], r], r]
 
     ///
     /// Returns the list of facts for `pred` which satisfies `searchAndVals`.
@@ -72,28 +77,30 @@ mod Fixpoint.Provenance {
     /// Returns `Some(v)` where `v` is a list of `(missingFactPart, depth, rule)`. Here
     /// `missingFactPart` refers to the value-part in the `BPLookup`.
     ///
-    def lookup(rc: Region[r], idb: ProvIDB, searchAndVals: Vector[(Int32, Boxed)], arrSize: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r =
-        match Map.get(pred, idb) {
-            case None => None
-            case Some(fullTree) => 
+    def lookup(rc: Region[r], idb: ProvIDB, searchAndVals: Vector[(Int32, Boxed)], arity: Int32, lookupStruct: ProvLookupStruct[r], pred: PredSym): Option[List[(Vector[Boxed], Int64, Int32)]] \ r + IO =
+        match Map.get(makeFakeRelSym(pred), idb) {
+            case None => unreachable!() // No facts for `pred`.
+            case Some(fullTree) =>
                 let (search, vals) = Vector.unzip(searchAndVals);
-                let innerMap = MutMap.getOrElsePut(pred, MutMap.empty(rc), lookupStruct);
-                match MutMap.get(search, innerMap) {
+                let innerMap = BPlusTree.computeIfAbsent(() -> BPlusTree.empty(rc), pred, lookupStruct);
+                match BPlusTree.get(search, innerMap) {
                     case Some(tree) => BPlusTree.get(vals, tree)
                     case None =>
-                        // We have never encountered this search before. Initialize it.
+                        // We have never encountered this search before. Initialize the `BPlusTree` for it.
+                        // Initializing happens by mapping every fact to the search-part and non-search part
+                        // and inserting them as key-value pairs in a `BPLookup`.
                         let tree = BPlusTree.emptyWithSearch(rc, search);
                         let extractSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, search), k), Vector.length(search));
-                        let nonSearch = Vector.range(0, arrSize) |> Vector.filter(v -> not Vector.memberOf(v, search));
+                        let nonSearch = Vector.range(0, arity) |> Vector.filter(v -> not Vector.memberOf(v, search));
                         let extractNonSearchPart = k -> Vector.init(i -> Vector.get(Vector.get(i, nonSearch), k), Vector.length(nonSearch));
                         fullTree |>
-                        Map.forEach(k -> match (depth, rule) -> {
-                            let searchPart = extractSearchPart(k);
-                            let nonSearchPart = extractNonSearchPart(k);
-                            let newVal = ((nonSearchPart), depth, rule);
-                            BPlusTree.putWith(_ -> old -> newVal :: old, searchPart, newVal :: Nil, tree)
-                        });
-                        MutMap.put(search, tree, innerMap);
+                            BPlusTree.forEach(k -> match (depth, rule) -> {
+                                let searchPart = extractSearchPart(k);
+                                let nonSearchPart = extractNonSearchPart(k);
+                                let newVal = (nonSearchPart, depth, rule);
+                                BPlusTree.putWith(_ -> old -> newVal :: old, searchPart, newVal :: Nil, tree)
+                            });
+                        BPlusTree.put(search, tree, innerMap);
                         BPlusTree.get(vals, tree)
                 }
         }
@@ -120,15 +127,15 @@ mod Fixpoint.Provenance {
     mod ProofTree {
         @Internal
         pub def toString(p: ProofTree, indentChild: Int32): String = match p {
-            case EDB(pred, fact) => 
+            case EDB(pred, fact) =>
                 let indentCur = String.repeat(indentChild, " ");
                 let factString = Vector.join(", ", fact);
                 "${indentCur}${pred}(${factString}). Fact"
-            case Negative(pred, fact) => 
+            case Negative(pred, fact) =>
                 let indentCur = String.repeat(indentChild, " ");
                 let factString = Vector.join(", ", fact);
                 "${indentCur}No ${pred}(${factString})"
-            case IDB(pred, fact, subs) => 
+            case IDB(pred, fact, subs) =>
                 let factString = Vector.join(", ", fact);
                 let indentCur = String.repeat(indentChild, " ");
                 let subProofs = Vector.joinWith(sub -> toString(sub, indentChild + 4), "${String.lineSeparator()}", subs);
@@ -143,9 +150,9 @@ mod Fixpoint.Provenance {
     ///
     /// Flattens the proof `p` to a `List`, removing facts that do not satisfy `filterFunc`.
     ///
-    /// The returned `List` is in `Pre-order`.
+    /// The tree is traversed in a pre-order fashion meaning that for `IDB` atoms the atom is listed before the children.
     ///
-    def filterAndFlattenProof(p: ProofTree, filterFunc: PredSym -> Bool): List[(PredSym, Vector[Boxed])] = region rc {
+    def filterAndFlattenProof(p: ProofTree, filterFunc: PredSym -> Bool): Vector[(PredSym, Vector[Boxed])] = region rc {
         let res = MutList.empty(rc);
         def recurse(workList: List[ProofTree]) = match workList {
             case Nil => ()
@@ -161,55 +168,88 @@ mod Fixpoint.Provenance {
                 recurse(furtherWork)
         }};
         recurse(p :: Nil);
-        res |> MutList.toList
+        MutList.toVector(res)
     }
 
+    ///
+    /// Returns `None` if `predSym(fact)` is not a part of the provenance model `d`.
+    ///
+    /// Returns `Some(v)` where `v` is a vector of the facts that can be used to prove `fact`.
+    /// In other words they are the result of flattening the proof tree of `predSym(fact)`.
+    ///
+    /// Crashes if `d` is not a provenance model.
+    ///
     @Internal
-    pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[List[(PredSym, Vector[Boxed])]] = match d {
+    pub def provQuery(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[Vector[(PredSym, Vector[Boxed])]] =
+        unsafely IO run provQueryInternal(predSym, fact, d)
+
+    ///
+    /// Same interface as `provQuery`, but has an `IO` effect from dealing with `Static`.
+    ///
+    @Internal
+    pub def provQueryInternal(predSym: PredSym, fact: Vector[Boxed], d: Datalog): Option[Vector[(PredSym, Vector[Boxed])]] \ IO = match d {
         case Provenance(rules, provIdb) => region rc {
-            Array.empty(rc, 10);
-            let reorderedRules = Vector.map(identity, rules);
-            let annotation = match Map.get(predSym, provIdb) {
+            let annotation = match Map.get(RelSym.Symbol(predSym, -1, Denotation.Relational), provIdb) {
                 case None => None
-                case Some(v) => match Map.get(fact, v) {
+                case Some(v) => match BPlusTree.get(fact, v) {
                     case None => None
                     case Some(annotations) => Some(annotations)
                 }
             };
             match annotation {
                 case None => None
-                case Some((depth, ruleUsed)) => 
-                    let lookupStruct = MutMap.empty(rc);
-                    let tree = buildProof(predSym, fact, depth, ruleUsed, reorderedRules, provIdb, lookupStruct, rc);
+                case Some((depth, ruleUsed)) =>
+                    let lookupStruct = BPlusTree.empty(rc);
+                    let tree = buildProof(predSym, fact, depth, ruleUsed, rules, provIdb, lookupStruct, rc);
                     Some(filterAndFlattenProof(tree, _ -> true))
             }
         }
-        case _ => 
+        case _ =>
             bug!("In Fixpoint.Provenance.provQuery: Can only build a proof from a provenance model")
     }
 
-    def buildProof(predSym: PredSym, fact: Vector[Boxed], depth: Int64, ruleUsed: Int32, rules: Vector[Constraint], provIdb: ProvIDB, lookupStruct: ProvLookupStruct[r], rc: Region[r]): ProofTree \ r = {
-        if(ruleUsed == -1) {
+    ///
+    /// Builds the provenance tree for `predSym(fact)` where `fact` was derived with
+    /// depth `depth` using `rules[ruleUsed]`.
+    ///
+    ///
+    /// `ruleUsed == -1` means that `predSym(fact)` is an `EDB` atom. `ruleUsed == -2`
+    /// means that `predSym(fact)` is a negative fact/not a fact in the model.
+    ///
+    def buildProof(predSym: PredSym, fact: Vector[Boxed], depth: Int64, ruleUsed: Int32, rules: Vector[Constraint], provIdb: ProvIDB, lookupStruct: ProvLookupStruct[r], rc: Region[r]): ProofTree \ r + IO = {
+        if (ruleUsed == -1) {
             ProofTree.EDB(predSym, fact)
-        } else if(ruleUsed == -2) {
+        } else if (ruleUsed == -2) {
             ProofTree.Negative(predSym, fact)
         } else {
             let rule = Vector.get(ruleUsed, rules);
             let bodyAtoms = getMatchingBody(fact, depth, rc, provIdb, lookupStruct, rule);
             let Constraint.Constraint(_, bodyPreds) = rule;
-            let relevantPreds = bodyPreds |> Vector.filter(bodyAtom -> match bodyAtom {
-                case BodyPredicate.BodyAtom(_, _, _, _, _) => true
-                case _ => false
-            });
-            let childProofs = Vector.zip(relevantPreds, bodyAtoms) |> Vector.map(match (bodyP, (bodyFact, bodyDepth, bodyRule)) -> match bodyP {
-                case BodyPredicate.BodyAtom(p, _, _, _, _) =>
-                    buildProof(p, bodyFact, bodyDepth, bodyRule, rules, provIdb, lookupStruct, rc)
-                case _      => unreachable!()
-            });
+            let relevantPreds = bodyPreds |>
+                Vector.filter(bodyAtom -> match bodyAtom {
+                    case BodyPredicate.BodyAtom(_, _, _, _, _) => true
+                    case _ => false
+                });
+            let childProofs = Vector.zip(relevantPreds, bodyAtoms) |>
+                Vector.map(match (bodyP, (bodyFact, bodyDepth, bodyRule)) -> match bodyP {
+                    case BodyPredicate.BodyAtom(p, _, _, _, _) =>
+                        buildProof(p, bodyFact, bodyDepth, bodyRule, rules, provIdb, lookupStruct, rc)
+                    case _ => unreachable!()
+                });
             ProofTree.IDB(predSym, fact, childProofs)
         }
     }
 
+    ///
+    /// Returns a vector of `(values, subDepth, subRule)` that satisfy `rule` and would imply `fact`.
+    /// In the tuple `subDepth` is the depth at which `values` was derived and `subRule` the rule used
+    /// to derive it.
+    ///
+    /// In other words return a vector of facts that could have derived `fact`,
+    /// assuming `fact` was derived by `rule`.
+    ///
+    /// The returned facts will have a depth stricly smaller than `depth`.
+    ///
     def getMatchingBody(
         fact: Vector[Boxed],
         depth: Int64,
@@ -217,20 +257,24 @@ mod Fixpoint.Provenance {
         provIdb: ProvIDB,
         lookupStruct: ProvLookupStruct[r],
         rule: Constraint
-    ): Vector[(Vector[Boxed], Int64, Int32)] \ r = {
+    ): Vector[(Vector[Boxed], Int64, Int32)] \ r + IO = {
         let Constraint.Constraint(HeadPredicate.HeadAtom(_, _, headTerms), bodyPreds) = rule;
-        let bodyValues = Array.init(rc, _ -> None, Vector.length(bodyPreds));
-        let getValOfVar = MutMap.empty(rc);
+        // Array which contains the current assignment of body atoms.
+        // Not all body predicates will be atoms. After termination of `loop` a
+        // `None` at position `i` will be mean that `rule[i]` was not a body atom.
+        let bodyValues: Array[Option[(Vector[Boxed], Int64, Int32)], r] = Array.repeat(rc, Vector.length(bodyPreds), None);
+        // A mapping from `VarSym` to its current value.
+        let getValOfVar: MutMap[VarSym, Boxed, r] = MutMap.empty(rc);
         let headApps = Vector.zip(headTerms, fact) |>
-        Vector.filter(match (h, _) -> match h {
-            case (HeadTerm.App0(_)) => false // Must be true.
-            case (HeadTerm.App1(_, _)) => true
-            case (HeadTerm.App2(_, _, _)) => true
-            case (HeadTerm.App3(_, _, _, _)) => true
-            case (HeadTerm.App4(_, _, _, _, _)) => true
-            case (HeadTerm.App5(_, _, _, _, _, _)) => true
-            case _ => false
-        });
+            Vector.filter(match (h, _) -> match h {
+                case (HeadTerm.App0(_)) => false // `App0` is due to dead code in `Lowering`. It cannot be made.
+                case (HeadTerm.App1(_, _)) => true
+                case (HeadTerm.App2(_, _, _)) => true
+                case (HeadTerm.App3(_, _, _, _)) => true
+                case (HeadTerm.App4(_, _, _, _, _)) => true
+                case (HeadTerm.App5(_, _, _, _, _, _)) => true
+                case _ => false
+            });
         ///
         /// Returns the current value of `varName`.
         ///
@@ -241,25 +285,29 @@ mod Fixpoint.Provenance {
         ///
         /// Concretely, we update the `getValOfVar` to contain `varNames[i] => matchedFacts[i]`.
         ///
-        def putVals(varNames, matchedFact) = varNames |> Vector.forEachWithIndex(i -> v ->
-            MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
-        );
+        def registerVars(varNames, matchedFact) =
+            varNames |>
+                Vector.forEachWithIndex(i -> v ->
+                    MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
+                );
         ///
-        /// Returns true if all guards are satisfied by the current variable assignment.
+        /// Returns true if all head applications are satisfied by the current variable assignment.
         ///
-        def areGuardsTrue(): Bool = {
-            headApps |> Vector.forAll(match (app, val) -> match app {
-                case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
-                case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
-                case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
-                case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
-                case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
-                case _ => unreachable!()
-            })
+        def areHeadApplicationsSatisfied(): Bool = {
+            headApps |>
+                Vector.forAll(match (app, val) -> match app {
+                    case (HeadTerm.App1(f, v1))                 => val == f(getVal(v1))
+                    case (HeadTerm.App2(f, v1, v2))             => val == f(getVal(v1), getVal(v2))
+                    case (HeadTerm.App3(f, v1, v2, v3))         => val == f(getVal(v1), getVal(v2), getVal(v3))
+                    case (HeadTerm.App4(f, v1, v2, v3, v4))     => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4))
+                    case (HeadTerm.App5(f, v1, v2, v3, v4, v5)) => val == f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5))
+                    case _ => unreachable!()
+                })
         };
-        
         ///
-        /// Attempts to satisfy `bodyPreds`, having satisfied already found a satisfying assignment
+        /// This is a top down evaluation of `rule`.
+        ///
+        /// Attempts to satisfy `bodyPreds`, having already found a satisfying assignment
         /// for `bodyPreds[i]`, where `0 <= i < index`.
         ///
         /// Destructively updates `getValOfVar` and `bodyValues` with newly bound values.
@@ -269,71 +317,73 @@ mod Fixpoint.Provenance {
         ///
         def loop(index) = {
             if (index == Vector.length(bodyPreds)) {
-                // TODO: Can be removed???
-                areGuardsTrue()
+                // Base case. We have satisfied all atoms and found a satisfying assignment.
+                areHeadApplicationsSatisfied()
             } else {
-                // This could, for performance, be something that was done once and only once.
-                // It would however require a new representation of a Datalog program.
                 match Vector.get(index, bodyPreds) {
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Positive, _, expected) =>
-                        // Collect the bound variables in a list as needed by `lookup`.
-                        // `(2, val)` being in the list means that attribute 2 of the tuple
-                        // must have value `val`. View a a `zipWithIndex |> filterWithIndex`.
-                        let filterAsList = ((Nil, 0), expected) ||> Vector.foldLeft(match (acc, i) -> t -> match t {
-                            case BodyTerm.Wild => (acc, i + 1)
-                            case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
-                                case None => (acc, i + 1)
-                                case Some(val) => ((i, val) :: acc, i + 1)
-                            }
-                            case BodyTerm.Lit(val) => ((i, val) :: acc, i + 1)
-                        }) |> fst |> List.toVector |> Vector.reverse;
-                        // List of `VarSym` of variables that become bound when the atom is
+                        // Collect the bound variables in a list so they can be used
+                        // to by `lookup`.
+                        // `(2, val)` being in the list means that attribute 3 of the tuple
+                        // must have value `val`. View this as a `zipWithIndex |> filter`.
+                        let filterAsList: Vector[(Int32, Boxed)] = ((Nil, 0), expected)
+                            ||> Vector.foldLeft(match (acc, i) -> t -> match t {
+                                case BodyTerm.Wild => (acc, i + 1)
+                                case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
+                                    case None => (acc, i + 1)
+                                    case Some(val) => ((i, val) :: acc, i + 1)
+                                }
+                                case BodyTerm.Lit(val) => ((i, val) :: acc, i + 1)
+                            }) |> fst |> List.toVector |> Vector.reverse;
+                        // List of `VarSym` that become bound when the atom is
                         // satisfied.
-                        let nowBoundVars = expected |> Vector.filterMap(t -> match t {
-                            case BodyTerm.Var(v) => match MutMap.get(v, getValOfVar) {
-                                case None => Some(v)
-                                case Some(_) => None
-                            }
-                            case _ => None
-                        });
+                        let freeVars = expected |>
+                            Vector.filterMap(t -> match t {
+                                case BodyTerm.Var(v) => match MutMap.memberOf(v, getValOfVar) {
+                                    case false => Some(v)
+                                    case true => None
+                                }
+                                // We need to keep the order and positions for `registerVars`.
+                                // We do not care about what `_` has been assigned to.
+                                case BodyTerm.Wild => Some(VarSym.VarSym("_"))
+                                case _ => None
+                            });
+                        // Get a list of all values that match the current assignment of body atoms.
                         let matches = lookup(rc, provIdb, filterAsList, Vector.length(expected), lookupStruct, pred);
                         match matches {
-                            case None => false
+                            case None => false // Nothing matches the current assignment. Return false to indicate this.
                             case Some(facts) => {
-                                // Try to find any fact that matches the current assignment of variables.
-                                facts |> List.exists(match (bodyFact, bodyDepth, bodyRule) -> {
-                                    if(bodyDepth >= depth) {
-                                        false
-                                    } else {
-                                        let c1 = Counter.fresh(rc);
-                                        let c2 = Counter.fresh(rc);
-                                        let completeFact = Vector.range(0, Vector.length(expected)) |>
-                                        Vector.map(i -> {
-                                            if(Counter.get(c1) < Vector.length(filterAsList) and i == fst(Vector.get(Counter.get(c1), filterAsList))) {
-                                                snd(Vector.get(Counter.getAndIncrement(c1), filterAsList))
-                                            } else {
-                                                Vector.get(Counter.getAndIncrement(c2), bodyFact)
-                                            }
-                                        });
-                                        Array.put(Some((completeFact, bodyDepth, bodyRule)), index, bodyValues);
-                                        putVals(nowBoundVars, bodyFact);
-                                        loop(index + 1)
-                                    }
-                                })
+                                // Go through the found facts and filter out any fact that has a depth higher than
+                                // the fact we are trying to prove.
+                                // For the kept facts check whether they satisfy the whole rule and if not discard them.
+                                facts |>
+                                    List.exists(match (bodyFact, bodyDepth, bodyRule) -> {
+                                        if (bodyDepth >= depth) {
+                                            // The depth of the body fact is higher than the depth of the head.
+                                            // Reject this t oavoid infinite loops.
+                                            false
+                                        } else {
+                                            // This combination could be delayed until we knew we had a satisfying assignment.
+                                            Array.put(Some((combineToFact(filterAsList, bodyFact, expected), bodyDepth, bodyRule)), index, bodyValues);
+                                            registerVars(freeVars, bodyFact);
+                                            loop(index + 1)
+                                        }
+                                    })
                             }
                         }
                     case BodyPredicate.BodyAtom(pred, _, Polarity.Negative, _, expected) =>
-                        // `not pred(tuple)` is true if `pred(tuple)` is not in the model. 
-                        let tuple = expected |> Vector.map(t -> match t {
-                            case BodyTerm.Var(v) => getVal(v)
-                            case BodyTerm.Lit(val) => val
-                            case BodyTerm.Wild => unreachable!()
-                        });
-                        let isNonMatch = match Map.get(pred, provIdb) {
-                            case None => true
-                            case Some(facts) => not Map.memberOf(tuple, facts)
+                        // `not pred(tuple)` is true if `pred(tuple)` is not in the model.
+                        let tuple = expected |>
+                            Vector.map(t -> match t {
+                                case BodyTerm.Var(v) => getVal(v)
+                                case BodyTerm.Lit(val) => val
+                                case BodyTerm.Wild => unreachable!()
+                            });
+                        let isMatch = match Map.get(makeFakeRelSym(pred), provIdb) {
+                            case None => false
+                            case Some(facts) => BPlusTree.memberOf(tuple, facts)
                         };
-                        if(not isNonMatch)
+                        if (isMatch)
                             false
                         else {
                             // No need to save the match. Negative atoms cannot bind variables.
@@ -345,34 +395,49 @@ mod Fixpoint.Provenance {
                         // would not have been created by this rule.
                         loop(index + 1)
                     case BodyPredicate.Guard1(f, v1) =>
-                        if(f(getVal(v1)))
+                        if (f(getVal(v1)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard2(f, v1, v2) =>
-                        if(f(getVal(v1), getVal(v2)))
+                        if (f(getVal(v1), getVal(v2)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard3(f, v1, v2, v3) =>
-                        if(f(getVal(v1), getVal(v2), getVal(v3)))
+                        if (f(getVal(v1), getVal(v2), getVal(v3)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard4(f, v1, v2, v3, v4) =>
-                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4)))
+                        if (f(getVal(v1), getVal(v2), getVal(v3), getVal(v4)))
                             loop(index + 1)
                         else false
                     case BodyPredicate.Guard5(f, v1, v2, v3, v4, v5) =>
-                        if(f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5)))
+                        if (f(getVal(v1), getVal(v2), getVal(v3), getVal(v4), getVal(v5)))
                             loop(index + 1)
                         else false
-                    // Functional in provenance is not supported.
+                    // Functional in provenance is not supported at the moment.
                     case BodyPredicate.Functional(_, _, _) => unreachable!()
                 }
             }};
-        headTerms |> Vector.mapWithIndex(i -> h -> match h {
-            case HeadTerm.Var(v) => MutMap.put(v, Vector.get(i, fact), getValOfVar)
-            case _ => ()
-        });
+        // Bind all variables in the head atom to the values of `fact`.
+        headTerms |>
+            Vector.forEachWithIndex(i -> h -> match h {
+                case HeadTerm.Var(v) => MutMap.put(v, Vector.get(i, fact), getValOfVar)
+                case _ => ()
+            });
         loop(0);
         bodyValues |> Array.filterMap(rc, identity) |> Array.toVector
+    }
+
+    def combineToFact(filter: Vector[(Int32, Boxed)], newValues: Vector[Boxed], bodyTerms: Vector[BodyTerm]): Vector[Boxed] = region rc {
+        let c1 = Counter.fresh(rc);
+        let c2 = Counter.fresh(rc);
+        Vector.range(0, Vector.length(bodyTerms)) |>
+            Vector.map(i -> {
+                if (Counter.get(c1) < Vector.length(filter) and i == fst(Vector.get(Counter.get(c1), filter))) {
+                    snd(Vector.get(Counter.getAndIncrement(c1), filter))
+                } else {
+                    Vector.get(Counter.getAndIncrement(c2), newValues)
+                }
+            })
     }
 }

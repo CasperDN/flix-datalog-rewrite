@@ -2,7 +2,7 @@ mod Road {
     import java.lang.System;
     use Common.{forceEval, unwrap, loadTuplesFromFile, getCwd, exit}
 
-    pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} = 
+    pub def getFacts(): #{ Road(Int64, Int64) | t } \ {IO, Sys} =
         let path = "${getCwd()}/data/road/road-2000000.csv";
         let tuples = loadTuplesFromFile(path, ",");
         let map = Int64.fromString >> unwrap;
@@ -26,7 +26,7 @@ mod Road {
         println(endTime - startTime)
     })
 
-    pub def runWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock = 
+    pub def runWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock =
         let r = #{
             Path(x, y) :- Road(x, y).
             Path(x, z) :- Path(x, y), Road(y, z).
@@ -37,7 +37,7 @@ mod Road {
         let endTime = Clock.currentTime(TimeUnit.Nanoseconds);
         endTime - startTime
 
-    pub def runLatticeWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock = 
+    pub def runLatticeWithFacts(f: #{ Road(Int64, Int64) }): Int64 \ IO + Clock =
         let r = #{
             Path(x, y; Down.Down(1)) :- Road(x, y).
             Path(x, z; l1 + Down.Down(1)) :- Path(x, y; l1), Road(y, z).
