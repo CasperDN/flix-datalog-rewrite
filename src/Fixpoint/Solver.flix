@@ -36,49 +36,24 @@ mod Fixpoint.Solver {
     use Fixpoint.Util.getOrCrash
 
     ///
-    /// For testing. Toggles between the normal solver and the provenance solver.
-    ///
-    @Internal
-    pub def runSolver(d: Datalog): Datalog =
-        if (Options.useProvenance()) {
-            runProvSolver(d)
-        } else {
-            runSolverNoProv(d)
-        }
-
-    ///
     /// Returns the minimal model of the given Datalog program `d`.
     /// The minimal model is given by the model semantics for Datalog programs with stratified negation.
     /// The stratification is computed automatically by the solver.
     ///
     @Internal
-    pub def runSolverNoProv(d: Datalog): Datalog = region rc {
-        let (fixed, fixInfo) = Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
-        let strat = Phase.Stratifier.stratify(fixed);
-        Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, false), fixInfo)
-    }
+    pub def runSolver(d: Datalog): Datalog = runSolverInternal(false, d)
 
     ///
-    /// Returns the minimal model of the given Datalog program `d` with provenance
-    /// annotations to facilitate provenance queries.
+    /// Returns a provenance model of the given Datalog program `d`.
+    /// The provenance model can later be used for provenance queries.
     ///
     @Internal
-    pub def runProvSolver(d: Datalog): Datalog = region rc {
+    pub def runSolverWithProvenance(d: Datalog): Datalog = runSolverInternal(true, d)
+
+    def runSolverInternal(withProv: Bool, d: Datalog): Datalog = region rc {
         let (fixed, fixInfo) = Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
         let strat = Phase.Stratifier.stratify(fixed);
-        let provThing = runWithStratification(fixed, strat, true);
-        let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
-        let goalSym = PredSym.PredSym("Path", 2i64);
-        let mapping = x -> match x {
-            case PredSym.PredSym("Path", _) => Some(1)
-            case _ => None
-        };
-        let forcedEval = provOf(goal, goalSym, d, ???);
-        if (Option.isEmpty(forcedEval)) {
-            Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
-        } else {
-            Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
-        }
+        Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, withProv), fixInfo)
     }
 
     ///
@@ -132,13 +107,6 @@ mod Fixpoint.Solver {
     }
 
     ///
-    /// Returns a provenance model of the given Datalog program `d`.
-    /// The provenance model can later be used for provenance queries.
-    ///
-    @Internal
-    pub def runSolverWithProvenance(d: Datalog): Datalog = ???
-
-    ///
     /// Returns the pairwise union of `d1` and `d2`.
     /// I.e. the facts of the union is the union of the facts and likewise for rules.
     /// A fact or rule may occur twice in the Datalog program. This has no effect on its semantics.
@@ -175,6 +143,36 @@ mod Fixpoint.Solver {
     }
 
     ///
+    /// Returns the provenance of fact `f` of relation `p` given Datalog program `d`.
+    ///
+    @Internal
+    pub def provenanceOf(f: Vector[Boxed], p: PredSym, d: Datalog, mkExtVar: PredSym -> Vector[Boxed] -> t): Vector[t] = match d {
+        case Datalog(_, _) => provenanceOf(f, p, runSolverWithProvenance(d), mkExtVar)
+        case Model(db) => unsafely IO run {
+            // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
+            let fakeRelSym = Ram.makeFakeRelSym(p);
+            match Map.get(fakeRelSym, db) {
+                case None => // Temporary
+                    let termsStr = Vector.join(", ", f);
+                    bug!("${p}(${termsStr}) is not a fact")
+                case Some(facts) => match BPlusTree.memberOf(f, facts) {
+                    case false => // Temporary
+                        let termsStr = Vector.join(", ", f);
+                        bug!("${p}(${termsStr}) is not a fact")
+                    case true => Vector#{mkExtVar(p, f)}
+                }
+            }
+        }
+        case Provenance(_, _) => match Fixpoint.Provenance.provQuery(p, f, d) {
+            case None => 
+                let termsStr = Vector.join(", ", f);
+                bug!("${p}(${termsStr}) is not a fact")
+            case Some(v) => Vector.map(match (pred, fact) -> mkExtVar(pred, fact), v)
+        }
+        case Join(_, _) => provenanceOf(f, p, runSolverWithProvenance(d), mkExtVar)
+    }
+
+    ///
     /// Returns the `Provenance` program `d` as a `Model`.
     ///
     /// Crashes if `d` is not a `Provenance`.
@@ -195,38 +193,6 @@ mod Fixpoint.Solver {
                 newTree
             })
     }
-
-
-    ///
-    /// Return the provenance of the fact `f` of relation `p` given Datalog program `d`.
-    ///
-    @Internal
-    pub def provOf(f: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[Vector[t]] = match d {
-        case Datalog(_, _) =>
-            provOf(f, p, runProvSolver(d), mapping)
-        case Model(db) => unsafely IO run {
-            // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
-            let fakeRelSym = Ram.makeFakeRelSym(p);
-            match Map.get(fakeRelSym, db) {
-                case None => None
-                case Some(facts) => match BPlusTree.memberOf(f, facts) {
-                    case false => None
-                    case true => Some(Vector#{mapping(p, f)})
-                }
-            }
-        }
-        case Provenance(_, _) =>
-            Fixpoint.Provenance.provQuery(p, f, d) |>
-                Option.map(Vector.map(match (pred, fact) -> mapping(pred, fact)))
-        case Join(_, _) =>
-            provOf(f, p, runProvSolver(d), mapping)
-    }
-
-    ///
-    /// Returns the provenance of fact `f` of relation `p` given Datalog program `d`.
-    ///
-    @Internal
-    pub def provenanceOf(f: Vector[Boxed], p: PredSym, d: Datalog, mkExtVar: PredSym -> Vector[Boxed] -> t): Vector[t] = ???
 
     ///
     /// Project all facts in the given Datalog program `d` that has `p` in its head.
