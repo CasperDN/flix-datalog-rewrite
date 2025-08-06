@@ -353,6 +353,48 @@ mod Test.Exp.Fixpoint.If {
         res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
     }
 
+    /////////////////////////////////////////////////////////////////////////////
+    // Test if-guard work on lattice elements                                  //
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testIfGuardLattice01(): Bool = {
+        let r = #{
+            Q(1; 2).
+            P(x; y) :- Q(x; y), if (x != y).
+        };
+        let res = query r select (x, y) from P(x; y);
+        res `Assert.eq` Vector#{(1, 2)}
+    }
     
+    @Test
+    def testIfGuardLattice02(): Bool = {
+        let r = #{
+            Q(1; 2).
+            P(x; y) :- if (x != y), Q(x; y).
+        };
+        let res = query r select (x, y) from P(x; y);
+        res `Assert.eq` Vector#{(1, 2)}
+    }
+
+    @Test
+    def testIfGuardLattice03(): Bool = {
+        let r = #{
+            Q(1; 2).
+            P(x; y) :- Q(x; y), if (x == y).
+        };
+        let res = query r select (x, y) from P(x; y);
+        res `Assert.eq` Vector#{}
+    }
+
+    @Test
+    def testIfGuardLattice04(): Bool = {
+        let r = #{
+            Q(1; 2).
+            P(x; y) :- if (x == y), Q(x; y).
+        };
+        let res = query r select (x, y) from P(x; y);
+        res `Assert.eq` Vector#{}
+    }
 
 }
