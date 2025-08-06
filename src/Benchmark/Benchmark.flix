@@ -1,6 +1,6 @@
 use Common.{exit, unwrap}
 
-def benchmark(): Unit \ {IO, Sys} =  
+def benchmark(): Unit \ {IO, Sys} =
     let args: List[String] = Environment.handle(Environment.getArgs)();
     let programStr = match args {
         case program :: Nil => program
@@ -25,7 +25,7 @@ def benchmark(): Unit \ {IO, Sys} =
 
 def numDigits(x: Int64): Int32 = String.length(Int64.toString(x))
 
-def prettyPrintTime(avgTime: Int64): Unit \ IO = 
+def prettyPrintTime(avgTime: Int64): Unit \ IO =
     let maxDigits = numDigits(avgTime);
     let avgTimeUs = avgTime / 1000i64;
     let avgTimeMs = avgTimeUs / 1000i64;

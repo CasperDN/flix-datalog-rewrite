@@ -6,9 +6,9 @@ Does Model in Datalog.flix need to use RelSym? Why not just the PredSym?
 
 Join Optimizer:
 How should functional be handled?
-Simple: For every input they are called with, record it. The estimated size of a join is 
-then the average size the seen values. Like everything else, this relies somewhat on a 
-uniformity assumption which is likely to not be true in practice, but it is better than 
+Simple: For every input they are called with, record it. The estimated size of a join is
+then the average size the seen values. Like everything else, this relies somewhat on a
+uniformity assumption which is likely to not be true in practice, but it is better than
 nothing. Join algorithm should be Selinger's algorithm. Cost computed as on page 12.
 Important note: When joining with a functional the cost is infinity if one of inputs
 have yet to be computed. In practice return a None or something like that to avoid errors

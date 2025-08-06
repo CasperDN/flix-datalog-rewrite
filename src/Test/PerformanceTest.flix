@@ -12,7 +12,7 @@
 
 // def readNum(): Int32 = 1_000_000
 
-// def mainBTreeExperiment(): Unit \ IO + NonDet + Sys = 
+// def mainBTreeExperiment(): Unit \ IO + NonDet + Sys =
 //     let _ = Random.runWithIO(() -> Clock.runWithIO(() -> FileWrite.runWithIO(() ->{
 //     // insertElementsDifferentOrder();
 //     // insertFewElementsOften();
@@ -60,7 +60,7 @@
 //     runNTestsGeneral(testNum, () -> runSingleTest(rc, pairs))
 
 
-// def repeatUntil(f: Unit -> Unit \ ef1, stopFunc: Unit -> Bool \ ef2): Int64 \ ef1 + ef2 = 
+// def repeatUntil(f: Unit -> Unit \ ef1, stopFunc: Unit -> Bool \ ef2): Int64 \ ef1 + ef2 =
 //     def repeatNInternal(count: Int64): Int64 \ ef1 + ef2 = {
 //         if (stopFunc()) count else {
 //             f(); repeatNInternal(count + 1i64)
@@ -70,7 +70,7 @@
 
 
 
-// def insertUntil(rc: Region[r], toInsert: InsertLists[r], timeLimit: Int64, order: Int32): Int64 \ IO + Clock + r = 
+// def insertUntil(rc: Region[r], toInsert: InsertLists[r], timeLimit: Int64, order: Int32): Int64 \ IO + Clock + r =
 //     let threadNum = Vector.size(toInsert);
 //     let insertNum = List.size(Vector.get(0, toInsert));
 //     Int32.toInt64(insertNum) * Int32.toInt64(threadNum) * {
@@ -83,7 +83,7 @@
 //                         let (x, y) = p;
 //                         BPlusTree.insert(x, y, tree)
 //                     }, list)
-                    
+
 //                      as Unit -> Unit \ IO)() @ rc2
 //                 , toInsert)
 //         };
@@ -96,7 +96,7 @@
 //     let pairs = Random.runWithIO(() -> Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts / threadNum#threadNum, rc), Vector.range(0, threadNum#threadNum)));
 //     runNTestsGeneral(testNum#testNum, () -> Clock.runWithIO(() -> insertUntil(rc, pairs, timeLimit, order)))
 
-// def readUntil(rc: Region[r], toInsert: InsertLists[r], lookup: InsertLists[r], timeLimit: Int64): Int64 \ IO + r = 
+// def readUntil(rc: Region[r], toInsert: InsertLists[r], lookup: InsertLists[r], timeLimit: Int64): Int64 \ IO + r =
 //     let readNum = List.size(Vector.get(0, lookup));
 //     let tree: BPlusTree[r]  = BPlusTree.empty(rc, standardOrder(), defaultSearch());
 //     Vector.forEach(List.forEach(match (x, y) -> BPlusTree.insert(x, y, tree)), toInsert);
@@ -194,7 +194,7 @@
 //     let inserted = Vector.map(_ -> getRandomListOfPairs(totalInserts#totalInserts, rc), Vector.range(0, 1));
 //     runNTestsGeneral(testNum#testNum, () -> insertUntil(rc, inserted, timeLimit, standardOrder()))
 
-// // def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists[r], timeLimit: Int64): Int64 \ IO = 
+// // def readUntilJavaMap(toInsert: Vector[List[(Int64, Int64)]], lookup: InsertLists[r], timeLimit: Int64): Int64 \ IO =
 // //     let readNum = List.size(Vector.get(0, lookup));
 // //     let tree  = new TreeMap();
 // //     Vector.forEach(List.forEach(match (x, y) -> {tree.put(Long.valueOf(x), Long.valueOf(y)); ()}), toInsert);
@@ -339,7 +339,7 @@
 //     FileWrite.append(str = "Experiment with varying order", file);
 //     let nanoLimit = commonTimeLimitNano();
 //     println("Experiment with different order:");
-//     Vector.forEach(order -> Vector.forEach(insertNum -> 
+//     Vector.forEach(order -> Vector.forEach(insertNum ->
 //         Vector.forEach(threads -> {
 //             FileWrite.append(str = "\nOrder:", file);
 //             FileWrite.append(str = Int32.toString(order), file);
@@ -364,7 +364,7 @@
 //     FileWrite.append(str = "Experiment with small depth", file);
 //     println("Experiment with low height:");
 //     let nanoLimit = commonTimeLimitNano();
-//     Vector.forEach(insertNum -> 
+//     Vector.forEach(insertNum ->
 //         Vector.forEach(threads -> {
 //             FileWrite.append(str = "\nInsertions:", file);
 //             FileWrite.append(str = Int32.toString(insertNum), file);
@@ -376,6 +376,6 @@
 //             println("Threads:");
 //             println(threads);
 //             FileWrite.append(str = Vector.toString(runWithThreadsRandomUntil(rc, testNum = repeatNum(), threadNum = threads, totalInserts=insertNum, nanoLimit, standardOrder())), file)
-//         }, Vector.range(1, 41)), 
+//         }, Vector.range(1, 41)),
 //     Vector#{10_000, 1_000_000})
 // }

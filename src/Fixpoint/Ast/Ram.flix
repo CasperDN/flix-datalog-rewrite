@@ -29,15 +29,15 @@ mod Fixpoint.Ast.Ram {
 
     ///
     /// A `RamProgram` represents a compiled Datalog program.
-    /// 
+    ///
     @Internal
     pub enum RamProgram {
-        case Program(RamStmt, Facts, Predicates, IndexInformation)
+        case Program(RamStmt, FactTuple, Predicates, IndexInformation)
     }
 
     ///
     /// Contains a set of `RelSym` representing the names of the relations in the program
-    ///  and 1 + the maximal identifier of the `RelSym`s.
+    /// and 1 + the maximal identifier of the `RelSym`s.
     ///
     @Internal
     pub type alias Predicates = (Int64, Set[RelSym])
@@ -46,7 +46,14 @@ mod Fixpoint.Ast.Ram {
     /// The extensible database (EDB) of a program.
     ///
     @Internal
-    pub type alias Facts = Map[RelSym, Vector[Vector[Boxed]]]
+    pub type alias Facts = Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]
+
+    ///
+    /// `FactsTuple` consists of `(oldFacts, newFacts)`, where `oldFacts` are given through
+    /// joining a model, while `newFacts` are EDB facts written in the Datalog program.
+    ///
+    @Internal
+    pub type alias FactTuple = (Facts, Facts)
 
     ///
     /// A `Search` describes the order in which entries in a tuple are ordered. These are
@@ -54,7 +61,7 @@ mod Fixpoint.Ast.Ram {
     /// for efficient retrieval in range queries.
     ///
     /// For example, the Datalog rule
-    /// 
+    ///
     /// A(x) :- B(x), C(_, _, x).
     ///
     /// produces the search `Vector#{2, 0, 1}` for relation `C`. This means the tuples in
@@ -108,12 +115,6 @@ mod Fixpoint.Ast.Ram {
     /// `Until(condition, body)` checks if `condition` is false and repeadetly executes
     /// `body` until `condition` is `true`.
     ///
-    /// `EstimateJoinSize(relSym, indexUsed, savePosition, search)` estimates the size
-    /// relation `relSym` based on index `indexUsed` as described by `search` and saves
-    /// the result to `savePosition`. `EstimateJoinSize` statements only exist during the
-    /// join profiling stage during join optimization. For more details see 
-    /// `JoinOptimizer.flix`. 
-    ///
     /// `Comment(string)` is a comment for debugging.
     ///
     @Internal
@@ -125,7 +126,6 @@ mod Fixpoint.Ast.Ram {
         case Seq(Vector[RamStmt])
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
-        case EstimateJoinSize(RelSym, Int32, Int32, Search)
         case Comment(String)
     }
 
@@ -142,8 +142,6 @@ mod Fixpoint.Ast.Ram {
                 case RamStmt.Until(test, body) =>
                     let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.EstimateJoinSize(relSym, _, _, attr) =>
-                    "EstimateJoinSize(${relSym}, {${Vector.join(", ", attr)}})"
                 case RamStmt.Comment(comment) => "/* ${comment} */"
             }
     }
@@ -151,7 +149,7 @@ mod Fixpoint.Ast.Ram {
     /////////////////////////////////////////////////////////////////////////////
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
-    
+
     ///
     /// `Search(rv, relSym, body)` iterates through the facts in relation `relSym`, saving
     /// them as RowVar `rv` and executes `body`.
@@ -215,7 +213,7 @@ mod Fixpoint.Ast.Ram {
     /// `term` must be a Meet or RowLoad of a lattice var.
     ///
     /// `Leq(const, rv, relSym)`: True if `const` is less than the lattice element of `rv`.
-    /// 
+    ///
     /// `Eq(term1, term2)`: True if `term1 == term2`.
     ///
     /// `Guard1(f, term1)`: True if `f(term1) == true`.
@@ -327,7 +325,7 @@ mod Fixpoint.Ast.Ram {
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
             case RamTerm.Lit(v, _) => "%{v}"
-            case RamTerm.ProvMax(loads) => 
+            case RamTerm.ProvMax(loads) =>
                 let loadsStr = Vector.joinWith(match (rv, i) -> "${rv}[${i}]", ", ", loads);
                 "max(${loadsStr})"
             case RamTerm.RowLoad(var, index, _) => "${var}[${index}]"
@@ -384,6 +382,17 @@ mod Fixpoint.Ast.Ram {
             case RelSym.Symbol(sym, _, _) => "${sym}"
         }
     }
+
+    ///
+    /// Returns a `RelSym` wrapper of the `predSym`.
+    ///
+    /// The returned `RelSym` is equivalent to a 'real' `RelSym` with respect
+    /// to the `Order` on `RelSym`.
+    ///
+    /// Used for accessing values in maps.
+    ///
+    @Internal
+    pub def makeFakeRelSym(predSym: PredSym): RelSym = RelSym.Symbol(predSym, -1, Relational)
 
     ///
     /// Returns the arity of `relSym`.
@@ -451,7 +460,7 @@ mod Fixpoint.Ast.Ram {
             case (RowVar.Named(i1), RowVar.Named(i2)) => i1 <=> i2
         }
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // RamId                                                                   //
     /////////////////////////////////////////////////////////////////////////////
@@ -487,7 +496,7 @@ mod Fixpoint.Ast.Ram {
             case (RamId.RelPos(i0, i1)) => "RelPos[${i0}, ${i1}]"
         }
     }
-    
+
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {
             case (RamId.Id(i1), RamId.Id(i2)) => i1 == i2
@@ -511,7 +520,7 @@ mod Fixpoint.Ast.Ram {
                 let firstComp = i0 <=> j0;
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
-            case (_,  RamId.TuplePos(_, _)) => Comparison.GreaterThan
+            case (_, RamId.TuplePos(_, _)) => Comparison.GreaterThan
             case (RamId.RelPos(_, _), _) => Comparison.LessThan
             case (_, RamId.RelPos(_, _)) => Comparison.GreaterThan
             case (RamId.Id(_), _) => Comparison.LessThan

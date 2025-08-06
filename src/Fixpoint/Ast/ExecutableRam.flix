@@ -32,15 +32,15 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// A `RamProgram` represents a further compiled Datalog program ready to be run
     /// by the interpreter.
-    /// 
-    pub enum RamProgram {
-        case Program(RamStmt, Facts, Predicates, IndexInformation, (Arities, ConstWrites), RamIdToPos)
+    ///
+    pub enum RamProgram[r: Region] {
+        case Program(RamStmt, Facts[r], Predicates, IndexInformation, (Arities, ConstWrites), RamIdToPos)
     }
     ///
     /// The extensible database (EDB) of a program.
     ///
     @Internal
-    pub type alias Facts = Map[RelSym, Vector[(Vector[Int64], Boxed)]]
+    pub type alias Facts[r: Region] = Map[RelSym, BPlusTree[Vector[Int64], Boxed, r]]
 
     ///
     /// `ConstWrites` describes constants used for queries and the position they should be
@@ -59,8 +59,8 @@ mod Fixpoint.Ast.ExecutableRam {
     /// the context-specified `RowVar`, `rv`, write `searchEnv[indexTo][indexInTo] = rv[indexInFrom]`.
     ///
     /// They come from rules with variables like `Head(x):- Body1(x), Body2(y, x)`, since `x` is used
-    /// twice. We would here have a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}` for `Body1`. 
-    /// This should be read as: The first value of `Body1` should be saved as `idOfBody2`'s 
+    /// twice. We would here have a `WriteTuple` of `Vector#{(0, idOfBody2, 1)}` for `Body1`.
+    /// This should be read as: The first value of `Body1` should be saved as `idOfBody2`'s
     /// (the position of `Body2`) second value.
     ///
     @Internal
@@ -102,12 +102,6 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Comment(string)` is a comment for debugging.
     ///
-    /// `EstimateJoinSize(indexPosition, savePosition, search)` estimates the size of the
-    /// index at `indexPosition` as described by `search` and save the result to
-    /// `savePosition`. `EstimateJoinSize` statements only exist during the
-    /// join profiling stage during join optimization. For more details see 
-    /// `JoinOptimizer.flix`. 
-    ///
     @Internal
     pub enum RamStmt {
         case Insert(RelOp)
@@ -118,7 +112,6 @@ mod Fixpoint.Ast.ExecutableRam {
         case Par(Vector[RamStmt])
         case Until(Vector[BoolExp], RamStmt)
         case Comment(String)
-        case EstimateJoinSize(Int32, Int32, Vector[Int32])
     }
 
     instance ToString[RamStmt] {
@@ -135,15 +128,13 @@ mod Fixpoint.Ast.ExecutableRam {
                     "Until(${tst}) do${nl}${String.indent(4, "${body}")}end"
                 case RamStmt.Comment(comment) => "/* ${comment} */"
                 case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
-                case RamStmt.EstimateJoinSize(index, writeTo, attr) => 
-                    "EstimateJoinSize(<optimized out>, {${Vector.join(", ", attr)}}) @ ${index}, ${writeTo}"
             }
     }
 
     /////////////////////////////////////////////////////////////////////////////
     // RelOp                                                                   //
     /////////////////////////////////////////////////////////////////////////////
-    
+
     ///
     /// `Search(rvPos, indexPos, meet, den, writeTuple, body)` iterates the facts in the
     /// index at `indexPos` saving them at `rvPos` and using the facts as context for
@@ -187,13 +178,13 @@ mod Fixpoint.Ast.ExecutableRam {
                 case RelOp.Query(var, ramSym, _, _, writes, body) =>
                     let writeString = Vector.joinWith(match term -> ToString.toString(term), " ∧ ", writes);
                     "query {x${var} ∈ indexes[${ramSym}] | ${writeString}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(id, _, terms, _, body, _) => 
+                case RelOp.Functional(id, _, terms, _, body, _) =>
                     "loop(x${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, ramSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${ramSym}"
                 case RelOp.If(test, then) =>
                     let tst = test |> Vector.join(" ∧ ");
-                    "if(${tst}) then${nl}${String.indent(4, "${then}")}end"
+                    "if (${tst}) then${nl}${String.indent(4, "${then}")}end"
             }
     }
 
@@ -231,10 +222,10 @@ mod Fixpoint.Ast.ExecutableRam {
         case Leq(Boxed, Boxed -> Boxed -> Bool, Int32)
         case Eq(RamTerm, RamTerm)
         case Guard1(Boxed -> Bool, RamTerm)
-        case Guard2(Boxed -> Boxed  -> Bool, RamTerm, RamTerm)
-        case Guard3(Boxed -> Boxed  -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
-        case Guard4(Boxed -> Boxed  -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
-        case Guard5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard2(Boxed -> Boxed -> Bool, RamTerm, RamTerm)
+        case Guard3(Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm)
+        case Guard4(Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm)
+        case Guard5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Bool, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm)
     }
 
     instance ToString[BoolExp] {
@@ -262,7 +253,7 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Lit(rep, val)` represents the literal `val` and its unboxed version, `rep`.
     ///
-    /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents 
+    /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents
     /// `max(memory[memPos1][i1], memory[memPos2][i2], ...)`
     ///
     /// `LoadFromTuple(memPos, i, unboxingInfo)` represents an index from the tuple stored at postion
@@ -295,12 +286,12 @@ mod Fixpoint.Ast.ExecutableRam {
         case ProvMax(Vector[(Int32, Int32)])
         case LoadFromTuple(Int32, Int32, UnifiedTypePos)
         case LoadLatVar(Int32, UnifiedTypePos)
-        case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case Meet(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
         case App1(Boxed -> Boxed, RamTerm, UnifiedTypePos)
-        case App2(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
-        case App3(Boxed -> Boxed  -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
-        case App4(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
-        case App5(Boxed -> Boxed  -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
+        case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
+        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, UnifiedTypePos)
     }
 
     instance ToString[RamTerm] {
@@ -319,5 +310,5 @@ mod Fixpoint.Ast.ExecutableRam {
             case RamTerm.App5(_, v1, v2, v3, v4, v5, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
         }
     }
-    
+
 }
