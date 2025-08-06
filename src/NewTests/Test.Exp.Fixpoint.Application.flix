@@ -51,7 +51,7 @@ mod Test.Exp.Fixpoint.Application {
             let out = fizz + buzz;
             if (out == "")
                 Int32.toString(x)
-            else 
+            else
                 out
         };
         let tuples = Vector.range(1, 21);
@@ -64,7 +64,7 @@ mod Test.Exp.Fixpoint.Application {
             "11", "Fizz", "13", "14", "FizzBuzz", "16", "17", "Fizz", "19", "Buzz"
         };
         res `Assert.eq`
-        query f, r select (x, y) from FizzBuzz(x, y) |> 
+        query f, r select (x, y) from FizzBuzz(x, y) |>
             Vector.unzip |> snd
     }
 
@@ -89,7 +89,7 @@ mod Test.Exp.Fixpoint.Application {
         let res = tuples |> Vector.map(x -> (x + 1, x + 1));
         res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // Tests with application of 2 arguments                                   //
     /////////////////////////////////////////////////////////////////////////////

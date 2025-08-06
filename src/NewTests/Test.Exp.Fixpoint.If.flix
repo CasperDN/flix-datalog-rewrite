@@ -145,16 +145,6 @@ mod Test.Exp.Fixpoint.If {
         res `Assert.eq` query f, r select (x, y) from R(x, y)
     }
 
-    @Test
-    def testIfGuardTwo05(): Bool = {
-        let f = inject Vector#{("Alice", "Carol"), ("Bob", "Carol")} into Friend/2;
-        let r = #{
-            FriendInCommon(x, y) :- Friend(x, a), Friend(y, a), if (x != y).
-        };
-        let res = query f, r select (x, y) from FriendInCommon(x, y);
-        res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
-    }
-
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 3 parameters                                         //
     /////////////////////////////////////////////////////////////////////////////
@@ -168,7 +158,7 @@ mod Test.Exp.Fixpoint.If {
         };
         tuples `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
     }
-    
+
     @Test
     def testIfGuardThree02(): Bool = {
         let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x, 2 * x));
@@ -211,11 +201,11 @@ mod Test.Exp.Fixpoint.If {
         let res = tuples |> Vector.filter(match (x, y, z) -> String.exists(c -> c == '3', x + y + z)) |> Vector.sort;
         res `Assert.eq` query f, r select (x, y, z) from R(x, y, z)
     }
-    
+
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard with 4 parameters                                         //
     /////////////////////////////////////////////////////////////////////////////
-    
+
     @Test
     def testIfGuardFour01(): Bool = {
         let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, x, x, x + x + x));
@@ -225,7 +215,7 @@ mod Test.Exp.Fixpoint.If {
         };
         tuples `Assert.eq` query f, r select (x, y, z, w) from R(x, y, z, w)
     }
-    
+
     @Test
     def testIfGuardFour02(): Bool = {
         let tuples = Vector.range(0, 100) |> Vector.map(x -> (x, 2 * x, 3 * x, 4 * x));
@@ -324,12 +314,12 @@ mod Test.Exp.Fixpoint.If {
         let res1 = query p select (x, y) from P1(x, y);
         let res2 = query p select (x, y) from P2(x, y);
         let res3 = query p select (x, y) from P3(x, y);
-        let res = tuples |> 
-            Vector.map(x -> 
+        let res = tuples |>
+            Vector.map(x ->
                 Vector.foldLeft((acc, y) -> (x, y) :: acc, Nil, tuples) |>
                 List.reverse |>
                 List.toVector
-            ) |> 
+            ) |>
             Vector.fold;
         res1 `Assert.eq` res2 and res2 `Assert.eq` res3 and res3 `Assert.eq` res
     }
@@ -338,7 +328,7 @@ mod Test.Exp.Fixpoint.If {
     def testIfGuardBodyPosition03(): Bool = {
         let f = inject Vector#{("Alice", "Carol"), ("Bob", "Carol")} into Friend/2;
         let r = #{
-            FriendInCommon(x, y) :- Friend(x, a), if (x != y), Friend(y, a).
+            FriendInCommon(x, y) :- Friend(x, a), Friend(y, a), if (x != y).
         };
         let res = query f, r select (x, y) from FriendInCommon(x, y);
         res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
@@ -348,11 +338,22 @@ mod Test.Exp.Fixpoint.If {
     def testIfGuardBodyPosition04(): Bool = {
         let f = inject Vector#{("Alice", "Carol"), ("Bob", "Carol")} into Friend/2;
         let r = #{
+            FriendInCommon(x, y) :- Friend(x, a), if (x != y), Friend(y, a).
+        };
+        let res = query f, r select (x, y) from FriendInCommon(x, y);
+        res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
+    }
+
+    @Test
+    def testIfGuardBodyPosition05(): Bool = {
+        let f = inject Vector#{("Alice", "Carol"), ("Bob", "Carol")} into Friend/2;
+        let r = #{
             FriendInCommon(x, y) :- if (x != y), Friend(x, a), Friend(y, a).
         };
         let res = query f, r select (x, y) from FriendInCommon(x, y);
         res `Assert.eq` Vector#{("Alice", "Bob"), ("Bob", "Alice")}
     }
+
 
     /////////////////////////////////////////////////////////////////////////////
     // Test if-guard work on lattice elements                                  //
