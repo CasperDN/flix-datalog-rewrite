@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-mod Test.Exp.Fixpoint.Solve {
+mod Test.Exp.Fixpoint.KeywordSolve {
 
     /////////////////////////////////////////////////////////////////////////////
     // Test that `solve` does not mutate the original program being solved     //
