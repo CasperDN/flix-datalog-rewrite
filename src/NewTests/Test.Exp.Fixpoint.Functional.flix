@@ -15,21 +15,21 @@
  * limitations under the License.
  */
 
-mod Test.Library.Fixpoint.Functional {
+mod Test.Exp.Fixpoint.Functional {
 
     /////////////////////////////////////////////////////////////////////////////
     // Tests with functional predicates                                        //
     /////////////////////////////////////////////////////////////////////////////
 
-    def isPrime(x: Int32): Bool = 
+    def isPrime(x: Int32): Bool =
         def loop(i) =
-            if (i > x / 2) true 
-            else if (Int32.modulo(x, i) == 0) false 
+            if (i > x / 2) true
+            else if (Int32.modulo(x, i) == 0) false
             else loop(i+1);
         if(x < 2) false
         else loop(2)
-    
-    def primesInRange(b: Int32, e: Int32): Vector[Int32] = 
+
+    def primesInRange(b: Int32, e: Int32): Vector[Int32] =
         Vector.range(b, e) |> Vector.filter(isPrime)
 
     @Test
@@ -39,7 +39,7 @@ mod Test.Library.Fixpoint.Functional {
             Primes(x) :- P(y), let x = primesInRange(0, y).
         };
         let res = Vector#{
-            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 
+            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41,
             43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
         };
         res `Assert.eq` query p select (x) from Primes(x)
@@ -53,19 +53,19 @@ mod Test.Library.Fixpoint.Functional {
             PrimesUntil(x) :- PrimesPlus20(y), let x = primesInRange(0, y).
         };
         let res = Vector#{
-            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 
-            47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 
-            107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 
-            167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 
-            229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 
-            283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 
-            359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 
-            431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 
-            491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 
-            571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 
-            641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 
-            709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 
-            787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 
+            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43,
+            47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
+            107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163,
+            167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227,
+            229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281,
+            283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353,
+            359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
+            431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487,
+            491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569,
+            571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631,
+            641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701,
+            709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773,
+            787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857,
             859, 863, 877, 881, 883, 887
         };
         res `Assert.eq` query startinPrimes, p select (x) from PrimesUntil(x)
@@ -108,6 +108,75 @@ mod Test.Library.Fixpoint.Functional {
         };
         let res = Vector.range(0, 10) |> Vector.flatMap(x -> Vector.range(10, 20) |> Vector.map(y -> (x, y))) |> Vector.sort;
         res `Assert.eq` query p select (x, y) from Ranges(x, y)
+    }
+
+    @Test
+    def testFunctionalZero01(): Bool = {
+        let p = #{
+            Empty(p) :- let p = Vector#{}.
+        };
+        let res: Vector[Int32] = Vector#{};
+        res `Assert.eq` query p select x from Empty(x)
+    }
+
+    @Test
+    def testFunctionalZero02(): Bool = {
+        let p = #{
+            NonEmpty(p) :- let p = Vector#{1}.
+        };
+        Vector#{1} `Assert.eq` query p select x from NonEmpty(x)
+    }
+
+    @Test
+    def testFunctionalZero03(): Bool = {
+        let p = #{
+            Range(p) :- let p = Vector.range(0, 10).
+        };
+        Vector.range(0, 10) `Assert.eq` query p select x from Range(x)
+    }
+
+    @Test
+    def testFunctionalZero04(): Bool = {
+        let p = #{
+            Primes(x) :- let x = primesInRange(0, 100).
+        };
+        let res = Vector#{
+            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41,
+            43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
+        };
+        res `Assert.eq` query p select (x) from Primes(x)
+    }
+
+    @Test
+    def testFunctionalZero05(): Bool = {
+        let p = #{
+            NonEmpty(x) :- let x = Vector#{"SomeString"}.
+        };
+        Vector#{"SomeString"} `Assert.eq` query p select (x) from NonEmpty(x)
+    }
+
+    @Test
+    def testFunctionalZero06(): Bool = {
+        let p = #{
+            NonEmpty(x) :- let x = Vector#{(1, 2)}.
+        };
+        Vector#{(1, 2)} `Assert.eq` query p select (x) from NonEmpty(x)
+    }
+
+    @Test
+    def testFunctionalZero07(): Bool = {
+        let p = #{
+            NonEmpty(x) :- let x = Vector#{1i64}.
+        };
+        Vector#{1i64} `Assert.eq` query p select (x) from NonEmpty(x)
+    }
+
+    @Test
+    def testFunctionalZero08(): Bool = {
+        let p = #{
+            NonEmpty(x) :- let x = Vector#{1f64}.
+        };
+        Vector#{1f64} `Assert.eq` query p select (x) from NonEmpty(x)
     }
 
     /////////////////////////////////////////////////////////////////////////////

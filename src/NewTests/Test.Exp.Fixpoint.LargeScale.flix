@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-mod Test.Library.Fixpoint.LargeScale {
+mod Test.Exp.Fixpoint.LargeScale {
     
     @Test
     def testLargeScale01(): Bool = {

@@ -15,11 +15,7 @@
  * limitations under the License.
  */
 
-mod Test.Library.Fixpoint.Stratification {
-
-    /////////////////////////////////////////////////////////////////////////////
-    // Tests with application of 1 arguments                                   //
-    /////////////////////////////////////////////////////////////////////////////
+mod Test.Exp.Fixpoint.Stratification {
 
     @Test
     def testStratification01(): Bool = {
