@@ -70,11 +70,7 @@ mod Fixpoint.Predicate {
     /// Returns a list of all full `RelSym` in `predInfo`.
     ///
     @Internal
-    pub def allFullRelSyms(predInfo: Predicates): List[RelSym] =
-        let (_, set) = predInfo;
-        Set.foldLeft(acc -> relSym ->
-            relSym :: acc
-        , Nil, set)
+    pub def allFullRelSyms(predInfo: Predicates): List[RelSym] = snd(predInfo)
 
     ///
     /// Returns a list of all `RelSym` in `predInfo`.
@@ -218,17 +214,18 @@ mod Fixpoint.Predicate {
     ///
     /// Returns a set of all full `RelSym` created from `PredSym`s in `program` and `db` and the maximal identifier+1.
     ///
-    def collectPreds(program: Datalog, db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): (Int64, Set[RelSym]) = match program {
+    def collectPreds(program: Datalog, db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): Predicates = match program {
         case Datalog(facts, rules) =>
             let set1 = collectPredicates(rules);
             let set2 = collectPredicates(facts);
             let set3 = collectDbPredicates(db);
             let set = (set1 `Set.union` set2) `Set.union` set3;
-            let optMax = set |>
-                Set.maximumBy(match RelSym.Symbol(PredSym.PredSym(_, id1), _, _) -> match RelSym.Symbol(PredSym.PredSym(_, id2), _, _) -> id1 <=> id2);
+            let relSyms = Set.toList(set);
+            let optMax = relSyms |>
+                List.maximumBy(match RelSym.Symbol(PredSym.PredSym(_, id1), _, _) -> match RelSym.Symbol(PredSym.PredSym(_, id2), _, _) -> id1 <=> id2);
             match optMax {
-                case None => (-1i64, set)
-                case Some(max) => (toId(max) + 1i64, set)
+                case None => (-1i64, relSyms)
+                case Some(max) => (toId(max) + 1i64, relSyms)
             }
         case _ => bug!("Datalog Boxing bug")
     }
