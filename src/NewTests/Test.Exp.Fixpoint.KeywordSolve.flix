@@ -22,7 +22,7 @@ mod Test.Exp.Fixpoint.KeywordSolve {
     /////////////////////////////////////////////////////////////////////////////
 
     @Test
-    pub def testSolve01(): Bool = {
+    def testSolve01(): Bool = {
         let db1 = solve #{
             ASolve(42).
         };
@@ -36,7 +36,7 @@ mod Test.Exp.Fixpoint.KeywordSolve {
     }
 
     @Test
-    pub def testSolve02(): Bool = {
+    def testSolve02(): Bool = {
         let db1 = solve #{
             ASolve(42).
         };
@@ -51,7 +51,7 @@ mod Test.Exp.Fixpoint.KeywordSolve {
     }
 
     @Test
-    pub def testSolve03(): Bool = {
+    def testSolve03(): Bool = {
         let db1 = solve #{
             BSolve(1).
             BSolve(2).
@@ -67,7 +67,7 @@ mod Test.Exp.Fixpoint.KeywordSolve {
     }
 
     @Test
-    pub def testSolve04(): Bool = {
+    def testSolve04(): Bool = {
         let db1 = #{ 
             ASolve(1).
             ASolve(x) :- BSolve(x).
