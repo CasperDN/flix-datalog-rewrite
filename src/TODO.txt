@@ -1,15 +1,6 @@
-In project: optimize `bot` out
-
-Add functional and constant handling to join-optimizer.
-
-Does Model in Datalog.flix need to use RelSym? Why not just the PredSym?
-
-Join Optimizer:
-How should functional be handled?
-Simple: For every input they are called with, record it. The estimated size of a join is
-then the average size the seen values. Like everything else, this relies somewhat on a
-uniformity assumption which is likely to not be true in practice, but it is better than
-nothing. Join algorithm should be Selinger's algorithm. Cost computed as on page 12.
-Important note: When joining with a functional the cost is infinity if one of inputs
-have yet to be computed. In practice return a None or something like that to avoid errors
-leading to choosing an unsound join order.
+Tests:
+1. Lattice tests. Test with GLB.
+2. Test where the following happens:
+    A non-full index is used on a delta relation.
+    two facts are concluded in a single iteration of fixed point computation for that relation.
+3. Test of provenance
