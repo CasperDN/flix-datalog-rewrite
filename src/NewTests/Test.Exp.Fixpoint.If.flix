@@ -399,4 +399,26 @@ mod Test.Exp.Fixpoint.If {
         res `Assert.eq` Vector#{}
     }
 
+    @Test
+    pub def testIfGuardLattice05(): Unit \ IO = {
+        let r = #{
+            Q(1; 2).
+            S(1; 6).
+            P(x; y) :- if (y == 6), Q(x; y), S(x; y).
+        };
+        let res = query r select (x, y) from P(x; y);
+        println(res)
+    }
+
+    @Test
+    pub def testIfGuardLattice06(): Unit \ IO = {
+        let r = #{
+            Q(1; 2).
+            S(1; 6).
+            P(x; y) :- if (y == 6), S(x; y), Q(x; y).
+        };
+        println(MeetLattice.greatestLowerBound(6, 2));
+        let res = query r select (x, y) from P(x; y);
+        println(res)
+    }
 }
