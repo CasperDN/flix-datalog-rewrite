@@ -62,7 +62,7 @@ mod Test.Exp.Fixpoint.KeywordSolve {
         };
         let combined = solve db1, db2;
         let mm1 = query db1 select x from ASolve(x);
-        let mm2 = query combined select x from BSolve(x);
+        let mm2 = query combined select x from ASolve(x);
         mm1 `Assert.eq` Vector#{1, 2} and mm2 `Assert.eq` Vector#{-2, -1, 1, 2}
     }
 
