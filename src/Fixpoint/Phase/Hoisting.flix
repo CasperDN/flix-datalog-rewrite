@@ -301,7 +301,7 @@ mod Fixpoint.Phase.Hoisting {
                 // Just note all `boolExps`. They will be placed as high as possible in the AST by other cases.
                 // If `boolExps` contains no variables, push it all the way to the top, otherwise register it for
                 // all variables occurring in `boolExp`.
-                foreach(b <- boolExps) {
+                foreach (b <- boolExps) {
                     match b {
                         // Don't collect Eq's: they are handled separately to ensure we refer to the earliest evaluated expression.
                         case BoolExp.Eq(_, _) => ()

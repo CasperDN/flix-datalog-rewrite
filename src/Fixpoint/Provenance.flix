@@ -290,7 +290,7 @@ mod Fixpoint.Provenance {
         /// Concretely, we update the `getValOfVar` to contain `varNames[i] => matchedFacts[i]`.
         ///
         def registerVars(varNames, matchedFact) =
-            foreach((i, v) <- ForEach.withIndex(varNames)) {
+            foreach ((i, v) <- ForEach.withIndex(varNames)) {
                 MutMap.put(v, Vector.get(i, matchedFact), getValOfVar)
             };
         ///
