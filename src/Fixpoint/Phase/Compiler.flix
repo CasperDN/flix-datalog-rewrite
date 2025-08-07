@@ -57,7 +57,7 @@ mod Fixpoint.Phase.Compiler {
                         let (pseudoStratum, stratum) = Map.getWithDefault(p, (0, 0), strat);
                         let pseudoMap = MutMap.getOrElsePut(pseudoStratum, MutMap.empty(rc), pseudoStratums);
                         MutMap.putWith(List.append, stratum, (num, rule) :: Nil, pseudoMap)
-                }                
+                }
             };
             foreach ((_, pseudStrat) <- pseudoStratums) {
                     let runInParallel = (Nil, pseudStrat) ||>
