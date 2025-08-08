@@ -67,20 +67,28 @@ mod Fixpoint.Predicate {
     }
 
     ///
+    /// Returns 1 plus the maximum full predicate in `predicates`.
+    ///
+    def getMax(predicates: Predicates): Int64 = {
+        let (_, _, res) = predicates;
+        res
+    }
+
+    ///
     /// Returns a list of all full `RelSym` in `predInfo`.
     ///
     @Internal
-    pub def allFullRelSyms(predInfo: Predicates): List[RelSym] = snd(predInfo)
+    pub def allFullRelSyms(predInfo: Predicates): List[RelSym] =
+        let (_, full, _) = predInfo;
+        full
 
     ///
     /// Returns a list of all `RelSym` in `predInfo`.
     ///
     @Internal
     pub def allRelSyms(predInfo: Predicates): List[RelSym] =
-        let fullRels = allFullRelSyms(predInfo);
-        let deltaRels = List.map(x -> fullRelSymToType(x, PredType.Delta, predInfo), fullRels);
-        let newRels = List.map(x -> fullRelSymToType(x, PredType.New, predInfo), fullRels);
-        fullRels ::: deltaRels ::: newRels
+        let (relSyms, _, _) = predInfo;
+        relSyms
 
     ///
     /// Returns the full `RelSym` associated with the `PredSym` in `body` according to `predInfo`.
@@ -93,9 +101,7 @@ mod Fixpoint.Predicate {
     ///
     /// Returns the identifier of `wantedType` of `id` according to `predInfo`
     ///
-    @Internal
-    pub def fullIdtoPredType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
-        let (max, _) = predInfo;
+    def fullIdtoPredType(id: Int64, wantedType: PredType, max: Int64): Int64 =
         match wantedType {
             case PredType.Full => id
             case PredType.Delta => id + max
@@ -107,23 +113,28 @@ mod Fixpoint.Predicate {
     /// a full `RelSym`.
     ///
     @Internal
-    pub def fullRelSymToType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = match relSym {
-        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(id, wantedType, predInfo)), arity, den)
+    pub def fullRelSymToType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = 
+        fullRelSymToTypeInternal(relSym, wantedType, getMax(predInfo))
+
+    ///
+    /// Returns a `RelSym` of type `wantedType` given the `RelSym` `relSym`, which must be
+    /// a full `RelSym`.
+    ///
+    def fullRelSymToTypeInternal(relSym: RelSym, wantedType: PredType, max: Int64): RelSym = match relSym {
+        case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) => RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(id, wantedType, max)), arity, den)
     }
 
     ///
     /// Returns the identifier of type `wantedType` from `id` according to `predInfo`.
     ///
-    @Internal
-    pub def getIdAsType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
+    def getIdAsType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
         let fullId = idToFullPredId(id, predInfo);
-        fullIdtoPredType(fullId, wantedType, predInfo)
+        fullIdtoPredType(fullId, wantedType, getMax(predInfo))
 
     ///
     /// Returns the `PredSym` of type `wantedType` from `predSym` according to `predInfo`.
     ///
-    @Internal
-    pub def getPredSymAsType(predSym: PredSym, wantedType: PredType, predInfo: Predicates): PredSym = match predSym {
+    def getPredSymAsType(predSym: PredSym, wantedType: PredType, predInfo: Predicates): PredSym = match predSym {
         case PredSym.PredSym(name, id) => PredSym.PredSym(name, getIdAsType(id, wantedType, predInfo))
     }
 
@@ -147,9 +158,8 @@ mod Fixpoint.Predicate {
     /// Returns the identifier of the full `PredSym` associated with the identifier `id`
     /// according to `predInfo`.
     ///
-    @Internal
-    pub def idToFullPredId(id: Int64, predInfo: Predicates): Int64 =
-        let (max, _) = predInfo;
+    def idToFullPredId(id: Int64, predInfo: Predicates): Int64 =
+        let max = getMax(predInfo);
         if (id <= max) {
             id
         } else if (id <= max * 2i64) {
@@ -161,9 +171,8 @@ mod Fixpoint.Predicate {
     ///
     /// Returns the type of a `PredSym` with identifier `id` according to `predInfo`.
     ///
-    @Internal
-    pub def idToPredType(id: Int64, predInfo: Predicates): PredType =
-        let (max, _) = predInfo;
+    def idToPredType(id: Int64, predInfo: Predicates): PredType =
+        let max = getMax(predInfo);
         if (id <= max) {
             PredType.Full
         } else if (id <= max * 2i64) {
@@ -192,7 +201,7 @@ mod Fixpoint.Predicate {
     @Internal
     pub def relSymFromPredType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = match relSym {
         case RelSym.Symbol(PredSym.PredSym(name, id), arity, den) =>
-            RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(idToFullPredId(id, predInfo), wantedType, predInfo)), arity, den)
+            RelSym.Symbol(PredSym.PredSym(name, fullIdtoPredType(idToFullPredId(id, predInfo), wantedType, getMax(predInfo))), arity, den)
     }
 
     ///
@@ -220,13 +229,17 @@ mod Fixpoint.Predicate {
             let set2 = collectPredicates(facts);
             let set3 = collectDbPredicates(db);
             let set = (set1 `Set.union` set2) `Set.union` set3;
-            let relSyms = Set.toList(set);
-            let optMax = relSyms |>
+            let fullRels = Set.toList(set);
+            let optMax = fullRels |>
                 List.maximumBy(match RelSym.Symbol(PredSym.PredSym(_, id1), _, _) -> match RelSym.Symbol(PredSym.PredSym(_, id2), _, _) -> id1 <=> id2);
-            match optMax {
-                case None => (-1i64, relSyms)
-                case Some(max) => (toId(max) + 1i64, relSyms)
-            }
+            let max = match optMax {
+                case None => 0i64
+                case Some(max) => toId(max) + 1i64
+            };
+            let deltaRels = List.map(x -> fullRelSymToTypeInternal(x, PredType.Delta, max), fullRels);
+            let newRels = List.map(x -> fullRelSymToTypeInternal(x, PredType.New, max), fullRels);
+            let allRels = fullRels ::: deltaRels ::: newRels;
+            (allRels, fullRels, max)
         case _ => bug!("Datalog Boxing bug")
     }
 
@@ -234,9 +247,7 @@ mod Fixpoint.Predicate {
     /// Returns a set of full `RelSym` in `db`.
     ///
     def collectDbPredicates(db: Map[RelSym, BPlusTree[Vector[Boxed], Boxed, Static]]): Set[RelSym] =
-        Map.foldLeftWithKey(set -> relSym -> _ -> {
-            Set.insert(relSym, set)
-        }, Set#{}, db)
+        Map.foldLeftWithKey(set -> relSym -> _ -> Set.insert(relSym, set), Set#{}, db)
 
     ///
     /// Returns a set of full `RelSym` in `constraints`.
@@ -244,11 +255,11 @@ mod Fixpoint.Predicate {
     def collectPredicates(constraints: Vector[Constraint]): Set[RelSym] =
         Vector.foldLeft(match set -> match Constraint(headAtom, body) -> {
             let setWithHead = Set.insert(headAtomToFullRelSym(headAtom), set);
-            Vector.foldLeft(setBody -> bodyConstraint ->
-                match bodyConstraint {
-                    case BodyAtom(_, _, _, _, _) => Set.insert(bodyAtomToFullRelSym(bodyConstraint), setBody)
-                    case _ => setBody
-                }, setWithHead, body)
+            Vector.foldLeft(setBody -> bodyConstraint -> match bodyConstraint {
+                case BodyAtom(_, _, _, _, _) =>
+                    Set.insert(bodyAtomToFullRelSym(bodyConstraint), setBody)
+                case _ => setBody
+            }, setWithHead, body)
         }, Set#{}, constraints)
 
     ///

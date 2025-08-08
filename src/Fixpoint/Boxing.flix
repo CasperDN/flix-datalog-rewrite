@@ -263,7 +263,7 @@ mod Fixpoint.Boxing {
         use Fixpoint.BoxingType.RamIdToPos
         use Fixpoint.Counter
         use Fixpoint.Util.getOrCrash
-        use Fixpoint.Predicate.{PredType, idToFullPredId, fullRelSymToType, relSymFromPredType, relSymsOfProgram}
+        use Fixpoint.Predicate.{PredType, fullRelSymToType, relSymFromPredType, relSymsOfProgram}
 
         ///
         /// Returns a map from `RamId` to `UnifiedTypePos` constructed from `program`.
