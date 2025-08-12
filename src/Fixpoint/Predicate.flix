@@ -98,9 +98,9 @@ mod Fixpoint.Predicate {
     pub def fullIdtoPredType(id: Int64, wantedType: PredType, predInfo: Predicates): Int64 =
         let (max, _) = predInfo;
         match wantedType {
-            case PredType.Full => id
+            case PredType.Full  => id
             case PredType.Delta => id + max
-            case PredType.New => id + max * 2i64
+            case PredType.New   => id + max * 2i64
         }
 
     ///
@@ -224,7 +224,7 @@ mod Fixpoint.Predicate {
             let optMax = set |>
                 Set.maximumBy(match RelSym.Symbol(PredSym.PredSym(_, id1), _, _) -> match RelSym.Symbol(PredSym.PredSym(_, id2), _, _) -> id1 <=> id2);
             match optMax {
-                case None => (-1i64, set)
+                case None      => (-1i64, set)
                 case Some(max) => (toId(max) + 1i64, set)
             }
         case _ => bug!("Datalog Boxing bug")
@@ -261,7 +261,7 @@ mod Fixpoint.Predicate {
     ///
     def bodyAtomToFullRelSym(body: BodyPredicate): RelSym = match body {
         case BodyAtom(pred, den, _, _, terms) => RelSym.Symbol(pred, Vector.length(terms), den)
-        case _ => unreachable!()
+        case _                                => unreachable!()
     }
 
 }

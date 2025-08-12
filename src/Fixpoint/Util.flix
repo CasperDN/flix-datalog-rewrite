@@ -24,7 +24,7 @@ mod Fixpoint.Util {
     @Internal
     pub def getOrCrash(x: Option[a]): a = match x {
         case Some(v) => v
-        case None => bug!("Attempted unwrapping none in getOrCrash")
+        case None    => bug!("Attempted unwrapping none in getOrCrash")
     }
 
 }

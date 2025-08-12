@@ -133,16 +133,16 @@ mod Fixpoint.Ast.Ram {
         pub def toString(stmt: RamStmt): String =
             let nl = String.lineSeparator();
             match stmt {
-                case RamStmt.Insert(op) => ToString.toString(op)
+                case RamStmt.Insert(op)          => ToString.toString(op)
                 case RamStmt.MergeInto(src, dst) => "Merge ${src} into ${dst}"
-                case RamStmt.Swap(lhs, rhs) => "Swap ${lhs} and ${rhs}"
-                case RamStmt.Purge(relSym) => "Purge ${relSym}"
-                case RamStmt.Seq(xs) => Vector.join(";${nl}", xs)
-                case RamStmt.Par(xs) => Vector.join("|${nl}", xs)
-                case RamStmt.Until(test, body) =>
+                case RamStmt.Swap(lhs, rhs)      => "Swap ${lhs} and ${rhs}"
+                case RamStmt.Purge(relSym)       => "Purge ${relSym}"
+                case RamStmt.Seq(xs)             => Vector.join(";${nl}", xs)
+                case RamStmt.Par(xs)             => Vector.join("|${nl}", xs)
+                case RamStmt.Until(test, body)   =>
                     let tst = test |> Vector.join(" && ");
                     "until(${tst}) do${nl}${String.indent(4, "${body}")}end"
-                case RamStmt.Comment(comment) => "/* ${comment} */"
+                case RamStmt.Comment(comment)    => "/* ${comment} */"
             }
     }
 
@@ -240,16 +240,16 @@ mod Fixpoint.Ast.Ram {
     instance ToString[BoolExp] {
         pub def toString(exp: BoolExp): String =
             match exp {
-                case BoolExp.Not(boolExp) => "not (${boolExp})"
-                case BoolExp.IsEmpty(relSym) => "${relSym} = ∅"
-                case BoolExp.NotMemberOf(terms, relSym) => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
-                case BoolExp.NotBot(term, _, _) => "(${term}) ≠ ⊥"
-                case BoolExp.Leq(elem, _, term) => "${elem} ≤ (${term})"
-                case BoolExp.Eq(lhs, rhs) => "${lhs} = ${rhs}"
-                case BoolExp.Guard1(_, v) => "<clo>(${v})"
-                case BoolExp.Guard2(_, v1, v2) => "<clo>(${v1}, ${v2})"
-                case BoolExp.Guard3(_, v1, v2, v3) => "<clo>(${v1}, ${v2}, ${v3})"
-                case BoolExp.Guard4(_, v1, v2, v3, v4) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
+                case BoolExp.Not(boolExp)                  => "not (${boolExp})"
+                case BoolExp.IsEmpty(relSym)               => "${relSym} = ∅"
+                case BoolExp.NotMemberOf(terms, relSym)    => "(${terms |> Vector.join(", ")}) ∉ ${relSym}"
+                case BoolExp.NotBot(term, _, _)            => "(${term}) ≠ ⊥"
+                case BoolExp.Leq(elem, _, term)            => "${elem} ≤ (${term})"
+                case BoolExp.Eq(lhs, rhs)                  => "${lhs} = ${rhs}"
+                case BoolExp.Guard1(_, v)                  => "<clo>(${v})"
+                case BoolExp.Guard2(_, v1, v2)             => "<clo>(${v1}, ${v2})"
+                case BoolExp.Guard3(_, v1, v2, v3)         => "<clo>(${v1}, ${v2}, ${v3})"
+                case BoolExp.Guard4(_, v1, v2, v3, v4)     => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
                 case BoolExp.Guard5(_, v1, v2, v3, v4, v5) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
             }
     }
@@ -303,14 +303,14 @@ mod Fixpoint.Ast.Ram {
     ///
     @Internal
     pub def getTermRamId(t: RamTerm): RamId = match t {
-        case RamTerm.Lit(_, id) => id
-        case RamTerm.ProvMax(_) => RamId.Id(-1)
-        case RamTerm.RowLoad(rv, index, _) => RamId.TuplePos(rv, index)
-        case RamTerm.Meet(_, _, _, id) => id
-        case RamTerm.App1(_ , _, id) => id
-        case RamTerm.App2(_, _, _, id) => id
-        case RamTerm.App3(_, _, _, _, id) => id
-        case RamTerm.App4(_, _, _, _, _, id) => id
+        case RamTerm.Lit(_, id)                 => id
+        case RamTerm.ProvMax(_)                 => RamId.Id(-1)
+        case RamTerm.RowLoad(rv, index, _)      => RamId.TuplePos(rv, index)
+        case RamTerm.Meet(_, _, _, id)          => id
+        case RamTerm.App1(_ , _, id)            => id
+        case RamTerm.App2(_, _, _, id)          => id
+        case RamTerm.App3(_, _, _, _, id)       => id
+        case RamTerm.App4(_, _, _, _, _, id)    => id
         case RamTerm.App5(_, _, _, _, _, _, id) => id
     }
 
@@ -324,16 +324,16 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
-            case RamTerm.Lit(v, _) => "%{v}"
-            case RamTerm.ProvMax(loads) =>
+            case RamTerm.Lit(v, _)                      => "%{v}"
+            case RamTerm.ProvMax(loads)                 =>
                 let loadsStr = Vector.joinWith(match (rv, i) -> "${rv}[${i}]", ", ", loads);
                 "max(${loadsStr})"
-            case RamTerm.RowLoad(var, index, _) => "${var}[${index}]"
-            case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
-            case RamTerm.App1(_, v, _) => "<clo>(${v})"
-            case RamTerm.App2(_, v1, v2, _) => "<clo>(${v1}, ${v2})"
-            case RamTerm.App3(_, v1, v2, v3, _) => "<clo>(${v1}, ${v2}, ${v3})"
-            case RamTerm.App4(_, v1, v2, v3, v4, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
+            case RamTerm.RowLoad(var, index, _)         => "${var}[${index}]"
+            case RamTerm.Meet(_, lhs, rhs, _)           => "(${lhs} ⊓ ${rhs})"
+            case RamTerm.App1(_, v, _)                  => "<clo>(${v})"
+            case RamTerm.App2(_, v1, v2, _)             => "<clo>(${v1}, ${v2})"
+            case RamTerm.App3(_, v1, v2, v3, _)         => "<clo>(${v1}, ${v2}, ${v3})"
+            case RamTerm.App4(_, v1, v2, v3, v4, _)     => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
             case RamTerm.App5(_, v1, v2, v3, v4, v5, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
         }
     }
@@ -409,7 +409,7 @@ mod Fixpoint.Ast.Ram {
     pub def arityOfNonLat(relSym: RelSym): Int32 = match relSym {
         case RelSym.Symbol(_, arity, den) => match den {
             case Relational => arity
-            case _ => arity - 1
+            case _          => arity - 1
         }
     }
 
@@ -490,20 +490,20 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[RamId] {
         pub def toString(x: RamId): String = match x {
-            case (RamId.Id(i1)) => "Id[${i1}]"
-            case (RamId.InId(i0, i1)) => "InId[${i0}, ${i1}]"
+            case (RamId.Id(i1))           => "Id[${i1}]"
+            case (RamId.InId(i0, i1))     => "InId[${i0}, ${i1}]"
             case (RamId.TuplePos(i0, i1)) => "TuplePos[${i0}, ${i1}]"
-            case (RamId.RelPos(i0, i1)) => "RelPos[${i0}, ${i1}]"
+            case (RamId.RelPos(i0, i1))   => "RelPos[${i0}, ${i1}]"
         }
     }
 
     instance Eq[RamId] {
         pub def eq(a: RamId, b: RamId): Bool = match (a, b) {
-            case (RamId.Id(i1), RamId.Id(i2)) => i1 == i2
+            case (RamId.Id(i1), RamId.Id(i2))                       => i1 == i2
             case (RamId.InId(id1, index1), RamId.InId(id2, index2)) => id1 == id2 and index1 == index2
-            case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1)) => i0 == j0 and i1 == j1
-            case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1)) => i0 == j0 and i1 == j1
-            case _ => false
+            case (RamId.TuplePos(i0, i1), RamId.TuplePos(j0, j1))   => i0 == j0 and i1 == j1
+            case (RamId.RelPos(i0, i1), RamId.RelPos(j0, j1))       => i0 == j0 and i1 == j1
+            case _                                                  => false
         }
     }
 
@@ -521,12 +521,12 @@ mod Fixpoint.Ast.Ram {
                 if (firstComp != Comparison.EqualTo) firstComp else i1 <=> j1
             case (RamId.TuplePos(_, _), _) => Comparison.LessThan
             case (_, RamId.TuplePos(_, _)) => Comparison.GreaterThan
-            case (RamId.RelPos(_, _), _) => Comparison.LessThan
-            case (_, RamId.RelPos(_, _)) => Comparison.GreaterThan
-            case (RamId.Id(_), _) => Comparison.LessThan
-            case (_, RamId.Id(_)) => Comparison.GreaterThan
-            case (RamId.InId(_, _), _) => Comparison.LessThan
-            case (_, RamId.InId(_, _)) => Comparison.GreaterThan
+            case (RamId.RelPos(_, _), _)   => Comparison.LessThan
+            case (_, RamId.RelPos(_, _))   => Comparison.GreaterThan
+            case (RamId.Id(_), _)          => Comparison.LessThan
+            case (_, RamId.Id(_))          => Comparison.GreaterThan
+            case (RamId.InId(_, _), _)     => Comparison.LessThan
+            case (_, RamId.InId(_, _))     => Comparison.GreaterThan
         }
     }
 }

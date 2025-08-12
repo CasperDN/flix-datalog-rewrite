@@ -72,7 +72,7 @@ mod Fixpoint.PrecedenceGraph {
         };
         match sorted {
             case s :: rest => loop(s :: Nil, rest)
-            case Nil => ()
+            case Nil       => ()
         };
         MutList.toList(pseudoStratums)
     }
@@ -137,7 +137,7 @@ mod Fixpoint.PrecedenceGraph {
         @Internal
         pub def numberOfVertices(g: MutGraph[r]): Int32 \ r = match MutSet.maximum(g->vertices) {
             case Some(v) => v + 1
-            case None => 0
+            case None    => 0
         }
 
         ///
@@ -328,8 +328,7 @@ mod Fixpoint.PrecedenceGraph {
                     def loop() = {
                         let w = match MutList.pop(stack) {
                             case Some(v) => v
-                            case None =>
-                                bug!("In Fixpoint.PrecedenceGraph.MutGraph: stack cannot be empty")
+                            case None    => bug!("In Fixpoint.PrecedenceGraph.MutGraph: stack cannot be empty")
                         };
                         Array.put(false, w, onStack);
                         MutSet.add(w, mutSet);
