@@ -206,3 +206,34 @@ def main1000(): Unit \ IO = {
     println((Clock.runWithIO(Clock.now) - now) / 1000i64);
     ()
 }
+
+
+// @test
+// def fffff(): Bool = {
+//     let db = #{
+//         A(1). A(3). A(5).
+//         // B(2). B(7). B(11).
+//     };
+//     let pr = #{
+//         R(x * y) :- A(x), let y = Vector#{2, 7, 11}, if (x <= y).
+//     };
+//     let pp = pquery db, pr select R(21) with {A};
+//     Vector.map(v -> ematch v {
+//         case A(x) => "A(${x})"
+//     }, pp) `Assert.eq` Vector#{"A(3)", "B(7)"}
+// }
+
+@test
+def f5(): Bool = {
+    let db = #{
+        A(1). A(3). A(5).
+    };
+    let pr = #{
+        R(x * y) :- A(x), let y = Vector#{2, 7, 11}, if (x <= y).
+    };
+    let pp = pquery db, pr select R(21) with {A};
+    Vector.map(v -> ematch v {
+        case A(x) => "A(${x})"
+    }, pp) `Assert.eq` Vector#{"A(3)"}
+}
+
