@@ -416,6 +416,13 @@ mod Fixpoint.Provenance {
                             Array.put(Some((tuple, -2i64, -2)), index, bodyValues);
                             loop(index + 1, varSymToVal)
                         }
+                    case BodyPredicate.Functional(outVars, func, inVars) =>
+                        let args = Vector.map(varSym -> getVal(varSym, varSymToVal), inVars);
+                        let result = func(args);
+                        Vector.exists(tuple -> {
+                            let newMap = registerVars(outVars, tuple, varSymToVal);
+                            loop(index + 1, newMap)
+                        }, result)
                     // We evaluate these later
                     case BodyPredicate.Guard0(_) =>
                         loop(index + 1, varSymToVal)
@@ -429,13 +436,6 @@ mod Fixpoint.Provenance {
                         loop(index + 1, varSymToVal)
                     case BodyPredicate.Guard5(_, _, _, _, _, _) =>
                         loop(index + 1, varSymToVal)
-                    case BodyPredicate.Functional(outVars, func, inVars) =>
-                        let args = Vector.map(varSym -> getVal(varSym, varSymToVal), inVars);
-                        let result = func(args);
-                        Vector.exists(tuple -> {
-                            let newMap = registerVars(outVars, tuple, varSymToVal);
-                            loop(index + 1, newMap)
-                        }, result)
                 }
             }};
         // A mapping from `VarSym` to its current value.
