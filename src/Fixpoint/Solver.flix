@@ -164,7 +164,7 @@ mod Fixpoint.Solver {
             }
         }
         case Provenance(_, _) => match Fixpoint.Provenance.provQuery(p, f, withh, d) {
-            case None => 
+            case None =>
                 let termsStr = Vector.join(", ", f);
                 bug!("${p}(${termsStr}) is not a fact")
             case Some(v) => Vector.map(match (pred, fact) -> mkExtVar(pred, fact), v)

@@ -113,7 +113,7 @@ mod Fixpoint.Predicate {
     /// a full `RelSym`.
     ///
     @Internal
-    pub def fullRelSymToType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym = 
+    pub def fullRelSymToType(relSym: RelSym, wantedType: PredType, predInfo: Predicates): RelSym =
         fullRelSymToTypeInternal(relSym, wantedType, getMax(predInfo))
 
     ///
@@ -256,7 +256,7 @@ mod Fixpoint.Predicate {
         Vector.foldLeft(match set -> match Constraint(headAtom, body) -> {
             let setWithHead = Set.insert(headAtomToFullRelSym(headAtom), set);
             Vector.foldLeft(setBody -> bodyConstraint -> match bodyConstraint {
-                case BodyAtom(_, _, _, _, _) => 
+                case BodyAtom(_, _, _, _, _) =>
                     Set.insert(bodyAtomToFullRelSym(bodyConstraint), setBody)
                 case _ => setBody
             }, setWithHead, body)
