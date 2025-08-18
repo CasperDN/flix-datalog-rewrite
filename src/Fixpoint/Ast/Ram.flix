@@ -22,6 +22,7 @@ mod Fixpoint.Ast.Ram {
     use Fixpoint.Boxed
     use Fixpoint.PredSymsOf
     use Fixpoint.SubstitutePredSym
+    use Fixpoint.TypeInfo.{provType, TypeInformation}
 
     /////////////////////////////////////////////////////////////////////////////
     // RamProgram                                                              //
@@ -32,7 +33,7 @@ mod Fixpoint.Ast.Ram {
     ///
     @Internal
     pub enum RamProgram {
-        case Program(RamStmt, FactTuple, Predicates, IndexInformation)
+        case Program(RamStmt, FactTuple, Predicates, IndexInformation, TypeInformation)
     }
 
     ///
@@ -169,9 +170,9 @@ mod Fixpoint.Ast.Ram {
     ///
     @Internal
     pub enum RelOp {
-        case Search(RowVar, RelSym, RelOp)
-        case Query(RowVar, RelSym, Vector[BoolExp], Int32, RelOp)
-        case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32)
+        case Search(RowVar, RelSym, Vector[Int32], RelOp)
+        case Query(RowVar, RelSym, Vector[BoolExp], Int32, Vector[Int32], RelOp)
+        case Functional(RowVar, Vector[Boxed] -> Vector[Vector[Boxed]], Vector[RamTerm], RelOp, Int32, Vector[Int32])
         case Project(Vector[RamTerm], RelSym, Int32)
         case If(Vector[BoolExp], RelOp)
     }
@@ -180,14 +181,14 @@ mod Fixpoint.Ast.Ram {
         pub def toString(op: RelOp): String =
             let nl = String.lineSeparator();
             match op {
-                case RelOp.Search(var, relSym, body) =>
+                case RelOp.Search(var, relSym, _types, body) =>
                     "search ${var} ∈ ${relSym} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Query(var, relSym, prefixQuery, _, body) =>
+                case RelOp.Query(var, relSym, prefixQuery, _, _types, body) =>
                     let qry = Vector.joinWith(match term -> {
                         ToString.toString(term)
                     }, " ∧ ", prefixQuery);
                     "query {${var} ∈ ${relSym} | ${qry}} do${nl}${String.indent(4, "${body}")}end"
-                case RelOp.Functional(RowVar.Named(id), _, terms, body, _) =>
+                case RelOp.Functional(RowVar.Named(id), _, terms, body, _, _) =>
                     "loop(x${id} <- f(${terms |> Vector.join(", ")})) do${nl}${String.indent(4, "${body}")}end"
                 case RelOp.Project(terms, relSym, _) =>
                     "project (${terms |> Vector.join(", ")}) into ${relSym}"
@@ -287,15 +288,15 @@ mod Fixpoint.Ast.Ram {
     ///
     @Internal
     pub enum RamTerm {
-        case Lit(Boxed, RamId)
+        case Lit(Boxed, Int32, RamId)
         case ProvMax(Vector[(RowVar, Int32)])
-        case RowLoad(RowVar, Int32, RelSym)
-        case Meet(Boxed -> Boxed -> Boxed, RamTerm, (RowVar, RelSym), RamId)
-        case App1(Boxed -> Boxed, RamTerm, RamId)
-        case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamId)
-        case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamId)
-        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
-        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, RamId)
+        case RowLoad(RowVar, Int32, Int32, RelSym) // Second to last is type info.
+        case Meet(Boxed -> Boxed -> Boxed, RamTerm, (RowVar, RelSym), Int32, RamId)
+        case App1(Boxed -> Boxed, RamTerm, Int32, RamId)
+        case App2(Boxed -> Boxed -> Boxed, RamTerm, RamTerm, Int32, RamId)
+        case App3(Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, Int32, RamId)
+        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, Int32, RamId)
+        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, RamTerm, RamTerm, RamTerm, RamTerm, RamTerm, Int32, RamId)
     }
 
     ///
@@ -303,16 +304,33 @@ mod Fixpoint.Ast.Ram {
     ///
     @Internal
     pub def getTermRamId(t: RamTerm): RamId = match t {
-        case RamTerm.Lit(_, id)                 => id
+        case RamTerm.Lit(_, _, id)                 => id
         case RamTerm.ProvMax(_)                 => RamId.Id(-1)
-        case RamTerm.RowLoad(rv, index, _)      => RamId.TuplePos(rv, index)
-        case RamTerm.Meet(_, _, _, id)          => id
-        case RamTerm.App1(_ , _, id)            => id
-        case RamTerm.App2(_, _, _, id)          => id
-        case RamTerm.App3(_, _, _, _, id)       => id
-        case RamTerm.App4(_, _, _, _, _, id)    => id
-        case RamTerm.App5(_, _, _, _, _, _, id) => id
+        case RamTerm.RowLoad(rv, index, _, _)   => RamId.TuplePos(rv, index)
+        case RamTerm.Meet(_, _, _, _, id)          => id
+        case RamTerm.App1(_ , _, _, id)            => id
+        case RamTerm.App2(_, _, _, _, id)          => id
+        case RamTerm.App3(_, _, _, _, _, id)       => id
+        case RamTerm.App4(_, _, _, _, _, _, id)    => id
+        case RamTerm.App5(_, _, _, _, _, _, _, id) => id
     }
+
+    ///
+    /// Returns the `RamId` of `t`.
+    ///
+    @Internal
+    pub def getType(t: RamTerm): Int32 = match t {
+        case RamTerm.Lit(_, ty, _)                 => ty
+        case RamTerm.ProvMax(_)                    => provType()
+        case RamTerm.RowLoad(_, _, ty, _)          => ty
+        case RamTerm.Meet(_, _, _, ty, _)          => ty
+        case RamTerm.App1(_ , _, ty, _)            => ty
+        case RamTerm.App2(_, _, _, ty, _)          => ty
+        case RamTerm.App3(_, _, _, _, ty, _)       => ty
+        case RamTerm.App4(_, _, _, _, _, ty, _)    => ty
+        case RamTerm.App5(_, _, _, _, _, _, ty, _) => ty
+    }
+
 
     ///
     /// Returns the `RamId` of the lattice-element of `rv`.
@@ -324,17 +342,17 @@ mod Fixpoint.Ast.Ram {
 
     instance ToString[RamTerm] {
         pub def toString(term: RamTerm): String = match term {
-            case RamTerm.Lit(v, _)                      => "%{v}"
+            case RamTerm.Lit(v, _, _)                      => "%{v}"
             case RamTerm.ProvMax(loads)                 =>
                 let loadsStr = Vector.joinWith(match (rv, i) -> "${rv}[${i}]", ", ", loads);
                 "max(${loadsStr})"
-            case RamTerm.RowLoad(var, index, _)         => "${var}[${index}]"
-            case RamTerm.Meet(_, lhs, rhs, _)           => "(${lhs} ⊓ ${rhs})"
-            case RamTerm.App1(_, v, _)                  => "<clo>(${v})"
-            case RamTerm.App2(_, v1, v2, _)             => "<clo>(${v1}, ${v2})"
-            case RamTerm.App3(_, v1, v2, v3, _)         => "<clo>(${v1}, ${v2}, ${v3})"
-            case RamTerm.App4(_, v1, v2, v3, v4, _)     => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
-            case RamTerm.App5(_, v1, v2, v3, v4, v5, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
+            case RamTerm.RowLoad(var, index, _, _)      => "${var}[${index}]"
+            case RamTerm.Meet(_, lhs, rhs, _, _)           => "(${lhs} ⊓ ${rhs})"
+            case RamTerm.App1(_, v, _, _)                  => "<clo>(${v})"
+            case RamTerm.App2(_, v1, v2, _, _)             => "<clo>(${v1}, ${v2})"
+            case RamTerm.App3(_, v1, v2, v3, _, _)         => "<clo>(${v1}, ${v2}, ${v3})"
+            case RamTerm.App4(_, v1, v2, v3, v4, _, _)     => "<clo>(${v1}, ${v2}, ${v3}, ${v4})"
+            case RamTerm.App5(_, v1, v2, v3, v4, v5, _, _) => "<clo>(${v1}, ${v2}, ${v3}, ${v4}, ${v5})"
         }
     }
 

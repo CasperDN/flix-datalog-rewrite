@@ -26,8 +26,11 @@ mod Fixpoint.Interpreter {
     use Fixpoint.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint.Counter
     use Fixpoint.Options.{usedArity, parLevel}
-    use Fixpoint.Predicate.allFullRelSyms
+    use Fixpoint.Predicate.{allFullRelSyms, getRelSymAsType}
+    use Fixpoint.Predicate.PredType.Full
     use Fixpoint.Util.getOrCrash
+
+    use Fixpoint.TypeInfo.{TypeInformation, getTypeOf}
 
     ///
     /// A tuple/fact.
@@ -172,7 +175,7 @@ mod Fixpoint.Interpreter {
         withProv: Bool,
         program: RamProgram[r]
     ): (Database[r], Predicates) \ r = match program {
-        case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), marshallIndexes) =>
+        case RamProgram.Program(stmt, _, predState, (_, indexPos), (arities, constWrites), typeInfo) =>
             let minEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.minValue()));
             let maxEnv = arities |> Vector.map(x -> Array.repeat(rc, x, Int64.maxValue()));
             foreach ((id1, id2, val) <- constWrites) {
@@ -185,7 +188,7 @@ mod Fixpoint.Interpreter {
             let ctx = (db, env, boxing);
             evalStmt(rc, ctx, parLevel(), stmt);
             // Remove the `IO` effect from dealing with static.
-            let boxedFacts = unsafely IO run marshallDb(rc, db, boxing, indexPos, predState, marshallIndexes, withProv);
+            let boxedFacts = unsafely IO run marshallDb(rc, db, boxing, indexPos, predState, typeInfo, withProv);
             (boxedFacts, predState)
     }
 
@@ -201,21 +204,19 @@ mod Fixpoint.Interpreter {
         boxing: Boxing[r],
         indexPos: Map[(RelSym, Int32), Int32],
         predTrack: Predicates,
-        boxingIndexes: RamIdToPos,
-        withProv: Bool
+        typeInfo: TypeInformation,
+        _withProv: Bool
     ): Database[r] \ r + IO =
         let res = MutMap.empty(rc);
         foreach (relSym <- allFullRelSyms(predTrack)) {
             let innerMap = BPlusTree.empty(Static);
             // If we are doing provenance computations we need to also rebox the annotations.
             // Since there are 2 annotations we add 2 in this case.
-            let usedArity =
-                if (withProv) arityOfNonLat(relSym) + 2
-                else arityOfNonLat(relSym);
-            let curBoxingInfo = Vector.range(0, usedArity) |>
-                Vector.map(i ->
-                    getOrCrash(Map.get(RamId.RelPos(toId(relSym), i), boxingIndexes))
-                );
+            // let usedArity =
+            //     if (withProv) arityOfNonLat(relSym) + 2
+            //     else arityOfNonLat(relSym);
+            let fullId = toId(getRelSymAsType(relSym, Full, predTrack));
+            let curBoxingInfo = getTypeOf(fullId, typeInfo);
             Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>
                 BPlusTree.forEach(vec -> latticeElem -> {
                     let boxedVec = vec |>

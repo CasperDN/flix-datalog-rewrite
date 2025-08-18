@@ -69,7 +69,8 @@ mod Fixpoint.Predicate {
     ///
     /// Returns 1 plus the maximum full predicate in `predicates`.
     ///
-    def getMax(predicates: Predicates): Int64 = {
+    @Internal
+    pub def getMax(predicates: Predicates): Int64 = {
         let (_, _, res) = predicates;
         res
     }
@@ -209,7 +210,15 @@ mod Fixpoint.Predicate {
     ///
     @Internal
     pub def relSymsOfProgram(program: RamProgram): List[RelSym] = match program {
-        case RamProgram.Program(_, _, predInfo, _) => allRelSyms(predInfo)
+        case RamProgram.Program(_, _, predInfo, _, _) => allRelSyms(predInfo)
+    }
+
+    ///
+    /// Returns a list of all `RelSym` known in `program`.
+    ///
+    @Internal
+    pub def fullRelSymsOfProgram(program: RamProgram): List[RelSym] = match program {
+        case RamProgram.Program(_, _, predInfo, _, _) => allFullRelSyms(predInfo)
     }
 
     ///

@@ -182,22 +182,33 @@ def forceEval(): Unit \ IO = {
 }
 
 
-def testFunctionalF1X2_01(): Bool =
-let ff = _x -> Vector#{};
-    let pr = #{
-        A(1).
-        R(a, b) :- A(x), let (a, b) = ff(x).
+// def testFunctionalF1X2_01(): Bool =
+// let ff = _x -> Vector#{};
+//     let pr = #{
+//         A(1).
+//         R(a, b) :- A(x), let (a, b) = ff(x).
+//     };
+//     let actual = query pr select (x, y) from R(x, y);
+//     Assert.eq((Vector#{}: Vector[(Int32, Int32)]), actual)
+
+@test
+def testFixpointSolveString(): Bool =
+    let p = #{
+        Edge("a", "b"). Edge("b", "c"). Edge("c", "d"). Edge("d", "e").
+        Edge(y, x) :- Edge(x, y).
+        Path(x, y) :- Edge(x, y).
+        Path(x, z) :- Path(x, y), Edge(y, z).
     };
-    let actual = query pr select (x, y) from R(x, y);
-    Assert.eq((Vector#{}: Vector[(Int32, Int32)]), actual)
+    let m = query p select (x, y) from Path(x, y);
+    Vector.memberOf(("d", "b"), m)
 
 def runForever(): Unit \ IO = {
-    if (testFunctionalF1X2_01()) runForever() else runForever()
+    if (testFixpointSolveString()) runForever() else runForever()
 }
 
 
 def runN(n: Int32): Unit \ IO = {
-    if (testFunctionalF1X2_01() and n > 0) runN(n - 1) else ()
+    if (testFixpointSolveString() and n > 0) runN(n - 1) else ()
 }
 
 def main1000(): Unit \ IO = {

@@ -33,7 +33,7 @@ mod Test.Exp.Fixpoint.Query {
         query foodDb() select (main, side) from Fastfood(main), Vegetable(side) |> Vector.memberOf(("Burger", "Potato"))
 
     @test
-    def testQuery09(): Bool =
+    pub def testQuery09(): Bool =
         query foodDb() select (String.toUpperCase(main), side) from Fastfood(main), Vegetable(side) |> Vector.memberOf(("BURGER", "Potato"))
 
     @test

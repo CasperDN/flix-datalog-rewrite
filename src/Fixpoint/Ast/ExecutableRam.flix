@@ -24,6 +24,7 @@ mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Boxed;
     use Fixpoint.BoxingType.{UnifiedTypePos, RamIdToPos};
+    use Fixpoint.TypeInfo.TypeInformation
 
     /////////////////////////////////////////////////////////////////////////////
     // RamProgram                                                              //
@@ -34,7 +35,7 @@ mod Fixpoint.Ast.ExecutableRam {
     /// by the interpreter.
     ///
     pub enum RamProgram[r: Region] {
-        case Program(RamStmt, Facts[r], Predicates, IndexInformation, (Arities, ConstWrites), RamIdToPos)
+        case Program(RamStmt, Facts[r], Predicates, IndexInformation, (Arities, ConstWrites), TypeInformation)
     }
     ///
     /// The extensible database (EDB) of a program.
