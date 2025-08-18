@@ -62,6 +62,7 @@ mod Fixpoint.Phase.Compiler {
             };
             let typeInfo = typeDatalog(d, pseudoStratums, predicates, withProv);
             let functionalCounter = Counter.fresh(rc);
+            Counter.set(getOrCrash(Int64.tryToInt32(Predicate.getMax(predicates))), functionalCounter);
             foreach ((_, pseudStrat) <- pseudoStratums) {
                     let runInParallel = (Nil, pseudStrat) ||>
                         MutMap.foldLeft(acc -> enumeratedRules -> {
@@ -272,9 +273,7 @@ mod Fixpoint.Phase.Compiler {
         case Constraint(headAtom, body) =>
             let HeadAtom(PredSym(_, headId), _, headTerms) = headAtom;
             let augBody = augmentBody(body, counter);
-            let functionalCountBackUp = Counter.get(functionalCounter);
             let env = unifyVars(predicates, augBody, functionalCounter, typeInfo);
-            Counter.set(functionalCountBackUp, functionalCounter);
             let ramTerms = Vector.mapWithIndex(i -> atom -> compileHeadTerm(env, getType(headId, i, typeInfo), atom), headTerms);
             let projection = RelOp.Project(ramTerms, Predicate.headAtomToRelSym(headAtom, New, predicates), ruleNum);
             match compileBody(env, augBody, predicates, typeInfo) {
@@ -381,12 +380,13 @@ mod Fixpoint.Phase.Compiler {
                 })
                 |> Vector.filter(i -> i != -1);
 
+            let count = Counter.get(functionalCounter);
             if (Fixpoint.Options.enableDebugging()) {
                 let comment = RamStmt.Comment(ToString.toString(rule));
                 MutList.push(comment, stmts);
-                Vector.forEach(compileSomething, positiveIDBAtoms)
+                Vector.forEach(i -> {Counter.set(count, functionalCounter); compileSomething(i)}, positiveIDBAtoms)
             } else {
-                Vector.forEach(compileSomething, positiveIDBAtoms)
+                Vector.forEach(i -> {Counter.set(count, functionalCounter); compileSomething(i)}, positiveIDBAtoms)
             }
     }
 
@@ -443,7 +443,10 @@ mod Fixpoint.Phase.Compiler {
     /// `x` is mapped to B$1[0] because `x` occurs positively in the second atom.
     /// `s` is mapped to the glb of all its positive occurences because it is latticenal.
     ///
+    /// Does not change `functionalCounter`
+    ///
     def unifyVars(predicates: Predicates, body: Vector[(BodyPredicate, RowVar)], functionalCounter: Counter[r], typeInfo: TypeInformation): Map[VarSym, RamTerm] \ r =
+        let functionalCountBackUp = Counter.get(functionalCounter);
         let toFullSym = bodyAtom -> (Predicate.bodyAtomToRelSym(bodyAtom, Full, predicates));
         let innerFunc = {
             acc -> atomVar ->
@@ -483,7 +486,9 @@ mod Fixpoint.Phase.Compiler {
             case Guard5(_, _, _, _, _, _) => acc
             case _                        => acc
         }};
-        Vector.foldLeft(innerFunc, Map#{}, body)
+        let res = Vector.foldLeft(innerFunc, Map#{}, body);
+        Counter.set(functionalCountBackUp, functionalCounter);
+        res
 
     ///
     /// Equates every term in a positive body atom with a RAM term corresponding to an attribute

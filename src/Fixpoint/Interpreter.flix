@@ -209,11 +209,6 @@ mod Fixpoint.Interpreter {
         let res = MutMap.empty(rc);
         foreach (relSym <- allFullRelSyms(predTrack)) {
             let innerMap = BPlusTree.empty(Static);
-            // If we are doing provenance computations we need to also rebox the annotations.
-            // Since there are 2 annotations we add 2 in this case.
-            // let usedArity =
-            //     if (withProv) arityOfNonLat(relSym) + 2
-            //     else arityOfNonLat(relSym);
             let fullId = toId(getRelSymAsType(relSym, Full, predTrack));
             let curBoxingInfo = getTypeOf(fullId, typeInfo);
             Array.get(getOrCrash(Map.get((relSym, 0), indexPos)), db) |>

@@ -22,8 +22,8 @@
 mod Fixpoint.Ast.ExecutableRam {
     use Fixpoint.Ast.Ram.{Predicates, RelSym, IndexInformation}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
-    use Fixpoint.Boxed;
-    use Fixpoint.BoxingType.UnifiedTypePos;
+    use Fixpoint.Boxed
+    use Fixpoint.BoxingType.UnifiedTypePos
     use Fixpoint.TypeInfo.TypeInformation
 
     /////////////////////////////////////////////////////////////////////////////
