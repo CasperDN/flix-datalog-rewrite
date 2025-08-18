@@ -18,19 +18,18 @@
 
 mod Fixpoint.Interpreter {
     use Fixpoint.Ast.ExecutableRam.{BoolExp, RamProgram, RamStmt, RamTerm, RelOp, WriteTuple}
-    use Fixpoint.Ast.Ram.{arityOfNonLat, Predicates, RamId, RelSym, Search, toDenotation, toId}
+    use Fixpoint.Ast.Ram.{arityOfNonLat, Predicates, RelSym, Search, toDenotation, toId}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
     use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
     use Fixpoint.Boxed
     use Fixpoint.Boxing.{boxWith, unboxWith}
-    use Fixpoint.BoxingType.{Boxing, RamIdToPos}
+    use Fixpoint.BoxingType.Boxing
     use Fixpoint.Counter
     use Fixpoint.Options.{usedArity, parLevel}
     use Fixpoint.Predicate.{allFullRelSyms, getRelSymAsType}
     use Fixpoint.Predicate.PredType.Full
-    use Fixpoint.Util.getOrCrash
-
     use Fixpoint.TypeInfo.{TypeInformation, getTypeOf}
+    use Fixpoint.Util.getOrCrash
 
     ///
     /// A tuple/fact.

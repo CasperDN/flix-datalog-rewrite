@@ -52,7 +52,6 @@
 mod Fixpoint.BoxingType {
     use Fixpoint.ReadWriteLock
     use Fixpoint.Boxed
-    use Fixpoint.Ast.Ram.RamId
 
     ///
     /// `Types` represent the different types a program can contain.
@@ -96,13 +95,6 @@ mod Fixpoint.BoxingType {
     ///
     @Internal
     pub type alias UnifiedTypePos = Int32
-
-    ///
-    /// Maps `RamId`'s to the `UnifiedTypePos`. It facilitates getting the type
-    /// information of a `RamTerm`.
-    ///
-    @Internal
-    pub type alias RamIdToPos = Map[RamId, UnifiedTypePos]
 
     ///
     /// Describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`

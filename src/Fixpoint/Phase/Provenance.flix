@@ -28,11 +28,10 @@
 ///
  mod Fixpoint.Phase.Provenance {
     use Fixpoint.Ast.Ram
-    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, RamId, BoolExp}
+    use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RamTerm, RelSym, arityOf, RowVar, BoolExp}
     use Fixpoint.Boxed
     use Fixpoint.Boxed.BoxedInt64
     use Fixpoint.Counter
-
     use Fixpoint.TypeInfo.{expandTypeToProv, expandTypeInfoToProv, provType}
 
     ///
@@ -112,7 +111,7 @@
         case RelOp.Project(terms, relSym, ruleNum) =>
             let newTerms = terms ++ Vector#{
                 RamTerm.ProvMax(List.toVector(rowVarsArity)),
-                RamTerm.Lit(BoxedInt64(Int32.toInt64(ruleNum)), provType(), RamId.Id(-1))
+                RamTerm.Lit(BoxedInt64(Int32.toInt64(ruleNum)), provType())
             };
             RelOp.Project(newTerms, relSym, ruleNum)
         case RelOp.If(boolExps, body) =>

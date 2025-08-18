@@ -17,7 +17,7 @@
  */
 
 mod Fixpoint.Phase.Compiler {
-    use Fixpoint.Ast.Ram.{arityOfNonLat, BoolExp, Facts, Predicates, RamId, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar}
+    use Fixpoint.Ast.Ram.{arityOfNonLat, BoolExp, Facts, Predicates, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar}
     use Fixpoint.Ast.Datalog.{BodyPredicate, BodyTerm, Constraint, Datalog, Fixity, HeadTerm, Polarity, VarSym}
     use Fixpoint.Ast.Datalog.Datalog.{Datalog}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
@@ -33,9 +33,7 @@ mod Fixpoint.Phase.Compiler {
     use Fixpoint.Util.getOrCrash
     use Fixpoint.Predicate
     use Fixpoint.Predicate.PredType.{Full, Delta, New}
-
-
-    use Fixpoint.TypeInfo.{getType, getTypeOf, typeDatalog, TypeInformation}
+    use Fixpoint.TypeInfo.{getType, getTypeOf, Type, typeDatalog, TypeInformation}
 
     ///
     /// Compile the given Datalog program `d` to RAM.
@@ -275,11 +273,11 @@ mod Fixpoint.Phase.Compiler {
             let HeadAtom(PredSym(_, headId), _, headTerms) = headAtom;
             let augBody = augmentBody(body, counter);
             let functionalCountBackUp = Counter.get(functionalCounter);
-            let env = unifyVars(predicates, counter, augBody, functionalCounter, typeInfo);
+            let env = unifyVars(predicates, augBody, functionalCounter, typeInfo);
             Counter.set(functionalCountBackUp, functionalCounter);
-            let ramTerms = Vector.mapWithIndex(i -> atom -> compileHeadTerm(env, counter, getType(headId, i, typeInfo), atom), headTerms);
+            let ramTerms = Vector.mapWithIndex(i -> atom -> compileHeadTerm(env, getType(headId, i, typeInfo), atom), headTerms);
             let projection = RelOp.Project(ramTerms, Predicate.headAtomToRelSym(headAtom, New, predicates), ruleNum);
-            match compileBody(env, augBody, predicates, counter, typeInfo) {
+            match compileBody(env, augBody, predicates, typeInfo) {
                 case None       => ()
                 case Some(join) =>
                     let loopBody = RelOp.If(join, projection);
@@ -340,10 +338,10 @@ mod Fixpoint.Phase.Compiler {
             let compileSomething = deltaIndex -> { // `delta` designates the focused atom.
                 let augBody = augmentBody(body, counter);
                 let delta = snd(Vector.get(deltaIndex, augBody));
-                let env = unifyVars(predicates, counter, augBody, functionalCounter, typeInfo);
-                let ramTerms = Vector.mapWithIndex(i -> atom -> compileHeadTerm(env, counter, getType(headId, i, typeInfo), atom), headTerms);
+                let env = unifyVars(predicates, augBody, functionalCounter, typeInfo);
+                let ramTerms = Vector.mapWithIndex(i -> atom -> compileHeadTerm(env, getType(headId, i, typeInfo), atom), headTerms);
                 let projection = RelOp.Project(ramTerms, Predicate.headAtomToRelSym(headAtom, New, predicates), ruleNum);
-                match compileBody(env, augBody, predicates, counter, typeInfo) {
+                match compileBody(env, augBody, predicates, typeInfo) {
                     case None       => ()
                     case Some(join) =>
                         let relSym = Predicate.headAtomToRelSym(headAtom, Full, predicates);
@@ -395,34 +393,34 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Substitute Datalog head term `term` for a RAM term according to the given substitution `env`.
     ///
-    def compileHeadTerm(env: Map[VarSym, RamTerm], counter: Counter[r], ty: Int32, term: HeadTerm): RamTerm \ r = match term {
+    def compileHeadTerm(env: Map[VarSym, RamTerm], ty: Type, term: HeadTerm): RamTerm = match term {
         case HeadTerm.Var(var)   => getOrCrash(Map.get(var, env))
-        case HeadTerm.Lit(v)     => RamTerm.Lit(v, ty, RamId.Id(Counter.getAndIncrement(counter)))
+        case HeadTerm.Lit(v)     => RamTerm.Lit(v, ty)
         case HeadTerm.App1(f, v) =>
             let t = getOrCrash(Map.get(v, env));
-            RamTerm.App1(f, t, ty, RamId.Id(Counter.getAndIncrement(counter)))
+            RamTerm.App1(f, t, ty)
         case HeadTerm.App2(f, v1, v2) =>
             let t1 = getOrCrash(Map.get(v1, env));
             let t2 = getOrCrash(Map.get(v2, env));
-            RamTerm.App2(f, t1, t2, ty, RamId.Id(Counter.getAndIncrement(counter)))
+            RamTerm.App2(f, t1, t2, ty)
         case HeadTerm.App3(f, v1, v2, v3) =>
             let t1 = getOrCrash(Map.get(v1, env));
             let t2 = getOrCrash(Map.get(v2, env));
             let t3 = getOrCrash(Map.get(v3, env));
-            RamTerm.App3(f, t1, t2, t3, ty, RamId.Id(Counter.getAndIncrement(counter)))
+            RamTerm.App3(f, t1, t2, t3, ty)
         case HeadTerm.App4(f, v1, v2, v3, v4) =>
             let t1 = getOrCrash(Map.get(v1, env));
             let t2 = getOrCrash(Map.get(v2, env));
             let t3 = getOrCrash(Map.get(v3, env));
             let t4 = getOrCrash(Map.get(v4, env));
-            RamTerm.App4(f, t1, t2, t3, t4, ty, RamId.Id(Counter.getAndIncrement(counter)))
+            RamTerm.App4(f, t1, t2, t3, t4, ty)
         case HeadTerm.App5(f, v1, v2, v3, v4, v5) =>
             let t1 = getOrCrash(Map.get(v1, env));
             let t2 = getOrCrash(Map.get(v2, env));
             let t3 = getOrCrash(Map.get(v3, env));
             let t4 = getOrCrash(Map.get(v4, env));
             let t5 = getOrCrash(Map.get(v5, env));
-            RamTerm.App5(f, t1, t2, t3, t4, t5, ty, RamId.Id(Counter.getAndIncrement(counter)))
+            RamTerm.App5(f, t1, t2, t3, t4, t5, ty)
     }
 
     ///
@@ -445,7 +443,7 @@ mod Fixpoint.Phase.Compiler {
     /// `x` is mapped to B$1[0] because `x` occurs positively in the second atom.
     /// `s` is mapped to the glb of all its positive occurences because it is latticenal.
     ///
-    def unifyVars(predicates: Predicates, counter: Counter[r], body: Vector[(BodyPredicate, RowVar)], functionalCounter: Counter[r], typeInfo: TypeInformation): Map[VarSym, RamTerm] \ r =
+    def unifyVars(predicates: Predicates, body: Vector[(BodyPredicate, RowVar)], functionalCounter: Counter[r], typeInfo: TypeInformation): Map[VarSym, RamTerm] \ r =
         let toFullSym = bodyAtom -> (Predicate.bodyAtomToRelSym(bodyAtom, Full, predicates));
         let innerFunc = {
             acc -> atomVar ->
@@ -465,7 +463,7 @@ mod Fixpoint.Phase.Compiler {
                                     if (i < Vector.length(terms) - 1)
                                         Map.insertWith(_ -> t -> t, var, RamTerm.RowLoad(rowVar, i, sType, toFullSym(atom)), acc1)
                                     else
-                                        let f = _ -> t2 -> RamTerm.Meet(glb, t2, (rowVar, toFullSym(atom)), getType(id, i, typeInfo), RamId.Id(Counter.getAndIncrement(counter)));
+                                        let f = _ -> t2 -> RamTerm.Meet(glb, t2, (rowVar, toFullSym(atom)), getType(id, i, typeInfo));
                                         Map.insertWith(f, var, RamTerm.RowLoad(rowVar, i, sType, toFullSym(atom)), acc1)
                             }
                             case _ => acc1
@@ -503,9 +501,9 @@ mod Fixpoint.Phase.Compiler {
     /// (2) comes from the negative atom `not A(x)`.
     /// (3) is a function call that computes the expression `x > 0`.
     ///
-    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predicates: Predicates, counter: Counter[r], typeInfo: TypeInformation): Option[Vector[BoolExp]] \ r =
+    def compileBody(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predicates: Predicates, typeInfo: TypeInformation): Option[Vector[BoolExp]] =
         if (isImpossible(body)) None
-        else Some(compileBodyWithoutGuard0(env, body, predicates, counter, typeInfo))
+        else Some(compileBodyWithoutGuard0(env, body, predicates, typeInfo))
 
     ///
     /// Returns true if a rule is impossible to satisfy. Used for removing `Guard0()` from the AST.
@@ -530,7 +528,7 @@ mod Fixpoint.Phase.Compiler {
     ///
     /// Compiles `body` under substitution `env`, assuming any `Guard0` is true.
     ///
-    def compileBodyWithoutGuard0(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predicates: Predicates, counter: Counter[r], typeInfo: TypeInformation): Vector[BoolExp] \ r =
+    def compileBodyWithoutGuard0(env: Map[VarSym, RamTerm], body: Vector[(BodyPredicate, RowVar)], predicates: Predicates, typeInfo: TypeInformation): Vector[BoolExp] =
         let toFullSym = bodyAtom -> (Predicate.bodyAtomToRelSym(bodyAtom, Full, predicates));
         body |>
             Vector.flatMap(match (atom, rowVar) ->
@@ -538,7 +536,7 @@ mod Fixpoint.Phase.Compiler {
                     case BodyTerm.Wild      =>
                         RamTerm.RowLoad(rowVar, j, getType(id, j, typeInfo), toFullSym(atom))
                     case BodyTerm.Var(var)  => getOrCrash(Map.get(var, env))
-                    case BodyTerm.Lit(v)    => RamTerm.Lit(v, getType(id, j, typeInfo), RamId.Id(Counter.getAndIncrement(counter)))
+                    case BodyTerm.Lit(v)    => RamTerm.Lit(v, getType(id, j, typeInfo))
                 };
                 match atom {
                     case BodyAtom(PredSym(_, id), denotation, Polarity.Positive, _, terms) =>
@@ -591,7 +589,7 @@ mod Fixpoint.Phase.Compiler {
     /// Compile the RamTerm `t` to either a Leq or NotBot depending on whether the atom was `Pi(;x)`, `Pi(;_)`, or `P(;1)`.
     ///
     def compileBoolForLatticeenal(t: RamTerm, leq: Boxed -> Boxed -> Bool, bot: Boxed, rv: RowVar, relSym: RelSym): BoolExp = match t {
-        case RamTerm.Lit(val, _, _) =>
+        case RamTerm.Lit(val, _) =>
             BoolExp.Leq(val, rv, relSym)
         case _ => BoolExp.NotBot(t, leq, bot)
     }

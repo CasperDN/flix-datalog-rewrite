@@ -98,16 +98,15 @@ mod Fixpoint.Phase.Lowering {
     use Fixpoint.Ast.ExecutableRam
     use Fixpoint.Ast.ExecutableRam.WriteTuple
     use Fixpoint.Ast.Ram
-    use Fixpoint.Ast.Ram.{arityOf, arityOfNonLat, getType, IndexInformation, RamId, RelSym, RowVar, Search, toDenotation, toId}
+    use Fixpoint.Ast.Ram.{arityOf, arityOfNonLat, getType, IndexInformation, RelSym, RowVar, Search, toDenotation, toId}
     use Fixpoint.Ast.Shared.{Denotation, PredSym}
     use Fixpoint.Boxed
     use Fixpoint.Boxing
-    use Fixpoint.BoxingType.{Boxing, RamIdToPos};
-    use Fixpoint.UniqueInts
-    use Fixpoint.Util.getOrCrash
-
+    use Fixpoint.BoxingType.Boxing;
     use Fixpoint.TypeInfo
     use Fixpoint.TypeInfo.{getTypeOf, TypeInformation}
+    use Fixpoint.UniqueInts
+    use Fixpoint.Util.getOrCrash
 
     ///
     /// Maps `RowVar`s to their memory position (position in an array the interpreter
@@ -309,11 +308,11 @@ mod Fixpoint.Phase.Lowering {
                     case Ram.BoolExp.Eq(Ram.RamTerm.RowLoad(rv2, i2, _, _), Ram.RamTerm.RowLoad(rv1, i1, _, _)) if rv == rv1 =>
                         addWriteTo(rv2, i2, rv1, i1, idToIndex, writeTo);
                         None
-                    case Ram.BoolExp.Eq(Ram.RamTerm.RowLoad(rv1, i, _, _), Ram.RamTerm.Lit(val, ty, _)) if rv == rv1 =>
+                    case Ram.BoolExp.Eq(Ram.RamTerm.RowLoad(rv1, i, _, _), Ram.RamTerm.Lit(val, ty)) if rv == rv1 =>
                         let unboxed = Boxing.unboxWith(val, ty, boxing);
                         addConstWriteTo(unboxed, rv, i, idToIndex, writeTo, rc);
                         None
-                    case Ram.BoolExp.Eq(Ram.RamTerm.Lit(val, ty, _), Ram.RamTerm.RowLoad(rv1, i, _, _)) if rv == rv1 =>
+                    case Ram.BoolExp.Eq(Ram.RamTerm.Lit(val, ty), Ram.RamTerm.RowLoad(rv1, i, _, _)) if rv == rv1 =>
                         let unboxed = Boxing.unboxWith(val, ty, boxing);
                         addConstWriteTo(unboxed, rv, i, idToIndex, writeTo, rc);
                         None
@@ -324,12 +323,8 @@ mod Fixpoint.Phase.Lowering {
                 else ();
                 ExecutableRam.RelOp.Query(lowerRowVar(rv, idToIndex), index, oldPos, den, thisWriteTo, loweredBody)
             case Ram.RelOp.Functional(rv, f, terms, body, _, thisType) =>
-                // let (idToBoxing, _) = boxingInfo;
-                // let thisType = ;
-                // let idToMarhsalled = id -> getOrCrash(Map.get(id, idToBoxing));
                 let loweredBody = lowerOpRec(body);
                 let thisWriteTo = getWriteTo(rv, writeTo);
-                // let to = Vector.map(i -> idToMarhsalled(RamId.TuplePos(rv, i)), Vector.range(0, arity));
                 ExecutableRam.RelOp.Functional(
                     lowerRowVar(rv, idToIndex), f,
                     Vector.map(lowerTerm(idToIndex, boxing, meetWithMap), terms),
@@ -370,7 +365,7 @@ mod Fixpoint.Phase.Lowering {
         let boxing = boxingInfo;
         // let termToBoxing = t -> getType(t);
         match term {
-            case Ram.RamTerm.Lit(val, ty, _) => ExecutableRam.RamTerm.Lit(Boxing.unboxWith(val, ty, boxing), val)
+            case Ram.RamTerm.Lit(val, ty) => ExecutableRam.RamTerm.Lit(Boxing.unboxWith(val, ty, boxing), val)
             case Ram.RamTerm.ProvMax(vec) =>
                 vec
                     |> Vector.map(match (rv, i) -> (UniqueInts.getIndex(rv, idToIndex), i))
@@ -385,15 +380,15 @@ mod Fixpoint.Phase.Lowering {
                             ExecutableRam.RamTerm.LoadLatVar(UniqueInts.getIndex(rv, idToIndex), ty)
                         }
                 }
-            case Ram.RamTerm.Meet(_, _, _, ty, _) =>
+            case Ram.RamTerm.Meet(_, _, _, ty) =>
                 let representingRowVar = lowerMeet(term, idToIndex, meetWithMap);
                 let pos = computeLatticeMeetPos(representingRowVar, idToIndex, meetWithMap);
                 ExecutableRam.RamTerm.LoadLatVar(pos, ty)
-            case Ram.RamTerm.App1(f, t1, ty, _)                   => ExecutableRam.RamTerm.App1(f, lowerT(t1), ty)
-            case Ram.RamTerm.App2(f, t1, t2, ty, _)               => ExecutableRam.RamTerm.App2(f, lowerT(t1), lowerT(t2), ty)
-            case Ram.RamTerm.App3(f, t1, t2, t3, ty, _)           => ExecutableRam.RamTerm.App3(f, lowerT(t1), lowerT(t2), lowerT(t3), ty)
-            case Ram.RamTerm.App4(f, t1, t2, t3, t4, ty, _)       => ExecutableRam.RamTerm.App4(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), ty)
-            case Ram.RamTerm.App5(f, t1, t2, t3, t4, t5, ty, _)   => ExecutableRam.RamTerm.App5(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), lowerT(t5), ty)
+            case Ram.RamTerm.App1(f, t1, ty)                   => ExecutableRam.RamTerm.App1(f, lowerT(t1), ty)
+            case Ram.RamTerm.App2(f, t1, t2, ty)               => ExecutableRam.RamTerm.App2(f, lowerT(t1), lowerT(t2), ty)
+            case Ram.RamTerm.App3(f, t1, t2, t3, ty)           => ExecutableRam.RamTerm.App3(f, lowerT(t1), lowerT(t2), lowerT(t3), ty)
+            case Ram.RamTerm.App4(f, t1, t2, t3, t4, ty)       => ExecutableRam.RamTerm.App4(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), ty)
+            case Ram.RamTerm.App5(f, t1, t2, t3, t4, t5, ty)   => ExecutableRam.RamTerm.App5(f, lowerT(t1), lowerT(t2), lowerT(t3), lowerT(t4), lowerT(t5), ty)
         }
 
     ///
@@ -410,7 +405,7 @@ mod Fixpoint.Phase.Lowering {
             let (_, meetDisjointSet) = meetWithMap;
             MutDisjointSets.makeSet(rv, meetDisjointSet);
             rv
-        case Ram.RamTerm.Meet(_, t1, (rv, _), _, _) =>
+        case Ram.RamTerm.Meet(_, t1, (rv, _), _) =>
             let (_, meetDisjointSet) = meetWithMap;
             let prevRv = lowerMeet(t1, idToIndex, meetWithMap);
             MutDisjointSets.makeSet(rv, meetDisjointSet);

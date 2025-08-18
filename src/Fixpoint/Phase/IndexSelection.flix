@@ -302,7 +302,7 @@ mod Fixpoint.Phase.IndexSelection {
     /// Returns true if `term` is ground (no free variables) w.r.t. `seenTuples`.
     ///
     def isTermGround(term: RamTerm, seenTuples: MutSet[RowVar, r]): Bool \ r = match term {
-        case RamTerm.Lit(_, _, _) => true
+        case RamTerm.Lit(_, _) => true
         case RamTerm.RowLoad(rowVar, _, _, _) =>
             MutSet.memberOf(rowVar, seenTuples)
         case _ => false
