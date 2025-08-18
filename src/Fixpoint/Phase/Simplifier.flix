@@ -82,14 +82,14 @@ mod Fixpoint.Phase.Simplifier {
     /// A simplification of an `Insert` can also lead to `None`, though this is handled by `simplifyOp`.
     ///
     def simplifyHelper(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, stmt: RamStmt): Option[RamStmt] = match stmt {
-        case RamStmt.Insert(op) => 
+        case RamStmt.Insert(op) =>
             simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op) |>
                 Option.map(RamStmt.Insert)
         case RamStmt.MergeInto(_, _) => Some(stmt)
         case RamStmt.Swap(_, _)      => Some(stmt)
         case RamStmt.Purge(_)        => Some(stmt)
         case RamStmt.Seq(xs) =>
-            Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs) 
+            Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)
                 |> RamStmt.Seq
                 |> Some
         case RamStmt.Par(xs) =>
@@ -159,7 +159,7 @@ mod Fixpoint.Phase.Simplifier {
                 let (memberOf, rest) = test
                     // Delete checks of the form `x[i] == x[i]`.
                     |> Vector.filter(e -> match e {
-                        case BoolExp.Eq(RowLoad(lhs1, lhs2, _, _), RowLoad(rhs1, rhs2, _, _)) => 
+                        case BoolExp.Eq(RowLoad(lhs1, lhs2, _, _), RowLoad(rhs1, rhs2, _, _)) =>
                             (lhs1, lhs2) != (rhs1, rhs2)
                         case _ => true
                     })

@@ -203,7 +203,7 @@ mod Fixpoint.PrecedenceGraph {
                 // We are guaranteed to have singleton sets
                 |> Map.map(Set.find(_ -> true) >> getOrCrash);
             topologicalSort(condensation)
-                |> List.map(u -> 
+                |> List.map(u ->
                     componentMap
                         |> MutMap.get(Map.get(u, inverseRootMap) |> getOrCrash)
                         |> getOrCrash
