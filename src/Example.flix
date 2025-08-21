@@ -237,3 +237,169 @@ def f5(): Bool = {
     }, pp) `Assert.eq` Vector#{"A(3)"}
 }
 
+
+
+mod BPlusTree {
+    ///
+    /// Returns `Some((k, v))` if `k => v` is in `t`. Otherwise, returns `None`.
+    ///
+    /// Thread-safe.
+    ///
+    pub def getPair(k: k, t: BPlusTree[k, v, r]): Option[(k, v)] \ r with Order[k] = {
+        let (leaf, stamp) = BPlusTree.findLeaf(k, t);
+        Node.getPair(k, stamp, leaf, t)
+    }
+
+    ///
+    /// Updates the tree `t` with the mapping `k => v`. Replaces any
+    /// existing mapping, `k2 => v2` mapping if `decider(k, v, k2, v2) == true`.
+    ///
+    /// Thread-safe and atomic.
+    ///
+    pub def putIf(k: k, v: v, decider: k -> v -> k -> v -> Bool, t: BPlusTree[k, v, r]): Unit \ r with Order[k] =
+        fixRoot(putIfInternal(k, v, decider, t), t)
+
+
+    ///
+    /// Internal method for `putIf`.
+    ///
+    /// Called when restarting.
+    ///
+    /// Returns the `Some(newRoot, stamp)` if the root was split where `stamp` is a write-stamp
+    /// on `rootLock`.
+    ///
+    def putIfInternal(k: k, v: v, decider: k -> v -> k -> v -> Bool, t: BPlusTree[k, v, r]): Option[(Node[k, v, r], Int64)] \ r with Order[k] =
+        let (leaf, stamp) = BPlusTree.findLeaf(k, t);
+        Node.insertIntoLeafIf(k, v, decider, leaf, stamp, t)
+
+
+    mod Node {
+        use BPlusTree.Lock
+
+        ///
+        /// Returns `Some((key, value))` if `key => val` is in `tree`. Otherwise return `None`.
+        ///
+        @Internal
+        pub def getPair(key: k, stamp: Int64, node: Node[k, v, r], tree: BPlusTree[k, v, r]): Option[(k, v)] \ r with Order[k] =
+            let index = binarySearch(key, BPlusTree.search(tree), node);
+            let result = if (index < 0)
+                None
+            else
+                Some((Array.get(index, node->keys), Array.get(index, node->values)));
+            if (not Lock.valid(stamp, node->lock)) {
+                // Restart
+                Lock.yieldBasedOn(node->lock);
+                BPlusTree.getPair(key, tree)
+            } else {
+                result
+            }
+
+        ///
+        /// Inserts the mapping `key => val` into the leaf `node` if it is not already present
+        /// Otherwise if the mapping `key2 => val2` is presents overwrite the mapping by `key => val`,
+        /// if `decider(key, val, key2, val2) == true`. If a split is caused return the new root.
+        ///
+        /// Lock invariants:
+        ///
+        /// - On invocation, `stamp` is an optimistic stamp on `node->lock`.
+        ///
+        /// - On return, the thread has no lock on the tree if the returned value is None.
+        ///   Otherwise it has a write-lock on `tree->rootLock` and `p` where `Some(p)` is returned
+        ///
+        @Internal
+        pub def insertIntoLeafIf(
+            key: k,
+            val: v,
+            decider: k -> v -> k -> v -> Bool,
+            node: Node[k, v, r],
+            stamp: Int64,
+            tree: BPlusTree[k, v, r]
+        ): Option[(Node[k, v, r], Int64)] \ r with Order[k] = {
+            let search = BPlusTree.search(tree);
+            let index = binarySearch(key, search, node);
+            if(index < 0) {
+                // `key` is not currently in tree. Attempt to gain the write lock and add it.
+                insertIntoLeafForceIf(key, val, decider, node, stamp, index, tree)
+            } else {
+                let oldKey = Array.get(index, node->keys);
+                let oldVal = Array.get(index, node->values);
+                // Verify that the pair is legal/not corrupted.
+                if (not Lock.valid(stamp, node->lock)) {
+                    // Restart
+                    Lock.yieldBasedOn(node->lock);
+                    BPlusTree.putIfInternal(key, val, decider, tree)
+                } else {
+                    if (decider(key, val, oldKey, oldVal)) {
+                        insertIntoLeafForceIf(key, val, decider, node, stamp, index, tree)
+                    } else {
+                        // At some point `oldKey => oldVal` was in the tree. We observed it and
+                        // decided to not insert `key => val`, by `decider`.
+                        None
+                    }
+                }
+            }
+        }
+
+        ///
+        /// Attempts to grab the lock of `node` and insert the `key => val` mapping. Restarts with
+        /// `putIfInternal` if this is not successfull.
+        ///
+        /// Lock invariants:
+        ///
+        /// - On invocation, `stamp` is an optimistic stamp on `node->lock`.
+        ///
+        /// - On return, the thread has no lock on the tree if the returned value is None.
+        ///   Otherwise it has a write-lock on `tree->rootLock` and `p` where `Some(p)` is returned
+        ///
+        @Internal
+        pub def insertIntoLeafForceIf(
+            key: k,
+            val: v,
+            decider: k -> v -> k -> v -> Bool,
+            node: Node[k, v, r],
+            stamp: Int64,
+            index: Int32,
+            tree: BPlusTree[k, v, r]
+        ): Option[(Node[k, v, r], Int64)] \ r with Order[k] = {
+            let writeStamp = Lock.tryConvertToWrite(stamp, node->lock);
+            if (not Lock.valid(writeStamp, node->lock)) {
+                // Restart
+                Lock.yieldBasedOn(node->lock);
+                BPlusTree.putIfInternal(key, val, decider, tree)
+            } else {
+                insertIntoLeafPropagate(key, val, index, node, writeStamp, tree)
+            }
+        }
+
+    }
+}
+
+@Test
+def testPQueryWithCycle01(): Bool =
+    let db = #{
+        Edge(1, 2). Edge(2, 1).
+    };
+    let pr = #{
+        Path(x, y) :- Edge(x, y).
+        Path(x, z) :- Path(x, y), Edge(y, z).
+        Cycle(x)   :- Path(x, x).
+    };
+    let pp = pquery db, pr select Cycle(1) with {Edge};
+    Vector.map(v -> ematch v { case Edge(x, y) => (x, y) }, pp) `Assert.eq` Vector#{(1, 2), (2, 1)}
+
+def main9384(): Bool = {
+    let db = #{
+        A(1). A(2). A(3). A(4). A(5).
+    };
+    let pr = #{
+        B(1) :- not A(-1).
+        B(x + 1) :- B(x), A(x).
+        C(-1) :- not B(-2).
+        C(x) :- B(x).
+        C(x) :- A(x), C(-1).
+    };
+    let pp = pquery db, pr select C(5) with {A};
+    Vector.map(v -> ematch v {
+        case A(x) => x
+    }, pp) `Assert.eq` Vector#{5}
+}

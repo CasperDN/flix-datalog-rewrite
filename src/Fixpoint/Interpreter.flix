@@ -351,6 +351,19 @@ mod Fixpoint.Interpreter {
                     if (latVal `leq` bot) ()
                     else BPlusTree.putWith(lub, tuple, latVal, relIndex)
             }
+            case RelOp.ProvProject(terms, rel, fullRel) =>
+                let relIndex = lookupIndex(rel, db);
+                let fullIndex = lookupIndex(fullRel, db);
+                let tuple = Vector.map(evalTerm(env, boxing), terms);
+                let depthPos = Vector.length(terms) - 2;
+                let chooseSmallest = k1 -> _v1 -> k2 -> _v2 -> Vector.get(depthPos, k1) < Vector.get(depthPos, k2);
+                match BPlusTree.getPair(tuple, fullIndex) {
+                    case None =>
+                        BPlusTree.putIf(tuple, Boxed.NoValue, chooseSmallest, relIndex)
+                    case Some((k, v)) if (chooseSmallest(tuple, Boxed.NoValue, k, v)) =>
+                        BPlusTree.putIf(tuple, Boxed.NoValue, chooseSmallest, relIndex)
+                    case _ => ()
+                }
             case RelOp.Search(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) =>
                 if (parLevel == 0) {
                     // We have exhausted all allowed attempts to spawn threads. Recurse sequentially.
